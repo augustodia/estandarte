@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Estandarte</title>
+<meta name="description" content="Jogo de estratégia e conquista de territórios para jogar entre celulares, sem servidor.">
+<meta name="theme-color" content="#0f1c2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main id="app">
+  <section id="home" class="screen">
+    <div class="crest" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M14 6v52" stroke="#f1e6cf" stroke-width="4" stroke-linecap="round"/><path d="M16 10h34l-8 11 8 11H16z" fill="#d64545"/></svg></div>
+    <h1>Estandarte</h1>
+    <p class="tag">Conquiste territórios, cumpra seu objetivo secreto.</p>
+    <label class="field">Seu nome<input id="name" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado"></label>
+    <button class="btn primary" data-do="host">Criar partida</button>
+    <button class="btn" data-do="join">Entrar em partida</button>
+    <button class="btn" data-do="resume" id="resume" hidden>Continuar partida salva</button>
+    <button class="btn ghost" data-do="rules">Como jogar</button>
+  </section>
+  <section id="lobby" class="screen" hidden>
+    <h2>Sala</h2>
+    <ul id="seats" class="seats"></ul>
+    <div id="lobbyActions"></div>
+  </section>
+  <section id="game" class="screen" hidden>
+    <header id="hud"></header>
+    <div id="mapwrap"><svg id="map" xmlns="http://www.w3.org/2000/svg"></svg><div id="dice" hidden></div><button id="fit" aria-label="Ajustar zoom">⤢</button></div>
+    <footer id="bar"></footer>
+  </section>
+</main>
+<div id="modal" hidden><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status" hidden></div>
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
