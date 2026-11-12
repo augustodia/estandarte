@@ -56,6 +56,7 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 ## O que cada um vê durante a partida
 
 - **Alertas no centro da tela** (somem em 1 s) só para o que é seu: "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!". O que os outros fazem aparece num aviso pequeno no topo, sem cobrir o mapa.
+- **Ordem de jogada:** no canto do mapa, uma fila mostra quem joga agora (em destaque, com a cor do jogador) e quem vem depois, com o número de territórios de cada um; seu nome aparece sublinhado.
 - **Destaque da jogada alheia:** o território que o jogador da vez selecionou (ou onde um bot acabou de agir) fica aceso e o resto do mapa esmaece.
 - **Ações ao vivo:** quem espera vê o território que o jogador da vez selecionou e o alvo que ele está mirando, além de reforços (+N), setas de ataque e de movimento, perdas (−N) e os dados.
 - **Tremor e vibração:** o mapa treme a cada ataque (mais forte em conquistas) e o aparelho vibra para atacante e defensor. A vibração depende do navegador: funciona no Android; o Safari do iPhone não oferece essa função.
