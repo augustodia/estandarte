@@ -231,7 +231,8 @@ export function apply(s, p, a, rng = Math.random) {
       const defender = d.o;
       let last, tla = 0, tld = 0;
       do {
-        const att = rollDice(Math.min(3, f.a - 1), rng), def = rollDice(Math.min(3, d.a), rng);
+        const maxA = Math.min(3, f.a - 1), nA = a.blitz ? maxA : Math.max(1, Math.min(maxA, a.dice | 0 || maxA)); // dados escolhidos pelo atacante
+        const att = rollDice(nA, rng), def = rollDice(Math.min(3, d.a), rng);
         let la = 0, ld = 0;
         for (let i = 0; i < Math.min(att.length, def.length); i++) att[i] > def[i] ? ld++ : la++;
         f.a -= la; d.a -= ld; tla += la; tld += ld;

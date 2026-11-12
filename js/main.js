@@ -22,13 +22,13 @@ const app = {
   me: null,        // convidado: meu índice de jogador
   link: null,      // convidado: conexão com o anfitrião
   lobby: null,     // convidado: lista de assentos recebida
-  sel: null, target: null, qty: 1, info: null,
+  sel: null, target: null, n: 1, nKey: '', info: null, // n: quantidade no seletor − / +
   lastRoll: 0, lastViewer: null, botTimer: null,
   cfg: { secs: 120 },   // tempo por turno em segundos (0 = livre)
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '12'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '13'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -356,15 +356,15 @@ const el = (tag, attrs, parent) => {
 };
 const PAD = 30;
 const nodes = [];
+let aimLayer = null;
 (function buildMap() {
-  const aura = el('g', {}, svg), routes = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
-  SEA.forEach(([a, b, wrap]) => {
-    const A = TERR[a], B = TERR[b];
-    if (wrap) { // rota que dá a volta no mapa: um trecho até cada borda
-      const [l, r] = A.x < B.x ? [A, B] : [B, A];
-      el('line', { class: 'sea-route', x1: l.x, y1: l.y, x2: -PAD, y2: l.y }, routes);
-      el('line', { class: 'sea-route', x1: r.x, y1: r.y, x2: MAP_W + PAD, y2: r.y }, routes);
-    } else el('line', { class: 'sea-route', x1: A.x, y1: A.y, x2: B.x, y2: B.y }, routes);
+  const aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), routes = el('g', {}, svg), labels = el('g', {}, svg), aim = el('g', { class: 'aimlayer' }, svg), hits = el('g', {}, svg);
+  aimLayer = aim;
+  // ligações por mar: um traço de costa a costa, por cima da terra, para ficar sempre visível
+  const link = (x1, y1, x2, y2) => { el('line', { class: 'sea-case', x1, y1, x2, y2 }, routes); el('line', { class: 'sea-route', x1, y1, x2, y2 }, routes); };
+  SEA.forEach(([, , x1, y1, x2, y2, wrap]) => {
+    if (wrap) { link(x1, y1, -PAD, y1); link(x2, y2, MAP_W + PAD, y2); } // dá a volta no mapa: um trecho até cada borda
+    else link(x1, y1, x2, y2);
   });
   TERR.forEach((t, i) => {
     const col = CONTINENTS[t.c].color;
@@ -627,22 +627,37 @@ function tapTerritory(t) {
   if (!v) return;
   app.info = t;
   const me = v.turn, T = v.terr, mine = T[t].o === me, adj = (a, b) => TERR[a].adj.includes(b);
-  const n = app.qty === 'all' ? 9999 : app.qty;
-  if (canAct()) {
+  if (canAct() && !v.occupy) {
     if (v.step === 'reinforce') {
-      if (mine) { if (mustTrade(v)) toast('Com 5 cartas é obrigatório trocar antes.'); else return act({ t: 'place', t0: t, n }); }
-    } else if (v.step === 'attack' && !v.occupy) {
+      if (!mine) app.sel = null;
+      else if (mustTrade(v)) toast('Com 5 cartas é obrigatório trocar antes.');
+      else if (v.pool.free + (v.pool.cont[TERR[t].c] || 0) < 1) { app.sel = null; toast('Os exércitos restantes são bônus de outro continente.'); }
+      else if (app.sel === t) app.n++; // tocar de novo no mesmo território soma 1
+      else app.sel = t;
+      app.target = null;
+    } else if (v.step === 'attack') {
       if (mine) { app.sel = T[t].a >= 2 ? t : null; app.target = null; if (T[t].a < 2) toast('É preciso 2 ou mais exércitos para atacar daqui.'); }
       else if (app.sel != null && adj(app.sel, t)) app.target = t;
       else { app.target = null; if (app.sel != null) toast('Esse território não faz fronteira com o selecionado.'); }
     } else if (v.step === 'move') {
-      if (mine && app.sel != null && adj(app.sel, t)) return act({ t: 'move', from: app.sel, to: t, n });
-      if (!mine || t === app.sel) app.sel = null;
-      else if (v.movable[t] > 0) app.sel = t;
-      else { app.sel = null; toast('Nenhum exército disponível para mover daqui.'); }
+      if (mine && app.sel != null && t !== app.sel && adj(app.sel, t)) app.target = t;
+      else if (!mine || t === app.sel) app.sel = app.target = null;
+      else if (v.movable[t] > 0) { app.sel = t; app.target = null; }
+      else { app.sel = app.target = null; toast('Nenhum exército disponível para mover daqui.'); }
     }
   }
   renderGame();
+}
+// Faixa do seletor − / + conforme o que o jogador está fazendo; null quando não há quantidade a escolher.
+function stepRange(v) {
+  const T = v.terr, s = app.sel, t = app.target;
+  if (v.occupy) return [0, v.occupy.max];
+  if (s == null || T[s].o !== v.turn) return null;
+  if (v.step === 'reinforce') { const hi = v.pool.free + (v.pool.cont[TERR[s].c] || 0); return hi > 0 ? [1, hi] : null; }
+  if (t == null) return null;
+  if (v.step === 'attack') return T[s].a > 1 ? [1, Math.min(3, T[s].a - 1)] : null;
+  const hi = Math.min(v.movable[s] || 0, T[s].a - 1);
+  return hi > 0 ? [1, hi] : null;
 }
 
 const STEP = { reinforce: 'Reforço', attack: 'Ataque', move: 'Remanejamento' };
@@ -666,7 +681,8 @@ function renderGame() {
   }
   // valida seleção
   if (!can || (app.sel != null && T[app.sel].o !== v.turn)) app.sel = app.target = null;
-  if (app.target != null && T[app.target].o === v.turn) app.sel = app.target = null;
+  if (v.step === 'attack' && app.target != null && T[app.target].o === v.turn) app.sel = app.target = null;
+  if (v.step === 'move' && app.target != null && T[app.target].o !== v.turn) app.target = null;
   if (v.step === 'attack' && app.sel != null && T[app.sel].a < 2) app.sel = app.target = null;
 
   processEvents(v);
@@ -688,10 +704,29 @@ function renderGame() {
     nd.poly.setAttribute('fill', COLORS[v.players[T[i].o].color].c);
     nd.num.textContent = T[i].a;
     const hl = app.target != null ? i === app.target : targets.has(i);
-    const dim = app.sel != null ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
+    const dim = app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
     const ps = pk && (i === pk.sel ? ' psel' : i === pk.target ? ' tgt' : '');
     nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + (ps || ''));
   });
+
+  // linhas até onde dá para atacar ou mover (e, para quem assiste, a mira do jogador da vez)
+  aimLayer.replaceChildren();
+  const aimTo = (a, b, cls, color) => {
+    if (Math.abs(TERR[a].x - TERR[b].x) > MAP_W / 2) return;
+    const ln = el('line', { class: 'aim ' + cls, x1: TERR[a].x, y1: TERR[a].y, x2: TERR[b].x, y2: TERR[b].y }, aimLayer);
+    if (color) ln.setAttribute('stroke', color);
+  };
+  if (can && app.sel != null && v.step !== 'reinforce' && !v.occupy) (app.target != null ? [app.target] : [...targets]).forEach((j) => aimTo(app.sel, j, app.target != null ? 'one' : ''));
+  if (pk && okT(pk.target)) aimTo(pk.sel, pk.target, 'one', COLORS[cur.color].c);
+
+  // seletor − / +: valor inicial quando muda o que está sendo escolhido, sempre dentro da faixa
+  const rng = can ? stepRange(v) : null, nKey = `${v.step}:${v.occupy ? 'o' + v.occupy.to : ''}:${app.sel}:${app.target}`;
+  if (rng) {
+    if (nKey !== app.nKey) app.n = v.occupy || v.step === 'attack' ? rng[1] : 1;
+    app.n = Math.max(rng[0], Math.min(rng[1], app.n));
+  }
+  app.nKey = nKey;
+  const stepper = (unit) => `<div class="step"><button data-step="-1" aria-label="Menos"${app.n <= rng[0] ? ' disabled' : ''}>−</button><b>${app.n}${unit ? `<small>${unit}</small>` : ''}</b><button data-step="1" aria-label="Mais"${app.n >= rng[1] ? ' disabled' : ''}>+</button></div>`;
 
   // topo
   const meP = v.players[vw];
@@ -713,7 +748,6 @@ function renderGame() {
 
   // rodapé
   const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.` : (v.log[v.log.length - 1] || '');
-  const chips = `<div class="chips">${[1, 5, 'all'].map((q) => `<button class="chip${app.qty === q ? ' on' : ''}" data-qty="${q}">${q === 'all' ? 'Tudo' : '×' + q}</button>`).join('')}</div>`;
   let msg = '', btns = '', warn = '';
   if (v.phase === 'over') {
     const w = v.players[v.winner];
@@ -721,29 +755,35 @@ function renderGame() {
     btns = app.role === 'host' ? '<button class="btn small primary" data-do="again">Nova partida</button>' : '';
   } else if (!can) {
     const nm = `<b style="color:${COLORS[cur.color].c}">${esc(cur.name)}</b>`;
-    const doing = v.step === 'reinforce' ? `está reforçando (${poolTotal(v)} a colocar)`
+    const doing = v.step === 'reinforce' ? `está reforçando${pk ? ' ' + TERR[pk.sel].n : ''} (${poolTotal(v)} a colocar)`
       : v.step === 'move' ? (pk ? `vai mover tropas de ${TERR[pk.sel].n}` : 'está remanejando tropas')
       : pk && okT(pk.target) ? `mira ${TERR[pk.target].n} a partir de ${TERR[pk.sel].n}` : pk ? `prepara um ataque de ${TERR[pk.sel].n}` : 'está na fase de ataque';
     msg = app.role === 'guest' && !app.link ? '<span class="off">Sem conexão.</span> Peça um novo QR ao anfitrião.' : `${nm} ${doing}${cur.ctrl === 'bot' ? ' (bot)' : ''}`;
     if (app.role === 'guest' && !app.link) btns = '<button class="btn small primary" data-do="join">Reconectar (ler QR)</button>';
   } else if (v.step === 'reinforce') {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
-    msg = mustTrade(v) ? 'Você tem 5 ou mais cartas: troque antes de reforçar.' : `Toque em territórios seus para reforçar: <b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}.`;
+    const left = `<b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}`;
+    msg = mustTrade(v) ? 'Você tem 5 ou mais cartas: troque antes de reforçar.' : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar · ${left}`;
     const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
-    btns = chips + (tr ? `<button class="btn small primary" data-do="autoTrade">Trocar cartas +${tradeValue(v.trades)}</button>` : '');
+    btns = (rng ? stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="place">Colocar</button>' : '')
+      + (tr ? `<button class="btn small${rng ? '' : ' primary'}" data-do="autoTrade">Trocar +${tradeValue(v.trades)}</button>` : '');
   } else if (v.occupy) {
-    msg = `Conquistou ${TERR[v.occupy.to].n}! Levar mais exércitos?`;
-    btns = Array.from({ length: v.occupy.max + 1 }, (_, i) => `<button class="btn small${i === v.occupy.max ? ' primary' : ''}" data-occupy="${i}">+${i}</button>`).join('');
+    msg = `Conquistou <b>${TERR[v.occupy.to].n}</b>! Um exército já entrou; levar mais quantos?`;
+    btns = stepper() + '<button class="btn small primary" data-do="occupyOk">Mover</button>';
   } else if (v.step === 'attack') {
-    if (app.sel != null && app.target != null) {
+    if (rng) {
       msg = `${TERR[app.sel].n} (${T[app.sel].a}) ⚔ ${TERR[app.target].n} (${T[app.target].a})`;
-      btns = '<button class="btn small primary" data-do="attack">Atacar</button><button class="btn small" data-do="blitz">Até o fim</button>';
-    } else msg = app.sel != null ? 'Agora toque num vizinho inimigo (tracejado).' : 'Toque num território seu para atacar a partir dele.';
-    btns += '<button class="btn small" data-do="endAttack">Encerrar ataques</button>';
-    if (app.sel != null && app.target != null) btns = btns.replace('Encerrar ataques', 'Encerrar');
+      btns = stepper(app.n === 1 ? 'dado' : 'dados') + '<button class="btn small primary" data-do="attack">Atacar</button><button class="btn small" data-do="blitz">Auto</button><button class="btn small ghost" data-do="endAttack">Encerrar</button>';
+    } else {
+      msg = app.sel != null ? 'Agora toque num vizinho inimigo ligado pelas linhas.' : 'Toque num território seu para atacar a partir dele.';
+      btns = '<button class="btn small" data-do="endAttack">Encerrar ataques</button>';
+    }
+  } else if (rng) {
+    msg = `Mover de <b>${TERR[app.sel].n}</b> para <b>${TERR[app.target].n}</b>`;
+    btns = stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="moveOk">Mover</button><button class="btn small ghost" data-do="endTurn">Encerrar</button>';
   } else {
-    msg = app.sel != null ? `Mover de ${TERR[app.sel].n} (até ${v.movable[app.sel] || 0}): toque no destino.` : 'Remaneje: toque na origem e depois num vizinho seu.';
-    btns = chips + '<button class="btn small primary" data-do="endTurn">Encerrar turno</button>';
+    msg = app.sel != null ? `Mover de ${TERR[app.sel].n} (até ${v.movable[app.sel] || 0}): toque no destino ligado pelas linhas.` : 'Remaneje: toque na origem e depois num vizinho seu.';
+    btns = '<button class="btn small primary" data-do="endTurn">Encerrar turno</button>';
   }
   if (app.role === 'host' && v.phase === 'play') {
     const off = app.seats.filter((s) => s.ctrl === 'remote' && !s.link);
@@ -808,7 +848,7 @@ function showRules() {
   modal(`<h3>Como jogar</h3>
   <ul><li><b>Objetivo:</b> cada jogador recebe um objetivo secreto (🎯). Quem cumprir primeiro vence.</li>
   <li><b>Reforço:</b> no início do turno você recebe metade dos seus territórios em exércitos (mínimo 3), mais o bônus de cada continente inteiro que dominar (o bônus só pode ser colocado no próprio continente).</li>
-  <li><b>Ataque:</b> a partir da 2ª rodada, ataque vizinhos com até 3 dados (precisa deixar 1 exército para trás). A defesa rola até 3. Compare do maior para o menor; empate é da defesa.</li>
+  <li><b>Ataque:</b> a partir da 2ª rodada, ataque vizinhos com até 3 dados (precisa deixar 1 exército para trás); use − e + para escolher quantos. A defesa rola até 3. Compare do maior para o menor; empate é da defesa. “Auto” repete o ataque com o máximo de dados até conquistar ou não poder mais.</li>
   <li><b>Conquista:</b> ao zerar a defesa você ocupa o território com 1 a 3 exércitos e, no fim do turno, ganha uma carta.</li>
   <li><b>Cartas:</b> troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória e o jogo faz sozinho no início do turno, escolhendo a melhor trinca. Com menos, o botão “Trocar cartas” aparece no reforço.</li>
   <li><b>Remanejamento:</b> ao final, mova exércitos entre territórios vizinhos seus; cada exército anda uma vez por turno.</li>
@@ -864,7 +904,11 @@ const actions = {
   cards: showCards,
   autoTrade() { const v = app.view, me = v.players[v.turn]; const tr = Array.isArray(me.cards) && bestTrade(me.cards, v.terr, v.turn); if (tr) act({ t: 'trade', cards: tr }); },
   menu: showMenu,
-  attack: () => act({ t: 'attack', from: app.sel, to: app.target }),
+  attack: () => act({ t: 'attack', from: app.sel, to: app.target, dice: app.n }),
+  max() { const r = stepRange(app.view); if (r) { app.n = r[1]; renderGame(); } },
+  place() { const n = app.n; app.n = 1; act({ t: 'place', t0: app.sel, n }); },
+  occupyOk: () => act({ t: 'occupy', n: app.n }),
+  moveOk() { const m = { t: 'move', from: app.sel, to: app.target, n: app.n }; app.target = null; act(m); },
   blitz: () => act({ t: 'attack', from: app.sel, to: app.target, blitz: true }),
   endAttack: () => { app.sel = app.target = null; act({ t: 'endAttack' }); },
   endTurn: () => { app.sel = app.target = null; act({ t: 'endTurn' }); },
@@ -875,9 +919,8 @@ document.addEventListener('click', (e) => {
   const d = b.dataset;
   if (d.m === 'close') return closeModal();
   if (d.do && actions[d.do]) return actions[d.do]();
-  if (d.qty) { app.qty = d.qty === 'all' ? 'all' : +d.qty; return renderGame(); }
+  if (d.step) { const r = stepRange(app.view); if (r) { app.n = Math.max(r[0], Math.min(r[1], app.n + +d.step)); renderGame(); } return; }
   if (d.secs != null) { app.cfg.secs = +d.secs; store.set('cfg', app.cfg); return sync(); }
-  if (d.occupy != null) return act({ t: 'occupy', n: +d.occupy });
   if (d.kick != null) { const s = app.seats.splice(+d.kick, 1)[0]; s.link && s.link.close(); return sync(); }
   if (d.color != null) {
     const s = app.seats[+d.color];

@@ -39,6 +39,13 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 
 O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ásia e da Oceania são ampliadas, arquipélagos viram blocos únicos e ilhotas e baías pequenas somem, para tudo ficar fácil de ver e tocar. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
 
+## Controles
+
+- **Reforço:** toque num território seu, ajuste a quantidade com − e + (ou "Máx") e toque em "Colocar". Tocar de novo no mesmo território soma 1.
+- **Ataque:** toque na origem; linhas mostram os alvos possíveis. Toque no alvo, escolha de 1 a 3 dados com − e + e toque em "Atacar". "Auto" repete o ataque com o máximo de dados até conquistar ou não poder mais.
+- **Conquista e remanejamento:** − e + definem quantos exércitos mover.
+- **Celular deitado:** o mapa ocupa a tela e todos os controles ficam numa faixa no rodapé.
+
 ## O que cada um vê durante a partida
 
 - **Alertas no centro da tela** (somem em 1 s): "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!", "Território perdido", "Vez de Fulano".

@@ -17,7 +17,7 @@ const flat = ([lon, lat]) => {
 // O mapa não é fiel em tamanho, de propósito: "lentes" ampliam regiões de territórios pequenos
 // (Europa, América Central, ilhas da Ásia e da Oceania) para ficarem fáceis de ver e tocar.
 // Cada lente é uma ampliação radial suave, que preserva vizinhanças. [lon, lat, raio em px, ganho]
-const LENSES = [[12, 49, 95, 0.65], [-84, 15, 55, 0.75], [118, 2, 90, 0.55], [146, -6, 36, 0.5], [137, 37, 42, 0.65], [172, -41, 42, 0.95]];
+const LENSES = [[12, 49, 95, 0.65], [-84, 15, 55, 0.75], [118, 2, 80, 0.28], [146, -6, 36, 0.5], [137, 37, 42, 0.65], [172, -41, 42, 0.95]];
 const lens = (p, c, sigma, a) => {
   const dx = p[0] - c[0], dy = p[1] - c[1], m = 1 + a * Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
   return [c[0] + dx * m, c[1] + dy * m];
@@ -35,6 +35,9 @@ const proj = (ll) => {
   return [MAPW / 2 + (x - W / 2) * sc, (H0 / 2) * SQUASH * S_TOP + (y - H0 / 2) * SQUASH * sc];
 };
 
+// Deslocamento de cada continente (unidades do mapa), para abrir espaço entre vizinhos colados
+// e deixar visíveis as ligações entre eles. Europa e Ásia ficam juntas: são a mesma massa de terra.
+const OFFSET = [[0, 0], [10, 18], [0, 0], [-4, 26], [0, 0], [12, 16]];
 const CONT = [
   { n: 'América do Norte', bonus: 5, color: '#f0d9a0', at: [-146, 27] },
   { n: 'América do Sul', bonus: 2, color: '#a8e0b0', at: [-104, -28] },
@@ -93,11 +96,11 @@ const splitWhole = { 'United States of America': ([, lat]) => (lat > 50 ? 'ala' 
 const SEED = {};
 const DROP = new Set(['Antarctica', 'Fr. S. Antarctic Lands']);
 // fronteiras: terrestres e rotas marítimas (~)
-const EDGES = `ala-cao ala~ext cao-cac cac-cal cao-euo cac-euo cac-eul cal-eul cal~gro gro~esc euo-eul euo-mex eul~cam mex-cam cam-col
+const EDGES = `ala-cao ala~ext cao-cac cac-cal cao-euo cac-euo cac-eul cal-eul cal~gro gro~esc euo-eul euo-mex eul~cam mex-cam cam~col
 col-and col-bra and-bra and-arg bra-arg bra~afo
 bri~esc bri~fra esc-euc esc-rus esc~eor fra-euc fra-ita fra~mag euc-ita euc-eor ita-eor ita-tur ita~mag eor-rus rus-tur rus-asc rus-sib
-mag-egi mag-afo mag-afc egi-afc egi-afl egi-ara afo-afc afc-afl afc-afa afl-afa afl~ara
-tur-ara tur-ira ara-ira ira-asc ira-ind ira-cho asc-sib asc-cho ind-cho ind-sea sib-mon sib-cho sib-ext ext-mon ext-chl ext~cor mon-cho mon-chl cho-chl cho-sea chl-sea chl-cor
+mag-egi mag-afo mag-afc egi-afc egi-afl egi~ara afo-afc afc-afl afc-afa afl-afa afl~ara
+tur-ara tur-ira tur-asc ara-ira ira-asc ira-ind ira-cho asc-sib asc-cho ind-cho ind-sea sib-mon sib-cho sib-ext ext-mon ext-chl ext~cor mon-cho mon-chl cho-chl cho-sea chl-sea chl-cor
 sea~ins cor~ins ins-ngu ins~aus ngu~aus ngu~nze aus~nze`.split(/\s+/);
 
 const keys = Object.keys(T), idx = Object.fromEntries(keys.map((k, i) => [k, i]));
@@ -173,8 +176,9 @@ function toPath(rings) {
 // O mapa é desenhado numa grade e redesenhado a partir dela. Na grade, cada território passa por um
 // "fechamento" (cresce e encolhe de volta): ilhas próximas se fundem, baías estreitas e buracos somem.
 // Depois, ilhotas são descartadas e as fronteiras são retraçadas e suavizadas, sempre iguais dos dois lados.
-const CLOSE = { ins: 17, nze: 15, cor: 12, cam: 12, ngu: 11, bri: 9, cao: 9, cac: 9, cal: 9, esc: 7, ext: 7, sea: 7, ita: 6, gro: 5, ala: 5 };
-const S = 2, GW = Math.ceil(MAPW * S), GH = Math.ceil(H * S), EPS = 2.6; // células por unidade; tolerância da suavização (células)
+const CLOSE = { ins: 9, nze: 15, cor: 12, cam: 12, ngu: 11, bri: 9, cao: 9, cac: 9, cal: 9, esc: 7, ext: 7, sea: 7, ita: 6, gro: 5, ala: 5 };
+const PADX = 20, PADY = 30; // folga para os continentes deslocados
+const S = 2, GW = Math.ceil((MAPW + PADX) * S), GH = Math.ceil((H + PADY) * S), EPS = 2.6; // células por unidade; tolerância da suavização (células)
 const own = new Int16Array(GW * GH).fill(-1);
 function fillRing(ring, label) {
   let y0 = Infinity, y1 = -Infinity;
@@ -195,7 +199,8 @@ keys.forEach((k, i) => {
   const g = groups[k];
   const rings = [...g.rings];
   if (g.arcs.length) for (const poly of topojson.merge(topo, g.arcs).coordinates) rings.push(poly[0].map(proj)); // só o anel externo
-  rings.filter(keep).forEach((r) => fillRing(r, i));
+  const [ox, oy] = OFFSET[T[k][1]];
+  rings.filter(keep).forEach((r) => fillRing(r.map(([x, y]) => [x + ox, y + oy]), i));
 });
 // distância aproximada (chanfro 3-4) até as células marcadas em src
 function chamfer(src, w, h) {
@@ -360,10 +365,28 @@ const signed = (r) => r.reduce((s2, p, i) => { const q = r[(i + 1) % r.length]; 
 // contornos externos; com lakes=true entram também os mares internos grandes que sobraram (viram furos no preenchimento)
 const ringsOf = (loops, lakes) => loops.map(simplifyLoop).filter((r) => r.length >= 3 && (signed(r) > 9 || (lakes && signed(r) < -9)));
 const terrLoops = traceLoops((l) => l, keys.length), contLoops = traceLoops((l) => (l < 0 ? -1 : T[keys[l]][1]), CONT.length);
+const shapes = terrLoops.map((loops) => ringsOf(loops));
 const TERR = keys.map((k, i) => {
-  const [x, y] = proj([T[k][2], T[k][3]]);
-  return { n: T[k][0], c: T[k][1], x: Math.round(x), y: Math.round(y), d: toPath(ringsOf(terrLoops[i])), adj: [] };
+  const [x, y] = proj([T[k][2], T[k][3]]), [ox, oy] = OFFSET[T[k][1]];
+  return { n: T[k][0], c: T[k][1], x: Math.round(x + ox), y: Math.round(y + oy), d: toPath(shapes[i]), adj: [] };
 });
+// ponte entre dois territórios ligados por mar: o trecho mais curto entre as duas costas, entrando um pouco em cada uma
+function bridge(a, b) {
+  let best = [Infinity];
+  const scan = (A, B, swap) => {
+    for (const ra of A) for (const p of ra) for (const rb of B) for (let i = 0; i < rb.length; i++) {
+      const q0 = rb[i], q1 = rb[(i + 1) % rb.length], dx = q1[0] - q0[0], dy = q1[1] - q0[1], l = dx * dx + dy * dy;
+      const t = l ? Math.max(0, Math.min(1, ((p[0] - q0[0]) * dx + (p[1] - q0[1]) * dy) / l)) : 0, q = [q0[0] + t * dx, q0[1] + t * dy];
+      const d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+      if (d < best[0]) best = swap ? [d, q, p] : [d, p, q];
+    }
+  };
+  scan(shapes[a], shapes[b], false); scan(shapes[b], shapes[a], true);
+  let [d, p, q] = best, ux = q[0] - p[0], uy = q[1] - p[1];
+  if (d < 1) { ux = TERR[b].x - TERR[a].x; uy = TERR[b].y - TERR[a].y; }
+  const n = Math.hypot(ux, uy) || 1, IN = 5;
+  return [p[0] - (ux / n) * IN, p[1] - (uy / n) * IN, q[0] + (ux / n) * IN, q[1] + (uy / n) * IN].map(f1);
+}
 // contorno externo de cada continente, feito dos mesmos arcos das fronteiras dos territórios
 const outline = contLoops.map((loops) => toPath(ringsOf(loops, true)));
 const SEA = [];
@@ -371,15 +394,19 @@ for (const e of EDGES) {
   const [a, sep, b] = e.split(/([-~])/);
   if (!(a in idx) || !(b in idx)) throw new Error('fronteira inválida: ' + e);
   TERR[idx[a]].adj.push(idx[b]); TERR[idx[b]].adj.push(idx[a]);
-  if (sep === '~') SEA.push(e === 'ala~ext' ? [idx[a], idx[b], 1] : [idx[a], idx[b]]);
+  if (sep !== '~') continue;
+  if (e === 'ala~ext') { // dá a volta no mapa: da ponta oeste do Alasca e da ponta leste do Extremo Oriente até as bordas
+    const west = shapes[idx[a]].flat().reduce((m, p) => (p[0] < m[0] ? p : m)), east = shapes[idx[b]].flat().reduce((m, p) => (p[0] > m[0] ? p : m));
+    SEA.push([idx[a], idx[b], f1(west[0] + 4), f1(west[1]), f1(east[0] - 4), f1(east[1]), 1]);
+  } else SEA.push([idx[a], idx[b], ...bridge(idx[a], idx[b])]);
 }
 TERR.forEach((t) => t.adj.sort((a, b) => a - b));
-const CONTINENTS = CONT.map((c) => { const [x, y] = proj(c.at); return { n: c.n, bonus: c.bonus, color: c.color, x: Math.round(x), y: Math.round(y), d: outline[CONT.indexOf(c)] }; });
+const CONTINENTS = CONT.map((c) => { const [x, y] = proj(c.at); const [ox, oy] = OFFSET[CONT.indexOf(c)]; return { n: c.n, bonus: c.bonus, color: c.color, x: Math.round(x + ox), y: Math.round(y + oy), d: outline[CONT.indexOf(c)] }; });
 const out = `// Gerado por tools/gen-map.mjs (geografia: Natural Earth, domínio público). Não editar à mão.
-export const MAP_W=${MAPW}, MAP_H=${H};
+export const MAP_W=${MAPW + PADX}, MAP_H=${H + PADY};
 export const CONTINENTS=${JSON.stringify(CONTINENTS).replace(/\},\{/g, '},\n{')};
 export const TERR=${JSON.stringify(TERR).replace(/\},\{/g, '},\n{')};
-// rotas marítimas [a, b, cruzaBorda?]
+// ligações por mar [a, b, x1, y1, x2, y2, cruzaBorda?]: o trecho desenhado vai de uma costa à outra
 export const SEA=${JSON.stringify(SEA)};
 `;
 writeFileSync(new URL('../js/map.js', import.meta.url), out);
