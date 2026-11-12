@@ -23,7 +23,11 @@ const app = {
   lobby: null,     // convidado: lista de assentos recebida
   sel: null, target: null, qty: 1, info: null,
   lastRoll: 0, lastViewer: null, botTimer: null,
+  cfg: { secs: 120 },   // tempo por turno em segundos (0 = livre)
+  tEnd: null, tLimit: 0, // relógio local do turno
+  evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
+const VERSION = '3'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -149,6 +153,11 @@ function hostHandlers(targetSeat) {
         } else return link.send({ t: 'err', m: app.game ? 'A partida já começou. Peça ao anfitrião o QR do seu jogador (menu ☰).' : 'A sala está cheia.' });
         closeModal();
         sync();
+      } else if (msg.t === 'peek' && app.game) {
+        if (playerOfSeat(seatOfLink(link)) !== app.game.turn) return;
+        app.peek = { n: msg.n | 0, sel: msg.sel, target: msg.target };
+        app.seats.forEach((s) => s.link && s.link !== link && s.link.send({ t: 'peek', ...app.peek }));
+        renderGame();
       } else if (msg.t === 'act' && app.game) {
         const pi = playerOfSeat(seatOfLink(link));
         if (pi < 0) return;
@@ -171,9 +180,10 @@ function hostHandlers(targetSeat) {
 async function hostInvite(targetSeat = null) {
   modal('<h3>Preparando convite…</h3><p>Se o navegador pedir, permita a câmera: ela lê o QR de resposta e ajuda os aparelhos a se encontrarem na rede local.</p>');
   const camStream = await openCamera();
+  if (app.game && !app.pausedAt) { app.pausedAt = Date.now(); sync(); } // relógio do turno pausa durante o pareamento
   let inv, stop = () => {};
   try { inv = await createInvite(hostHandlers(targetSeat)); }
-  catch (e) { stopStream(camStream); closeModal(); return toast('Seu navegador não conseguiu criar a conexão.'); }
+  catch (e) { stopStream(camStream); app.pausedAt = null; closeModal(); return toast('Seu navegador não conseguiu criar a conexão.'); }
   const url = inviteUrl(inv.code);
   const accept = (raw) => {
     const code = extractCode(raw);
@@ -187,18 +197,23 @@ async function hostInvite(targetSeat = null) {
   };
   modal(`<h3>${targetSeat != null ? 'Reconectar ' + esc(app.seats[targetSeat].name) : app.game ? 'Reconectar jogador' : 'Convidar jogador'}</h3>
     <ol><li>O convidado abre o jogo, toca em “${app.game ? 'Reconectar à partida' : 'Entrar em partida'}” e lê este QR (a câmera do celular também serve).</li>
-    <li>O celular dele mostra um QR de resposta: leia-o aqui.</li></ol>
+    <li>O celular dele mostra um QR de resposta: aponte a câmera deste aparelho para ele${camStream ? '. A leitura é automática' : ''}.</li></ol>
     <div class="qr" id="qrbox"></div>
-    <div class="row"><button class="btn small" data-m="copy">Copiar link</button><button class="btn small primary" data-m="scan">Ler resposta</button></div>
-    <div id="scanbox"></div>
+    <div id="scanbox" class="scan-mini"></div>
+    <div class="row"><button class="btn small" data-m="copy">Copiar link</button>${camStream ? '' : '<button class="btn small primary" data-m="scan">Abrir câmera</button>'}</div>
     <label class="field">Ou cole o código de resposta<textarea id="paste" rows="2"></textarea></label>
     <div class="row"><button class="btn small" data-m="ok">Usar código colado</button><button class="btn small ghost" data-m="close">Cancelar</button></div>`,
-  () => { stop(); stopStream(camStream); if (!inv.link.open) setTimeout(() => !inv.link.open && inv.cancel(), 20000); });
+  () => {
+    stop(); stopStream(camStream);
+    if (!inv.link.open) setTimeout(() => !inv.link.open && inv.cancel(), 20000);
+    if (app.pausedAt) { if (app.game && app.game.tEnd) app.game.tEnd += Date.now() - app.pausedAt; app.pausedAt = null; sync(); }
+  });
   $('#qrbox').append(drawQr(url));
+  if (camStream) stop = startScanner($('#scanbox'), accept, camStream);
   $('#modal .sheet').onclick = (e) => {
     const m = e.target.dataset.m;
     if (m === 'copy') copyText(url);
-    if (m === 'scan') { $('#qrbox').hidden = true; stop = startScanner($('#scanbox'), accept, camStream); }
+    if (m === 'scan') stop = startScanner($('#scanbox'), accept, camStream);
     if (m === 'ok') accept($('#paste').value);
     if (m === 'close') { inv.cancel(); closeModal(); }
   };
@@ -206,7 +221,8 @@ async function hostInvite(targetSeat = null) {
 
 function hostBegin() {
   app.game = newGame(app.seats.map((s) => ({ name: s.name, color: s.color, ctrl: s.ctrl })));
-  app.sel = app.target = null; app.lastViewer = null;
+  app.game.limit = app.cfg.secs;
+  app.sel = app.target = null; app.lastViewer = null; app.turnKey = null; app.evN = null;
   show('game'); sync();
 }
 
@@ -215,10 +231,17 @@ function sync() {
   if (app.role !== 'host') return;
   const g = app.game;
   const pub = app.seats.map((s) => ({ name: s.name, color: s.color, ctrl: s.ctrl, on: s.ctrl !== 'remote' || !!s.link }));
+  let left = null;
+  if (g) { // relógio do turno: reinicia quando o turno muda; bots não têm relógio
+    const key = g.round + ':' + g.turn;
+    if (key !== app.turnKey) { app.turnKey = key; g.tEnd = g.limit ? Date.now() + g.limit * 1000 : null; }
+    if (g.tEnd && g.phase === 'play' && g.players[g.turn].ctrl !== 'bot' && !app.pausedAt) left = Math.max(0, g.tEnd - Date.now());
+    app.tEnd = left == null ? null : Date.now() + left; app.tLimit = (g.limit || 0) * 1000;
+  }
   app.seats.forEach((s, si) => {
     if (!s.link) return;
-    if (g) { const pi = playerOfSeat(si); s.link.send({ t: 'state', s: viewFor(g, pi), you: pi }); }
-    else s.link.send({ t: 'lobby', seats: pub, you: si });
+    if (g) { const pi = playerOfSeat(si); s.link.send({ t: 'state', s: viewFor(g, pi), you: pi, left, limit: g.limit || 0 }); }
+    else s.link.send({ t: 'lobby', seats: pub, you: si, secs: app.cfg.secs });
   });
   if (g) {
     store.set('save2', { seats: app.seats.map(({ link, ...s }) => s), game: g });
@@ -251,7 +274,12 @@ const guestHandlers = {
   },
   onmessage(msg) {
     if (msg.t === 'lobby') { app.lobby = msg; app.view = null; show('lobby'); renderLobby(); }
-    else if (msg.t === 'state') { app.view = msg.s; app.me = msg.you; if ($('#game').hidden) show('game'); renderGame(); }
+    else if (msg.t === 'state') {
+      app.view = msg.s; app.me = msg.you;
+      app.tEnd = msg.left == null ? null : Date.now() + msg.left; app.tLimit = (msg.limit || 0) * 1000;
+      if ($('#game').hidden) show('game');
+      renderGame();
+    } else if (msg.t === 'peek') { app.peek = msg; renderGame(); }
     else if (msg.t === 'err') toast(msg.m);
   },
   onclose(link) {
@@ -308,11 +336,12 @@ function renderLobby() {
     ${host && i > 0 ? `<button class="btn small ghost" data-kick="${i}" aria-label="Remover">✕</button>` : ''}</li>`).join('');
   const full = seats.length >= 6;
   $('#lobbyActions').innerHTML = host
-    ? `<div class="row"><button class="btn" data-do="invite" ${full ? 'disabled' : ''}>Convidar por QR</button></div>
+    ? `<div class="setting">Tempo por turno<span class="chips">${[[0, 'Livre'], [60, '1 min'], [120, '2 min'], [180, '3 min']].map(([v, l]) => `<button class="chip${app.cfg.secs === v ? ' on' : ''}" data-secs="${v}">${l}</button>`).join('')}</span></div>
+       <div class="row"><button class="btn" data-do="invite" ${full ? 'disabled' : ''}>Convidar por QR</button></div>
        <div class="row"><button class="btn small" data-do="addLocal" ${full ? 'disabled' : ''}>+ Jogador neste aparelho</button><button class="btn small" data-do="addBot" ${full ? 'disabled' : ''}>+ Bot</button></div>
        <button class="btn primary" data-do="begin" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida (${seats.length} jogadores)</button>
        <button class="btn ghost" data-do="leave">Sair</button>`
-    : `<p class="tag">Aguardando o anfitrião iniciar…</p><button class="btn ghost" data-do="leave">Sair</button>`;
+    : `<p class="tag">Tempo por turno: ${app.lobby.secs ? app.lobby.secs / 60 + ' min' : 'livre'}. Aguardando o anfitrião iniciar…</p><button class="btn ghost" data-do="leave">Sair</button>`;
 }
 
 /* ---------- mapa ---------- */
@@ -435,6 +464,119 @@ svg.addEventListener('wheel', (e) => {
 addEventListener('resize', () => { if (!$('#game').hidden) applyCam(); });
 $('#fit').onclick = () => fitView(true);
 
+/* ---------- alertas, efeitos e relógio ---------- */
+const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
+// Alerta grande no meio da tela; some sozinho em 1 s. Alertas do próprio jogador (urgentes)
+// passam na frente dos demais, para "Sua vez!" nunca ficar preso atrás de avisos de outros.
+const flashQ = [];
+let flashCur = null, flashTimer = null;
+function flash(text, color, sub = '', ms = 1000, urgent = false) {
+  const f = { text, color, sub, ms, urgent };
+  if (urgent) { for (let i = flashQ.length - 1; i >= 0; i--) if (!flashQ[i].urgent) flashQ.splice(i, 1); }
+  else { const i = flashQ.findIndex((q) => !q.urgent); if (i >= 0) flashQ.splice(i, 1); }
+  flashQ.push(f);
+  if (flashQ.length > 3) flashQ.shift();
+  if (!flashCur || (urgent && !flashCur.urgent)) nextFlash();
+}
+function nextFlash() {
+  clearTimeout(flashTimer);
+  const f = flashQ.shift(), box = $('#flash');
+  flashCur = f || null;
+  if (!f) { box.hidden = true; return; }
+  box.querySelector('b').textContent = f.text; box.querySelector('small').textContent = f.sub;
+  box.style.setProperty('--c', f.color || '#f1e6cf'); box.style.animationDuration = f.ms + 'ms';
+  box.hidden = false; box.classList.remove('go'); void box.offsetWidth; box.classList.add('go');
+  flashTimer = setTimeout(nextFlash, f.ms);
+}
+const fx = el('g', { class: 'fx' }, svg);
+const later = (node, ms) => setTimeout(() => node.remove(), ms);
+function fxFloat(t, text, color, dy = 0) {
+  const n = el('text', { class: 'fx-float', x: TERR[t].x, y: TERR[t].y - 18 + dy, fill: color }, fx);
+  n.textContent = text; later(n, 1400);
+}
+function fxPulse(t, color, big) { later(el('circle', { class: 'fx-pulse' + (big ? ' big' : ''), cx: TERR[t].x, cy: TERR[t].y, r: 13, stroke: color }, fx), 1300); }
+function fxArrow(a, b, color) {
+  const A = TERR[a], B = TERR[b];
+  if (Math.abs(A.x - B.x) < MAP_W / 2) later(el('line', { class: 'fx-arrow', x1: A.x, y1: A.y, x2: B.x, y2: B.y, stroke: color }, fx), 1100);
+  later(el('circle', { class: 'fx-dot', cx: B.x, cy: B.y, r: 7, fill: color, stroke: '#fff', 'stroke-width': 2 }, fx), 1100);
+}
+function shake(big) { svg.classList.remove('shake', 'shake2'); void svg.getBoundingClientRect(); svg.classList.add(big ? 'shake2' : 'shake'); }
+
+const PHASE_ALERT = {
+  reinforce: ['Reforço', 'Reforce seus territórios'],
+  attack: ['Ataque!', 'Toque num território seu e num vizinho inimigo'],
+  move: ['Remanejamento', 'Mova tropas ou encerre o turno'],
+};
+// Transforma os eventos da última ação em animações, vibração e alertas.
+function processEvents(v) {
+  if (app.evN === v.n) return;
+  const first = app.evN == null;
+  app.evN = v.n;
+  const col = (p) => COLORS[v.players[p].color].c, nm = (p) => v.players[p].name;
+  const mine = (p) => (app.role === 'guest' ? p === app.me : v.players[p].ctrl === 'local');
+  for (const e of v.ev || []) {
+    if (first && e.t !== 'turn') continue;
+    if (e.t === 'turn') {
+      if (v.phase !== 'play') continue;
+      if (mine(e.p)) { flash('Sua vez!', col(e.p), v.round === 0 ? 'Distribua seus exércitos' : PHASE_ALERT.reinforce[1], 1000, true); buzz([120, 60, 120]); }
+      else flash(`Vez de ${nm(e.p)}`, col(e.p));
+    } else if (e.t === 'phase') {
+      if (mine(e.p)) { flash(PHASE_ALERT[e.step][0], col(e.p), PHASE_ALERT[e.step][1], 1000, true); buzz(40); }
+    } else if (e.t === 'place') { fxPulse(e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); }
+    else if (e.t === 'trade') flash(mine(e.p) ? `+${e.v} exércitos` : `${nm(e.p)} trocou cartas`, col(e.p), mine(e.p) ? 'Troca de cartas' : `+${e.v} exércitos`);
+    else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); }
+    else if (e.t === 'attack') {
+      fxArrow(e.from, e.to, col(e.p));
+      if (e.la) fxFloat(e.from, '−' + e.la, '#ff8a7a');
+      if (e.ld) fxFloat(e.to, '−' + e.ld, '#ff8a7a');
+      shake(e.won);
+      const involved = mine(e.p) || mine(e.def);
+      if (e.won) {
+        fxPulse(e.to, col(e.p), true);
+        if (involved) buzz([80, 40, 160]);
+        if (mine(e.p)) flash('Conquistou!', col(e.p), TERR[e.to].n, 1000, true);
+        else if (mine(e.def)) flash('Território perdido', col(e.p), `${nm(e.p)} tomou ${TERR[e.to].n}`, 1000, true);
+        else flash(`${nm(e.p)} conquistou`, col(e.p), TERR[e.to].n);
+      } else if (involved) buzz(70);
+    } else if (e.t === 'card') { if (mine(e.p)) flash('Carta recebida', col(e.p), 'Veja em 🂠'); }
+    else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); }
+    else if (e.t === 'timeout') flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p));
+    else if (e.t === 'win') { flash(`${nm(e.p)} venceu!`, col(e.p), '', 2500, true); buzz([150, 80, 150, 80, 300]); }
+  }
+}
+
+// Tempo esgotado: o anfitrião termina o turno pelo jogador (reforços automáticos, sem ataques).
+function forceEnd() {
+  const g = app.game, p = g.turn, key = g.round + ':' + g.turn;
+  const same = () => g.phase === 'play' && g.round + ':' + g.turn === key;
+  for (let i = 0; i < 80 && same() && g.step === 'reinforce'; i++) if (apply(g, g.turn, botAction(g))) break;
+  if (same() && g.occupy) apply(g, g.turn, { t: 'occupy', n: 0 });
+  if (same() && g.step === 'attack') apply(g, g.turn, { t: 'endAttack' });
+  if (same() && g.step === 'move') apply(g, g.turn, { t: 'endTurn' });
+  g.ev.unshift({ t: 'timeout', p });
+  g.log.push(`O tempo de ${g.players[p].name} esgotou.`);
+  app.sel = app.target = null;
+  sync();
+}
+setInterval(() => {
+  const v = app.view, bar = $('#timer');
+  const on = v && v.phase === 'play' && app.tEnd && app.tLimit && !$('#game').hidden;
+  bar.hidden = !on;
+  if (!on) { app.lastSec = null; return; }
+  const left = app.tEnd - Date.now(), secs = Math.max(0, Math.ceil(left / 1000));
+  bar.querySelector('i').style.transform = `scaleX(${Math.max(0, Math.min(1, left / app.tLimit))})`;
+  bar.querySelector('b').textContent = secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : secs + ' s';
+  bar.classList.toggle('low', secs <= 10);
+  if (secs !== app.lastSec) {
+    if (canAct() && app.lastSec != null) {
+      if (secs === 10) { flash('10 segundos!', '#e06a5a', 'O turno vai encerrar sozinho', 1000, true); buzz([60, 40, 60]); }
+      else if (secs <= 5 && secs > 0) buzz(35);
+    }
+    app.lastSec = secs;
+  }
+  if (app.role === 'host' && !app.pausedAt && app.game && app.game.tEnd && Date.now() > app.game.tEnd + 250 && app.game.players[app.game.turn].ctrl !== 'bot') forceEnd();
+}, 250);
+
 /* ---------- partida ---------- */
 const canAct = () => {
   const v = app.view;
@@ -490,6 +632,11 @@ function renderGame() {
   if (app.target != null && T[app.target].o === v.turn) app.sel = app.target = null;
   if (v.step === 'attack' && app.sel != null && T[app.sel].a < 2) app.sel = app.target = null;
 
+  processEvents(v);
+  // quem só assiste vê o que o jogador da vez está mirando
+  const okT = (x) => Number.isInteger(x) && x >= 0 && x < TERR.length;
+  const pk = !can && app.peek && app.peek.n === v.n && okT(app.peek.sel) ? app.peek : null;
+
   // mapa
   const targets = new Set();
   if (can && app.sel != null) {
@@ -505,7 +652,8 @@ function renderGame() {
     nd.num.textContent = T[i].a;
     const hl = app.target != null ? i === app.target : targets.has(i);
     const dim = app.sel != null ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
-    nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : ''));
+    const ps = pk && (i === pk.sel ? ' psel' : i === pk.target ? ' tgt' : '');
+    nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + (ps || ''));
   });
 
   // topo
@@ -535,7 +683,11 @@ function renderGame() {
     msg = `<b style="color:${COLORS[w.color].c}">${esc(w.name)}</b> venceu! ${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj])) : ''}`;
     btns = app.role === 'host' ? '<button class="btn small primary" data-do="again">Nova partida</button>' : '';
   } else if (!can) {
-    msg = app.role === 'guest' && !app.link ? '<span class="off">Sem conexão.</span> Peça um novo QR ao anfitrião.' : `Aguardando ${esc(cur.name)}…`;
+    const nm = `<b style="color:${COLORS[cur.color].c}">${esc(cur.name)}</b>`;
+    const doing = v.step === 'reinforce' ? `está reforçando (${poolTotal(v)} a colocar)`
+      : v.step === 'move' ? (pk ? `vai mover tropas de ${TERR[pk.sel].n}` : 'está remanejando tropas')
+      : pk && okT(pk.target) ? `mira ${TERR[pk.target].n} a partir de ${TERR[pk.sel].n}` : pk ? `prepara um ataque de ${TERR[pk.sel].n}` : 'está na fase de ataque';
+    msg = app.role === 'guest' && !app.link ? '<span class="off">Sem conexão.</span> Peça um novo QR ao anfitrião.' : `${nm} ${doing}${cur.ctrl === 'bot' ? ' (bot)' : ''}`;
     if (app.role === 'guest' && !app.link) btns = '<button class="btn small primary" data-do="join">Reconectar (ler QR)</button>';
   } else if (v.step === 'reinforce') {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
@@ -557,6 +709,14 @@ function renderGame() {
   if (app.role === 'host' && v.phase === 'play') {
     const off = app.seats.filter((s) => s.ctrl === 'remote' && !s.link);
     if (off.length) btns += `<button class="btn small warn" data-do="invite">Reconectar ${esc(off.length === 1 ? off[0].name : off.length + ' jogadores')}</button>`;
+  }
+  if (can) { // compartilha a seleção atual com quem está assistindo
+    const key = `${v.n}:${app.sel}:${app.target}`;
+    if (key !== app.peekKey) {
+      app.peekKey = key;
+      const m = { t: 'peek', n: v.n, sel: app.sel, target: app.target };
+      if (app.role === 'guest') app.link && app.link.send(m); else app.seats.forEach((s) => s.link && s.link.send(m));
+    }
   }
   const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span>Você: ${esc(meP.name)}</span>`;
   $('#bar').innerHTML = `<div class="msg">${msg}</div><div class="row">${btns}</div><div class="foot"><span class="info">${info}</span>${you}</div>`;
@@ -637,7 +797,8 @@ const actions = {
   resume() {
     const sv = store.get('save2');
     if (!sv) return;
-    app.role = 'host'; app.seats = sv.seats; app.game = sv.game; app.lastViewer = null;
+    app.role = 'host'; app.seats = sv.seats; app.game = sv.game; app.lastViewer = null; app.turnKey = null; app.evN = null;
+    if (!app.game.ev) app.game.ev = [];
     show('game'); sync();
     if (app.seats.some((s) => s.ctrl === 'remote')) toast('Reconecte os convidados pelo menu ☰ (botão QR).', 5000);
   },
@@ -674,6 +835,7 @@ document.addEventListener('click', (e) => {
   if (d.m === 'close') return closeModal();
   if (d.do && actions[d.do]) return actions[d.do]();
   if (d.qty) { app.qty = d.qty === 'all' ? 'all' : +d.qty; return renderGame(); }
+  if (d.secs != null) { app.cfg.secs = +d.secs; store.set('cfg', app.cfg); return sync(); }
   if (d.occupy != null) return act({ t: 'occupy', n: +d.occupy });
   if (d.kick != null) { const s = app.seats.splice(+d.kick, 1)[0]; s.link && s.link.close(); return sync(); }
   if (d.color != null) {
@@ -685,6 +847,8 @@ document.addEventListener('click', (e) => {
 
 /* ---------- inicialização ---------- */
 $('#name').value = store.get('name') || '';
+$('#ver').textContent = 'versão ' + VERSION;
+if (store.get('cfg')) Object.assign(app.cfg, store.get('cfg'));
 $('#name').addEventListener('input', () => store.set('name', $('#name').value));
 function refreshHome() {
   $('#resume').hidden = !store.get('save2');
@@ -700,8 +864,11 @@ document.addEventListener('visibilitychange', keepAwake);
 document.addEventListener('click', () => !wake && keepAwake(), { once: true });
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-  navigator.serviceWorker.ready.then(() => caches.has('estandarte-v2')).then((ok) => { $('#offline').hidden = !ok; }).catch(() => {});
+  const hadCtl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
+  navigator.serviceWorker.ready.then(() => caches.has('estandarte-v' + VERSION)).then((ok) => { $('#offline').hidden = !ok; }).catch(() => {});
+  // versão nova instalada: recarrega sozinho, desde que ninguém esteja no meio de uma partida
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtl && !$('#home').hidden && $('#modal').hidden) location.reload(); });
 }
 
 function fromHash() {

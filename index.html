@@ -27,6 +27,7 @@
     <button class="btn" data-do="resume" id="resume" hidden>Continuar partida salva</button>
     <button class="btn ghost" data-do="rules">Como jogar</button>
     <p class="tag" id="offline" hidden>✓ Pronto para jogar sem internet</p>
+    <p class="tag ver" id="ver"></p>
   </section>
   <section id="lobby" class="screen" hidden>
     <h2>Sala</h2>
@@ -35,11 +36,12 @@
   </section>
   <section id="game" class="screen" hidden>
     <header id="hud"></header>
-    <div id="mapwrap"><svg id="map" xmlns="http://www.w3.org/2000/svg"></svg><div id="dice" hidden></div><button id="fit" aria-label="Ajustar zoom">⤢</button></div>
+    <div id="mapwrap"><svg id="map" xmlns="http://www.w3.org/2000/svg"></svg><div id="timer" hidden><i></i><b></b></div><div id="dice" hidden></div><button id="fit" aria-label="Ajustar zoom">⤢</button></div>
     <footer id="bar"></footer>
   </section>
 </main>
 <div id="modal" hidden><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="flash" role="status" hidden><b></b><small></small></div>
 <div id="toast" role="status" hidden></div>
 <script src="vendor/qrcode.js"></script>
 <script src="vendor/jsQR.js"></script>

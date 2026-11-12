@@ -81,6 +81,7 @@ export function newGame(seats, rng = Math.random) {
     phase: 'play', players, terr, turn: 0, round: 0, step: 'reinforce',
     pool: { free: 0, cont: {} }, deck: shuffle([...TERR.map((_, i) => i), ...WILD], rng),
     discard: [], trades: 0, occupy: null, movable: null, roll: null, log: [], winner: null, n: 0,
+    ev: [], // eventos da última ação, para animações e alertas em todos os aparelhos
   };
   startTurn(s);
   return s;
@@ -97,6 +98,7 @@ function startTurn(s) {
   s.players[p].conquered = false;
   s.pool = { free: Math.max(3, Math.floor(owned(s, p) / 2)), cont: {} };
   CONTINENTS.forEach((c, i) => { if (ownsContinent(s, p, i)) s.pool.cont[i] = c.bonus; });
+  s.ev.push({ t: 'turn', p });
   log(s, `Vez de ${pname(s, p)}: ${poolTotal(s)} exércitos a distribuir.`);
   checkWin(s, p);
 }
@@ -121,6 +123,7 @@ function checkWin(s, p) {
   if (alive.length === 1) p = s.players.indexOf(alive[0]);
   else if (!objectiveMet(s, p)) return false;
   s.phase = 'over'; s.winner = p;
+  s.ev.push({ t: 'win', p });
   log(s, `${pname(s, p)} venceu a partida!`);
   return true;
 }
@@ -144,7 +147,7 @@ function nextTurn(s, rng) {
   const pl = s.players[s.turn];
   if (pl.conquered) {
     if (!s.deck.length) { s.deck = shuffle(s.discard, rng); s.discard = []; }
-    if (s.deck.length) { pl.cards.push(s.deck.pop()); log(s, `${pl.name} recebeu uma carta.`); }
+    if (s.deck.length) { pl.cards.push(s.deck.pop()); s.ev.push({ t: 'card', p: s.turn }); log(s, `${pl.name} recebeu uma carta.`); }
   }
   let t = s.turn;
   do {
@@ -164,6 +167,7 @@ export function apply(s, p, a, rng = Math.random) {
   const pl = s.players[p];
   const T = s.terr;
   s.n++;
+  s.ev = [];
   switch (a.t) {
     case 'trade': {
       if (s.step !== 'reinforce') return 'Trocas só no início do turno.';
@@ -172,6 +176,7 @@ export function apply(s, p, a, rng = Math.random) {
       s.discard.push(...a.cards);
       const v = tradeValue(s.trades++);
       s.pool.free += v;
+      s.ev.push({ t: 'trade', p, v });
       let bonus = 0;
       a.cards.forEach((c) => { if (c < NT && T[c].o === p) { T[c].a += 2; bonus++; } });
       log(s, `${pl.name} trocou cartas por ${v} exércitos${bonus ? ` (+2 em ${bonus} território${bonus > 1 ? 's' : ''} das cartas)` : ''}.`);
@@ -191,9 +196,10 @@ export function apply(s, p, a, rng = Math.random) {
       s.pool.free -= fromFree; placed += fromFree;
       if (!placed) return 'Os exércitos restantes são bônus de outro continente.';
       t.a += placed;
+      s.ev.push({ t: 'place', p, to: a.t0, k: placed });
       if (poolTotal(s) === 0) {
         if (s.round === 0) { log(s, `${pl.name} posicionou seus exércitos.`); nextTurn(s, rng); }
-        else s.step = 'attack';
+        else { s.step = 'attack'; s.ev.push({ t: 'phase', p, step: 'attack' }); }
       }
       checkWin(s, p);
       return null;
@@ -204,15 +210,17 @@ export function apply(s, p, a, rng = Math.random) {
       if (!f || !d || f.o !== p || d.o === p || !TERR[a.from].adj.includes(a.to)) return 'Ataque inválido.';
       if (f.a < 2) return 'É preciso ter ao menos 2 exércitos para atacar.';
       const defender = d.o;
-      let last;
+      let last, tla = 0, tld = 0;
       do {
         const att = rollDice(Math.min(3, f.a - 1), rng), def = rollDice(Math.min(3, d.a), rng);
         let la = 0, ld = 0;
         for (let i = 0; i < Math.min(att.length, def.length); i++) att[i] > def[i] ? ld++ : la++;
-        f.a -= la; d.a -= ld;
+        f.a -= la; d.a -= ld; tla += la; tld += ld;
         last = { from: a.from, to: a.to, att, def, la, ld, by: p, n: s.n };
       } while (a.blitz && d.a > 0 && f.a > 1);
       s.roll = last;
+      const ev = { t: 'attack', p, from: a.from, to: a.to, la: tla, ld: tld, def: defender, won: d.a === 0 };
+      s.ev.push(ev);
       if (d.a === 0) {
         const max = Math.min(3, f.a - 1);
         d.o = p; d.a = 1; f.a -= 1; pl.conquered = true;
@@ -223,6 +231,7 @@ export function apply(s, p, a, rng = Math.random) {
           const dp = s.players[defender];
           dp.alive = false; dp.killedBy = p;
           pl.cards.push(...dp.cards); dp.cards = [];
+          s.ev.push({ t: 'dead', p: defender, by: p });
           log(s, `${dp.name} foi eliminado por ${pl.name}.`);
         }
         checkWin(s, p);
@@ -233,6 +242,7 @@ export function apply(s, p, a, rng = Math.random) {
       if (!s.occupy) return 'Nada a ocupar.';
       const n = Math.max(0, Math.min(s.occupy.max, a.n | 0));
       T[s.occupy.from].a -= n; T[s.occupy.to].a += n;
+      if (n) s.ev.push({ t: 'move', p, from: s.occupy.from, to: s.occupy.to, k: n });
       s.occupy = null;
       checkWin(s, p);
       return null;
@@ -240,6 +250,7 @@ export function apply(s, p, a, rng = Math.random) {
     case 'endAttack': {
       if (s.step !== 'attack') return 'Fora da fase de ataque.';
       s.occupy = null; s.step = 'move'; s.roll = null;
+      s.ev.push({ t: 'phase', p, step: 'move' });
       s.movable = {};
       T.forEach((t, i) => { if (t.o === p && t.a > 1) s.movable[i] = t.a - 1; });
       return null;
@@ -251,6 +262,7 @@ export function apply(s, p, a, rng = Math.random) {
       const n = Math.min(Math.max(1, a.n | 0), s.movable[a.from] || 0, f.a - 1);
       if (n < 1) return 'Sem exércitos disponíveis para mover daqui.';
       f.a -= n; d.a += n; s.movable[a.from] -= n;
+      s.ev.push({ t: 'move', p, from: a.from, to: a.to, k: n });
       checkWin(s, p);
       return null;
     }

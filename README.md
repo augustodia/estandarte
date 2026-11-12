@@ -8,7 +8,9 @@ Jogo de estratégia por turnos para 2 a 6 jogadores: distribua exércitos, conqu
 
 1. O anfitrião toca em **Criar partida** e depois em **Convidar por QR**.
 2. O convidado abre o jogo, toca em **Entrar em partida** e lê o QR do anfitrião (a câmera do celular também abre o link).
-3. O celular do convidado mostra um QR de resposta; o anfitrião toca em **Ler resposta** e aponta para ele.
+3. O celular do convidado mostra um QR de resposta; o anfitrião aponta a câmera para ele (a leitura é automática).
+
+   O segundo QR existe porque uma conexão WebRTC precisa de dados dos dois lados (endereço e impressão digital do certificado de cada aparelho). Sem servidor para levar a resposta de volta, ela volta pela câmera.
 4. Repita para cada convidado e toque em **Iniciar partida**.
 
 Quando o navegador pedir a câmera, permita. Além de ler os QR codes, a permissão faz o navegador informar o IP local real do aparelho; sem ela ele usa um nome mDNS que outros celulares da rede nem sempre resolvem, e a conexão não abre.
@@ -36,6 +38,13 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
 No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover.
+
+## O que cada um vê durante a partida
+
+- **Alertas no centro da tela** (somem em 1 s): "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!", "Território perdido", "Vez de Fulano".
+- **Ações ao vivo:** quem espera vê o território que o jogador da vez selecionou e o alvo que ele está mirando, além de reforços (+N), setas de ataque e de movimento, perdas (−N) e os dados.
+- **Tremor e vibração:** o mapa treme a cada ataque (mais forte em conquistas) e o aparelho vibra para atacante e defensor. A vibração depende do navegador: funciona no Android; o Safari do iPhone não oferece essa função.
+- **Tempo por turno:** o anfitrião escolhe na sala (livre, 1, 2 ou 3 min). Uma barra mostra o tempo; nos últimos 10 s ela fica vermelha e avisa. Ao zerar, os reforços restantes são colocados automaticamente e o turno passa. O relógio pausa enquanto o anfitrião reconecta alguém.
 
 ## Arquitetura
 

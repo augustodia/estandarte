@@ -83,3 +83,36 @@ video{width:100%;border-radius:12px;background:#000;max-height:46vh;object-fit:c
 #hud .icon{min-width:40px;padding:0 6px}
 #toast{bottom:16px}
 }
+
+/* alerta central, relógio do turno e efeitos no mapa */
+#flash{position:fixed;left:50%;top:40%;z-index:15;pointer-events:none;text-align:center;padding:14px 26px;border-radius:18px;background:#0a1422ee;border:2px solid var(--c,#f1e6cf);color:var(--c,#f1e6cf);max-width:86%;box-shadow:0 10px 40px #000a;transform:translate(-50%,-50%)}
+#flash[hidden]{display:none}
+#flash b{display:block;font:700 34px Georgia,serif;letter-spacing:.04em;white-space:nowrap}
+#flash small{display:block;color:var(--ink);font-size:14px;margin-top:2px}
+#flash.go{animation:flash 1s both}
+@keyframes flash{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}24%{transform:translate(-50%,-50%) scale(1)}82%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}
+#timer{position:absolute;left:0;right:0;top:0;height:6px;background:#0008;z-index:2}
+#timer[hidden]{display:none}
+#timer i{display:block;height:100%;width:100%;background:var(--gold);transform-origin:left;transition:transform .25s linear}
+#timer b{position:absolute;right:8px;top:10px;font-size:13px;background:#0a1422cc;border-radius:8px;padding:2px 8px;color:var(--ink)}
+#timer.low i{background:var(--bad)}#timer.low b{color:#fff;background:var(--bad);animation:tick 1s steps(2) infinite}
+@keyframes tick{50%{opacity:.45}}
+#dice{top:34px}
+.fx{pointer-events:none}
+.fx-float{font:800 17px system-ui,sans-serif;text-anchor:middle;paint-order:stroke;stroke:#0a1422;stroke-width:3.5;stroke-linejoin:round;animation:floatup 1.3s ease-out both}
+@keyframes floatup{0%{opacity:0;transform:translateY(6px)}15%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translateY(-30px)}}
+.fx-pulse{fill:none;stroke-width:4;transform-box:fill-box;transform-origin:center;animation:pulse .9s ease-out both}
+.fx-pulse.big{stroke-width:6;animation-duration:1.2s}
+@keyframes pulse{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(3.4)}}
+.fx-arrow{stroke-width:5;stroke-linecap:round;animation:arrow 1s ease-out both}
+.fx-dot{animation:arrow 1s ease-out both}
+@keyframes arrow{0%{opacity:0}15%{opacity:1}70%{opacity:.9}100%{opacity:0}}
+#map.shake{animation:shake .35s}#map.shake2{animation:shake2 .55s}
+@keyframes shake{20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(3px,2px)}}
+@keyframes shake2{10%{transform:translate(-9px,4px)}25%{transform:translate(9px,-5px)}40%{transform:translate(-8px,-4px)}55%{transform:translate(7px,5px)}70%{transform:translate(-5px,2px)}85%{transform:translate(4px,-2px)}}
+.terr.psel{stroke:#fff;stroke-width:3;stroke-dasharray:3 3}
+.ver{font-size:11px;opacity:.6;margin:0}
+.scan-mini video{max-height:26vh}
+.setting{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--mute)}
+@media (prefers-reduced-motion:reduce){#map.shake,#map.shake2{animation:none}}
+@media (orientation:landscape) and (max-height:520px){#flash{top:46%}#flash b{font-size:28px}}
