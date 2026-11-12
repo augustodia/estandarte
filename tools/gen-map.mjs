@@ -1,10 +1,11 @@
 // Gera js/map.js a partir do Natural Earth 1:110m (domínio público), via world-atlas.
-// Uso: npm i --no-save topojson-client world-atlas && node tools/gen-map.mjs
+// Uso: npm i --no-save topojson-client world-atlas polygon-clipping && node tools/gen-map.mjs
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const topojson = require('topojson-client');
 const topo = require('world-atlas/countries-110m.json');
+const pc = require('polygon-clipping');
 
 const W = 1400, LON0 = -169.5, LAT_TOP = 75.5, LAT_BOT = -56;
 const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
@@ -130,16 +131,21 @@ function clipHalf(ring, a, b) {
 }
 const area = (r) => Math.abs(r.reduce((s, p, i) => { const q = r[(i + 1) % r.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0) / 2);
 const f1 = (v) => +v.toFixed(1);
+const keep = (ring) => { const xs = ring.map((p) => p[0]); return Math.max(...xs) - Math.min(...xs) <= W / 2 && area(ring) >= 5; };
 function toPath(rings) {
   let d = '';
   for (const ring of rings) {
-    const xs = ring.map((p) => p[0]);
-    if (Math.max(...xs) - Math.min(...xs) > W / 2) { console.warn('anel cruzando a borda descartado'); continue; }
-    if (area(ring) < 5) continue;
+    if (!keep(ring)) continue;
     let last = '';
     const pts = [];
     for (const p of ring) { const s = `${f1(p[0])},${f1(p[1])}`; if (s !== last) pts.push(s); last = s; }
     if (pts.length > 1 && pts[0] === pts[pts.length - 1]) pts.pop();
+    // remove "espinhos" de largura zero (vai e volta pelo mesmo ponto), que sobram dos cortes e da união
+    for (let i = 0, n = 0; pts.length >= 3 && n < pts.length;) {
+      const prev = pts[(i - 1 + pts.length) % pts.length], next = pts[(i + 1) % pts.length];
+      if (prev === next) { pts.splice(i, 1); pts.splice(i % pts.length, 1); i = Math.max(0, i - 1); n = 0; }
+      else { i = (i + 1) % pts.length; n++; }
+    }
     if (pts.length >= 3) d += 'M' + pts.join('L') + 'Z';
   }
   return d;
@@ -149,7 +155,13 @@ const TERR = keys.map((k) => {
   const rings = [...g.rings];
   if (g.arcs.length) for (const poly of topojson.merge(topo, g.arcs).coordinates) for (const ring of poly) rings.push(ring.map(proj));
   const [x, y] = proj([T[k][2], T[k][3]]);
+  g.all = rings.filter(keep);
   return { n: T[k][0], c: T[k][1], x: Math.round(x), y: Math.round(y), d: toPath(rings), adj: [] };
+});
+// contorno externo de cada continente: união das formas dos seus territórios
+const outline = CONT.map((_, ci) => {
+  const polys = keys.filter((k) => T[k][1] === ci).flatMap((k) => groups[k].all.map((r) => [[[...r, r[0]]]]));
+  return toPath(pc.union(...polys).flatMap((poly) => poly));
 });
 const SEA = [];
 for (const e of EDGES) {
@@ -159,10 +171,10 @@ for (const e of EDGES) {
   if (sep === '~') SEA.push(e === 'ala~ext' ? [idx[a], idx[b], 1] : [idx[a], idx[b]]);
 }
 TERR.forEach((t) => t.adj.sort((a, b) => a - b));
-const CONTINENTS = CONT.map((c) => { const [x, y] = proj(c.at); return { n: c.n, bonus: c.bonus, color: c.color, x: Math.round(x), y: Math.round(y) }; });
+const CONTINENTS = CONT.map((c) => { const [x, y] = proj(c.at); return { n: c.n, bonus: c.bonus, color: c.color, x: Math.round(x), y: Math.round(y), d: outline[CONT.indexOf(c)] }; });
 const out = `// Gerado por tools/gen-map.mjs (geografia: Natural Earth, domínio público). Não editar à mão.
 export const MAP_W=${W}, MAP_H=${H};
-export const CONTINENTS=${JSON.stringify(CONTINENTS)};
+export const CONTINENTS=${JSON.stringify(CONTINENTS).replace(/\},\{/g, '},\n{')};
 export const TERR=${JSON.stringify(TERR).replace(/\},\{/g, '},\n{')};
 // rotas marítimas [a, b, cruzaBorda?]
 export const SEA=${JSON.stringify(SEA)};

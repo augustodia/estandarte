@@ -27,7 +27,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '6'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '7'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -367,21 +367,22 @@ const nodes = [];
   });
   TERR.forEach((t, i) => {
     const col = CONTINENTS[t.c].color;
-    el('path', { id: 'h' + i, d: t.d }, defs);
     const poly = el('path', { class: 'terr', d: t.d, 'data-t': i, 'fill-rule': 'evenodd' }, land);
-    // filete interno na cor do continente: o traço é recortado pela própria forma, então só aparece por dentro
-    el('use', { href: '#h' + i }, el('clipPath', { id: 'c' + i }, defs));
-    const rim = el('path', { class: 'rim', d: t.d, stroke: col, 'clip-path': `url(#c${i})` }, rims);
     // marcador (exércitos + nome) num grupo próprio, para poder manter o tamanho na tela ao afastar o zoom
     const g = el('g', { class: 'mark' }, hits);
     el('text', { class: 'tname', x: 0, y: 24 }, g).textContent = t.n;
     const badge = el('circle', { class: 'badge', cx: 0, cy: 0, r: 12.5 }, g);
     const num = el('text', { class: 'num', x: 0, y: 0.5 }, g);
     el('circle', { class: 'hit', cx: 0, cy: 0, r: 15, 'data-t': i }, g);
-    nodes.push({ poly, num, badge, g, rim });
+    nodes.push({ poly, num, badge, g });
   });
-  CONTINENTS.forEach((c) => {
+  CONTINENTS.forEach((c, ci) => {
     el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
+    // contorno externo do continente: o traço é recortado pela própria forma e só aparece do lado de dentro,
+    // então na divisa entre dois continentes cada um mostra a sua cor
+    el('path', { id: 'k' + ci, d: c.d }, defs);
+    el('use', { href: '#k' + ci }, el('clipPath', { id: 'kc' + ci }, defs));
+    el('path', { class: 'rim', d: c.d, stroke: c.color, 'clip-path': `url(#kc${ci})` }, rims);
   });
 })();
 let markK = 0;
@@ -677,7 +678,6 @@ function renderGame() {
     const dim = app.sel != null ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
     const ps = pk && (i === pk.sel ? ' psel' : i === pk.target ? ' tgt' : '');
     nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + (ps || ''));
-    nd.rim.setAttribute('class', 'rim' + (i === app.sel || hl || ps ? ' hide' : dim ? ' dim' : ''));
   });
 
   // topo
