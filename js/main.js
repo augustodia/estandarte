@@ -1,7 +1,7 @@
 import { TERR, CONTINENTS, SEA, MAP_W, MAP_H } from './map.js';
 import {
   COLORS, SYMBOLS, OBJECTIVES, objectiveText, newGame, apply, viewFor, botAction, owned,
-  poolTotal, validTrade, tradeValue, cardSymbol, cardName, mustTrade, handSize,
+  poolTotal, validTrade, bestTrade, tradeValue, cardSymbol, cardName, mustTrade, handSize,
 } from './game.js';
 import { createInvite, joinInvite } from './net.js';
 
@@ -27,7 +27,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '3'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '4'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -369,16 +369,40 @@ const nodes = [];
     const col = CONTINENTS[t.c].color;
     el('path', { class: 'halo', d: t.d, fill: 'none', stroke: col }, halo);
     const poly = el('path', { class: 'terr', d: t.d, 'data-t': i, 'fill-rule': 'evenodd' }, land);
-    el('text', { class: 'tname', x: t.x, y: t.y + 23 }, labels).textContent = t.n;
-    el('circle', { class: 'badge', cx: t.x, cy: t.y, r: 12.5, stroke: col }, labels);
-    const num = el('text', { class: 'num', x: t.x, y: t.y + 0.5 }, labels);
-    el('circle', { class: 'hit', cx: t.x, cy: t.y, r: 15, 'data-t': i }, hits);
-    nodes.push({ poly, num });
+    // marcador (exércitos + nome) num grupo próprio, para poder manter o tamanho na tela ao afastar o zoom
+    const g = el('g', { class: 'mark' }, hits);
+    el('text', { class: 'tname', x: 0, y: 24 }, g).textContent = t.n;
+    const badge = el('circle', { class: 'badge', cx: 0, cy: 0, r: 12.5 }, g);
+    const num = el('text', { class: 'num', x: 0, y: 0.5 }, g);
+    el('circle', { class: 'hit', cx: 0, cy: 0, r: 15, 'data-t': i }, g);
+    nodes.push({ poly, num, badge, g, cont: col });
   });
   CONTINENTS.forEach((c) => {
     el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
   });
+  // cada território recebe um tom do seu continente, diferente dos vizinhos do mesmo continente
+  const shade = [];
+  TERR.forEach((t, i) => {
+    const used = new Set(t.adj.filter((j) => j < i && TERR[j].c === t.c).map((j) => shade[j]));
+    shade[i] = [0, 1, 2, 3].find((k) => !used.has(k)) ?? 0;
+    nodes[i].cont = tone(CONTINENTS[t.c].color, [0, 0.2, -0.2, 0.36][shade[i]]);
+  });
 })();
+// clareia (k>0) ou escurece (k<0) uma cor #rrggbb
+function tone(hex, k) {
+  const n = parseInt(hex.slice(1), 16), to = k > 0 ? 255 : 0, a = Math.abs(k);
+  return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((c) => Math.round(c + (to - c) * a).toString(16).padStart(2, '0')).join('');
+}
+const darkText = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150; };
+let markK = 0;
+function scaleMarks() {
+  // ao afastar o zoom os marcadores crescem (até um limite) para continuarem legíveis e tocáveis
+  const k = Math.round(Math.min(1.9, Math.max(1, 10.5 / (12.5 * cam.z))) * 50) / 50;
+  svg.classList.toggle('far', cam.z < 0.5);
+  if (k === markK) return;
+  markK = k;
+  nodes.forEach((nd, i) => nd.g.setAttribute('transform', `translate(${TERR[i].x} ${TERR[i].y}) scale(${k})`));
+}
 
 // Pan e zoom por viewBox, mantendo a proporção do contêiner.
 const cam = { x: 0, y: 0, z: 1 };
@@ -396,6 +420,7 @@ function applyCam() {
   const clamp = (v, size, total) => (size >= total + 2 * PAD ? (total - size) / 2 : Math.min(total + PAD - size, Math.max(-PAD, v)));
   cam.x = clamp(cam.x, w, MAP_W); cam.y = clamp(cam.y, h, MAP_H);
   svg.setAttribute('viewBox', `${cam.x} ${cam.y} ${w} ${h}`);
+  scaleMarks();
 }
 let camReady = false;
 function fitView(toggle) {
@@ -463,6 +488,11 @@ svg.addEventListener('wheel', (e) => {
 }, { passive: false });
 addEventListener('resize', () => { if (!$('#game').hidden) applyCam(); });
 $('#fit').onclick = () => fitView(true);
+// cores do mapa: por continente (dono no marcador) ou por dono (continente no aro do marcador)
+app.mapMode = store.get('mapMode') === 'own' ? 'own' : 'cont';
+const paintMode = () => { $('#mode').textContent = app.mapMode === 'cont' ? 'Cores: continentes' : 'Cores: donos'; };
+$('#mode').onclick = () => { app.mapMode = app.mapMode === 'cont' ? 'own' : 'cont'; store.set('mapMode', app.mapMode); paintMode(); renderGame(); };
+paintMode();
 
 /* ---------- alertas, efeitos e relógio ---------- */
 const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
@@ -523,7 +553,10 @@ function processEvents(v) {
     } else if (e.t === 'phase') {
       if (mine(e.p)) { flash(PHASE_ALERT[e.step][0], col(e.p), PHASE_ALERT[e.step][1], 1000, true); buzz(40); }
     } else if (e.t === 'place') { fxPulse(e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); }
-    else if (e.t === 'trade') flash(mine(e.p) ? `+${e.v} exércitos` : `${nm(e.p)} trocou cartas`, col(e.p), mine(e.p) ? 'Troca de cartas' : `+${e.v} exércitos`);
+    else if (e.t === 'trade') {
+      flash(mine(e.p) ? `+${e.v} exércitos` : `${nm(e.p)} trocou cartas`, col(e.p), mine(e.p) ? (e.auto ? 'Troca automática de cartas' : 'Troca de cartas') : `+${e.v} exércitos`, 1000, mine(e.p));
+      (e.bonus || []).forEach((t) => { fxPulse(t, col(e.p)); fxFloat(t, '+2', '#fff'); });
+    }
     else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); }
     else if (e.t === 'attack') {
       fxArrow(e.from, e.to, col(e.p));
@@ -614,6 +647,11 @@ function tapTerritory(t) {
 }
 
 const STEP = { reinforce: 'Reforço', attack: 'Ataque', move: 'Remanejamento' };
+const ICON = {
+  goal: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
+  cards: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="11" height="15" rx="2"/><path d="M9 3h9a2 2 0 0 1 2 2v13"/></svg>',
+  menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+};
 function renderGame() {
   const v = app.view;
   if (!v) return;
@@ -648,7 +686,11 @@ function renderGame() {
   // no reforço, quando só restam bônus de continente, apaga onde não dá para colocar
   const bonusOnly = can && v.step === 'reinforce' && v.pool.free === 0 && !mustTrade(v);
   nodes.forEach((nd, i) => {
-    nd.poly.setAttribute('fill', COLORS[v.players[T[i].o].color].c);
+    const own = COLORS[v.players[T[i].o].color].c, byCont = app.mapMode === 'cont';
+    nd.poly.setAttribute('fill', byCont ? nd.cont : own);
+    nd.badge.setAttribute('fill', byCont ? own : '#0c1626');
+    nd.badge.setAttribute('stroke', byCont ? '#fff' : CONTINENTS[TERR[i].c].color);
+    nd.num.setAttribute('fill', byCont && darkText(own) ? '#10151c' : '#fff');
     nd.num.textContent = T[i].a;
     const hl = app.target != null ? i === app.target : targets.has(i);
     const dim = app.sel != null ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
@@ -660,9 +702,9 @@ function renderGame() {
   const meP = v.players[vw];
   $('#hud').innerHTML = `<div class="turn"><span class="dot" style="background:${COLORS[cur.color].c}"></span>
     <span><b>${esc(cur.name)}</b><span class="phase">${v.phase === 'over' ? 'Fim de jogo' : `${STEP[v.step]} · rodada ${v.round + 1}`}</span></span></div>
-    <button class="icon" data-do="objective" aria-label="Objetivo">🎯</button>
-    <button class="icon" data-do="cards" aria-label="Cartas">🂠 ${handSize(meP)}</button>
-    <button class="icon" data-do="menu" aria-label="Menu">☰</button>`;
+    <button class="icon" data-do="objective" aria-label="Objetivo">${ICON.goal}</button>
+    <button class="icon" data-do="cards" aria-label="Cartas">${ICON.cards}<span>${handSize(meP)}</span></button>
+    <button class="icon" data-do="menu" aria-label="Menu">${ICON.menu}</button>`;
 
   // dados
   if (v.roll && v.roll.n !== app.lastRoll) {
@@ -677,7 +719,7 @@ function renderGame() {
   // rodapé
   const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.` : (v.log[v.log.length - 1] || '');
   const chips = `<div class="chips">${[1, 5, 'all'].map((q) => `<button class="chip${app.qty === q ? ' on' : ''}" data-qty="${q}">${q === 'all' ? 'Tudo' : '×' + q}</button>`).join('')}</div>`;
-  let msg = '', btns = '';
+  let msg = '', btns = '', warn = '';
   if (v.phase === 'over') {
     const w = v.players[v.winner];
     msg = `<b style="color:${COLORS[w.color].c}">${esc(w.name)}</b> venceu! ${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj])) : ''}`;
@@ -692,7 +734,8 @@ function renderGame() {
   } else if (v.step === 'reinforce') {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     msg = mustTrade(v) ? 'Você tem 5 ou mais cartas: troque antes de reforçar.' : `Toque em territórios seus para reforçar: <b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}.`;
-    btns = chips + (mustTrade(v) ? '<button class="btn small primary" data-do="cards">Trocar cartas</button>' : '');
+    const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
+    btns = chips + (tr ? `<button class="btn small primary" data-do="autoTrade">Trocar cartas +${tradeValue(v.trades)}</button>` : '');
   } else if (v.occupy) {
     msg = `Conquistou ${TERR[v.occupy.to].n}! Levar mais exércitos?`;
     btns = Array.from({ length: v.occupy.max + 1 }, (_, i) => `<button class="btn small${i === v.occupy.max ? ' primary' : ''}" data-occupy="${i}">+${i}</button>`).join('');
@@ -702,13 +745,14 @@ function renderGame() {
       btns = '<button class="btn small primary" data-do="attack">Atacar</button><button class="btn small" data-do="blitz">Até o fim</button>';
     } else msg = app.sel != null ? 'Agora toque num vizinho inimigo (tracejado).' : 'Toque num território seu para atacar a partir dele.';
     btns += '<button class="btn small" data-do="endAttack">Encerrar ataques</button>';
+    if (app.sel != null && app.target != null) btns = btns.replace('Encerrar ataques', 'Encerrar');
   } else {
     msg = app.sel != null ? `Mover de ${TERR[app.sel].n} (até ${v.movable[app.sel] || 0}): toque no destino.` : 'Remaneje: toque na origem e depois num vizinho seu.';
     btns = chips + '<button class="btn small primary" data-do="endTurn">Encerrar turno</button>';
   }
   if (app.role === 'host' && v.phase === 'play') {
     const off = app.seats.filter((s) => s.ctrl === 'remote' && !s.link);
-    if (off.length) btns += `<button class="btn small warn" data-do="invite">Reconectar ${esc(off.length === 1 ? off[0].name : off.length + ' jogadores')}</button>`;
+    if (off.length) warn = `<div class="actions"><button class="btn small warn" data-do="invite">Reconectar ${esc(off.length === 1 ? off[0].name : off.length + ' jogadores')} (offline)</button></div>`;
   }
   if (can) { // compartilha a seleção atual com quem está assistindo
     const key = `${v.n}:${app.sel}:${app.target}`;
@@ -718,8 +762,8 @@ function renderGame() {
       if (app.role === 'guest') app.link && app.link.send(m); else app.seats.forEach((s) => s.link && s.link.send(m));
     }
   }
-  const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span>Você: ${esc(meP.name)}</span>`;
-  $('#bar').innerHTML = `<div class="msg">${msg}</div><div class="row">${btns}</div><div class="foot"><span class="info">${info}</span>${you}</div>`;
+  const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span><span>Você: ${esc(meP.name)}</span></span>`;
+  $('#bar').innerHTML = `<div class="msg">${msg}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
 }
 
 function showObjective() {
@@ -735,7 +779,7 @@ function showCards() {
   const draw = () => {
     const ok = canTrade && validTrade([...picked]);
     $('#modal .sheet').innerHTML = `<h3>Cartas (${hand.length})</h3>
-      <p>Troque 3 símbolos iguais ou 3 diferentes (★ vale qualquer um) no início do seu turno. Próxima troca vale <b>${tradeValue(v.trades)}</b> exércitos; cartas de territórios seus dão +2 neles.</p>
+      <p>Troque 3 símbolos iguais ou 3 diferentes (★ vale qualquer um) no início do seu turno. Próxima troca vale <b>${tradeValue(v.trades)}</b> exércitos; cartas de territórios seus dão +2 neles. Com 5 cartas a troca é automática.</p>
       <div class="cards">${hand.map((c) => `<button class="card${picked.has(c) ? ' on' : ''}" data-card="${c}"><b>${SYMBOLS[cardSymbol(c)]}</b>${esc(cardName(c))}</button>`).join('') || '<p>Nenhuma carta ainda. Conquiste um território no turno para ganhar uma.</p>'}</div>
       <div class="row"><button class="btn primary" data-m="trade" ${ok ? '' : 'disabled'}>Trocar selecionadas</button><button class="btn" data-m="close">Fechar</button></div>`;
   };
@@ -771,7 +815,7 @@ function showRules() {
   <li><b>Reforço:</b> no início do turno você recebe metade dos seus territórios em exércitos (mínimo 3), mais o bônus de cada continente inteiro que dominar (o bônus só pode ser colocado no próprio continente).</li>
   <li><b>Ataque:</b> a partir da 2ª rodada, ataque vizinhos com até 3 dados (precisa deixar 1 exército para trás). A defesa rola até 3. Compare do maior para o menor; empate é da defesa.</li>
   <li><b>Conquista:</b> ao zerar a defesa você ocupa o território com 1 a 3 exércitos e, no fim do turno, ganha uma carta.</li>
-  <li><b>Cartas:</b> troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória.</li>
+  <li><b>Cartas:</b> troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória e o jogo faz sozinho no início do turno, escolhendo a melhor trinca. Com menos, o botão “Trocar cartas” aparece no reforço.</li>
   <li><b>Remanejamento:</b> ao final, mova exércitos entre territórios vizinhos seus; cada exército anda uma vez por turno.</li>
   <li><b>Rotas marítimas:</b> linhas pontilhadas também são fronteiras. O Alasca liga com o Extremo Oriente pela borda do mapa.</li></ul>
   <h3>Conexão</h3>
@@ -822,6 +866,7 @@ const actions = {
   again() { store.del('save2'); app.game = null; app.view = null; show('lobby'); sync(); },
   objective: showObjective,
   cards: showCards,
+  autoTrade() { const v = app.view, me = v.players[v.turn]; const tr = Array.isArray(me.cards) && bestTrade(me.cards, v.terr, v.turn); if (tr) act({ t: 'trade', cards: tr }); },
   menu: showMenu,
   attack: () => act({ t: 'attack', from: app.sel, to: app.target }),
   blitz: () => act({ t: 'attack', from: app.sel, to: app.target, blitz: true }),

@@ -99,6 +99,8 @@ function startTurn(s) {
   s.pool = { free: Math.max(3, Math.floor(owned(s, p) / 2)), cont: {} };
   CONTINENTS.forEach((c, i) => { if (ownsContinent(s, p, i)) s.pool.cont[i] = c.bonus; });
   s.ev.push({ t: 'turn', p });
+  // com 5 cartas ou mais a troca é obrigatória: o jogo faz sozinho, com a melhor trinca
+  for (let tr; s.players[p].cards.length >= 5 && (tr = bestTrade(s.players[p].cards, s.terr, p));) doTrade(s, p, tr, true);
   log(s, `Vez de ${pname(s, p)}: ${poolTotal(s)} exércitos a distribuir.`);
   checkWin(s, p);
 }
@@ -141,6 +143,30 @@ export function findTrade(hand) {
         if (validTrade([hand[a], hand[b], hand[c]])) return [hand[a], hand[b], hand[c]];
   return null;
 }
+// Melhor trinca para trocar: prioriza cartas de territórios do jogador (+2 cada) e poupa coringas.
+export function bestTrade(hand, terr, p) {
+  let best = null, top = -1;
+  for (let a = 0; a < hand.length; a++)
+    for (let b = a + 1; b < hand.length; b++)
+      for (let c = b + 1; c < hand.length; c++) {
+        const tr = [hand[a], hand[b], hand[c]];
+        if (!validTrade(tr)) continue;
+        const sc = tr.reduce((k, x) => k + (x >= NT ? 0 : 1 + (terr[x].o === p ? 10 : 0)), 0);
+        if (sc > top) { top = sc; best = tr; }
+      }
+  return best;
+}
+function doTrade(s, p, cards, auto) {
+  const pl = s.players[p], T = s.terr;
+  pl.cards = pl.cards.filter((c) => !cards.includes(c));
+  s.discard.push(...cards);
+  const v = tradeValue(s.trades++);
+  s.pool.free += v;
+  let bonus = 0;
+  cards.forEach((c) => { if (c < NT && T[c].o === p) { T[c].a += 2; bonus++; } });
+  s.ev.push({ t: 'trade', p, v, auto: !!auto, bonus: cards.filter((c) => c < NT && T[c].o === p) });
+  log(s, `${pl.name} trocou cartas por ${v} exércitos${auto ? ' (troca automática)' : ''}${bonus ? ` e +2 em ${bonus} território${bonus > 1 ? 's' : ''}` : ''}.`);
+}
 export const mustTrade = (s) => s.step === 'reinforce' && s.players[s.turn].cards.length >= 5;
 
 function nextTurn(s, rng) {
@@ -172,14 +198,7 @@ export function apply(s, p, a, rng = Math.random) {
     case 'trade': {
       if (s.step !== 'reinforce') return 'Trocas só no início do turno.';
       if (!validTrade(a.cards) || !a.cards.every((c) => pl.cards.includes(c))) return 'Troca inválida.';
-      pl.cards = pl.cards.filter((c) => !a.cards.includes(c));
-      s.discard.push(...a.cards);
-      const v = tradeValue(s.trades++);
-      s.pool.free += v;
-      s.ev.push({ t: 'trade', p, v });
-      let bonus = 0;
-      a.cards.forEach((c) => { if (c < NT && T[c].o === p) { T[c].a += 2; bonus++; } });
-      log(s, `${pl.name} trocou cartas por ${v} exércitos${bonus ? ` (+2 em ${bonus} território${bonus > 1 ? 's' : ''} das cartas)` : ''}.`);
+      doTrade(s, p, a.cards, false);
       return null;
     }
     case 'place': {
@@ -292,7 +311,7 @@ export function botAction(s) {
   const enemies = (i) => TERR[i].adj.filter((j) => T[j].o !== p);
   if (s.occupy) return { t: 'occupy', n: s.occupy.max };
   if (s.step === 'reinforce') {
-    const tr = findTrade(pl.cards);
+    const tr = bestTrade(pl.cards, T, p);
     if (tr && (pl.cards.length >= 5 || poolTotal(s) > 0)) return { t: 'trade', cards: tr };
     const mine = T.map((t, i) => i).filter((i) => T[i].o === p);
     const contIds = Object.keys(s.pool.cont).map(Number);

@@ -33,11 +33,11 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 
 - **Reforço:** metade dos seus territórios em exércitos (mínimo 3) + bônus de continentes dominados por inteiro.
 - **Ataque:** a partir da 2ª rodada, até 3 dados contra até 3 da defesa; empate favorece a defesa.
-- **Cartas:** conquistou no turno, ganha uma carta; 3 iguais ou 3 diferentes viram exércitos (4, 6, 8, 10, 12, 15, +5…).
+- **Cartas:** conquistou no turno, ganha uma carta; 3 iguais ou 3 diferentes viram exércitos (4, 6, 8, 10, 12, 15, +5…). Com 5 cartas a troca é automática no início do turno; com menos, um botão troca a melhor trinca com um toque.
 - **Remanejamento:** ao fim do turno, cada exército pode andar uma vez para um território vizinho seu.
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
-No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover.
+No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. O mapa pode ser colorido por continente (cada território num tom, dono indicado pela cor do marcador) ou por dono; o botão no canto do mapa alterna.
 
 ## O que cada um vê durante a partida
 
