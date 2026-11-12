@@ -16,12 +16,12 @@ const proj = ([lon, lat]) => {
 };
 
 const CONT = [
-  { n: 'América do Norte', bonus: 5, color: '#c9a55a', at: [-146, 27] },
-  { n: 'América do Sul', bonus: 3, color: '#6aa673', at: [-104, -28] },
-  { n: 'Europa', bonus: 5, color: '#6a9fc6', at: [-24, 47] },
-  { n: 'África', bonus: 4, color: '#c07a55', at: [-10, -14] },
-  { n: 'Ásia', bonus: 7, color: '#b9799a', at: [74, -4] },
-  { n: 'Oceania', bonus: 2, color: '#8d85c0', at: [128, -46] },
+  { n: 'América do Norte', bonus: 5, color: '#f0d9a0', at: [-146, 27] },
+  { n: 'América do Sul', bonus: 3, color: '#a8e0b0', at: [-104, -28] },
+  { n: 'Europa', bonus: 5, color: '#a9d4f5', at: [-24, 47] },
+  { n: 'África', bonus: 4, color: '#f2b08c', at: [-10, -14] },
+  { n: 'Ásia', bonus: 7, color: '#f0b0cf', at: [74, -4] },
+  { n: 'Oceania', bonus: 2, color: '#c9c0f5', at: [128, -46] },
 ];
 // chave: [nome, continente, rótulo lon, lat]
 const T = {

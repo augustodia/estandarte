@@ -27,7 +27,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '4'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '5'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -356,7 +356,7 @@ const el = (tag, attrs, parent) => {
 const PAD = 30;
 const nodes = [];
 (function buildMap() {
-  const halo = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
+  const defs = el('defs', {}, svg), halo = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), rims = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
   SEA.forEach(([a, b, wrap]) => {
     const A = TERR[a], B = TERR[b];
     if (wrap) { // rota que dá a volta no mapa: um trecho até cada borda
@@ -367,33 +367,23 @@ const nodes = [];
   });
   TERR.forEach((t, i) => {
     const col = CONTINENTS[t.c].color;
-    el('path', { class: 'halo', d: t.d, fill: 'none', stroke: col }, halo);
+    el('path', { class: 'halo', id: 'h' + i, d: t.d, fill: 'none', stroke: col }, halo);
     const poly = el('path', { class: 'terr', d: t.d, 'data-t': i, 'fill-rule': 'evenodd' }, land);
+    // borda interna na cor do continente: o traço é recortado pela própria forma, então só aparece por dentro
+    el('use', { href: '#h' + i }, el('clipPath', { id: 'c' + i }, defs));
+    const rim = el('path', { class: 'rim', d: t.d, stroke: col, 'clip-path': `url(#c${i})` }, rims);
     // marcador (exércitos + nome) num grupo próprio, para poder manter o tamanho na tela ao afastar o zoom
     const g = el('g', { class: 'mark' }, hits);
     el('text', { class: 'tname', x: 0, y: 24 }, g).textContent = t.n;
     const badge = el('circle', { class: 'badge', cx: 0, cy: 0, r: 12.5 }, g);
     const num = el('text', { class: 'num', x: 0, y: 0.5 }, g);
     el('circle', { class: 'hit', cx: 0, cy: 0, r: 15, 'data-t': i }, g);
-    nodes.push({ poly, num, badge, g, cont: col });
+    nodes.push({ poly, num, badge, g, rim });
   });
   CONTINENTS.forEach((c) => {
     el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
   });
-  // cada território recebe um tom do seu continente, diferente dos vizinhos do mesmo continente
-  const shade = [];
-  TERR.forEach((t, i) => {
-    const used = new Set(t.adj.filter((j) => j < i && TERR[j].c === t.c).map((j) => shade[j]));
-    shade[i] = [0, 1, 2, 3].find((k) => !used.has(k)) ?? 0;
-    nodes[i].cont = tone(CONTINENTS[t.c].color, [0, 0.2, -0.2, 0.36][shade[i]]);
-  });
 })();
-// clareia (k>0) ou escurece (k<0) uma cor #rrggbb
-function tone(hex, k) {
-  const n = parseInt(hex.slice(1), 16), to = k > 0 ? 255 : 0, a = Math.abs(k);
-  return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((c) => Math.round(c + (to - c) * a).toString(16).padStart(2, '0')).join('');
-}
-const darkText = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150; };
 let markK = 0;
 function scaleMarks() {
   // ao afastar o zoom os marcadores crescem (até um limite) para continuarem legíveis e tocáveis
@@ -488,11 +478,6 @@ svg.addEventListener('wheel', (e) => {
 }, { passive: false });
 addEventListener('resize', () => { if (!$('#game').hidden) applyCam(); });
 $('#fit').onclick = () => fitView(true);
-// cores do mapa: por continente (dono no marcador) ou por dono (continente no aro do marcador)
-app.mapMode = store.get('mapMode') === 'own' ? 'own' : 'cont';
-const paintMode = () => { $('#mode').textContent = app.mapMode === 'cont' ? 'Cores: continentes' : 'Cores: donos'; };
-$('#mode').onclick = () => { app.mapMode = app.mapMode === 'cont' ? 'own' : 'cont'; store.set('mapMode', app.mapMode); paintMode(); renderGame(); };
-paintMode();
 
 /* ---------- alertas, efeitos e relógio ---------- */
 const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
@@ -686,16 +671,13 @@ function renderGame() {
   // no reforço, quando só restam bônus de continente, apaga onde não dá para colocar
   const bonusOnly = can && v.step === 'reinforce' && v.pool.free === 0 && !mustTrade(v);
   nodes.forEach((nd, i) => {
-    const own = COLORS[v.players[T[i].o].color].c, byCont = app.mapMode === 'cont';
-    nd.poly.setAttribute('fill', byCont ? nd.cont : own);
-    nd.badge.setAttribute('fill', byCont ? own : '#0c1626');
-    nd.badge.setAttribute('stroke', byCont ? '#fff' : CONTINENTS[TERR[i].c].color);
-    nd.num.setAttribute('fill', byCont && darkText(own) ? '#10151c' : '#fff');
+    nd.poly.setAttribute('fill', COLORS[v.players[T[i].o].color].c);
     nd.num.textContent = T[i].a;
     const hl = app.target != null ? i === app.target : targets.has(i);
     const dim = app.sel != null ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
     const ps = pk && (i === pk.sel ? ' psel' : i === pk.target ? ' tgt' : '');
     nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + (ps || ''));
+    nd.rim.setAttribute('class', 'rim' + (i === app.sel || hl || ps ? ' hide' : dim ? ' dim' : ''));
   });
 
   // topo

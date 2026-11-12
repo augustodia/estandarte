@@ -53,7 +53,6 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;stroke:none}
 .mapbtn{position:absolute;bottom:10px;height:34px;border-radius:17px;border:1px solid var(--line);background:#15263dd9;color:var(--ink);font:600 12px/1 system-ui,sans-serif;padding:0 12px;display:inline-flex;align-items:center;justify-content:center}
 #fit{right:10px;width:34px;padding:0}#fit svg{width:16px;height:16px}
-#mode{left:10px}
 #bar{background:var(--panel);border-top:1px solid var(--line);padding:8px 10px max(8px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
 #bar .msg{font-size:14px;line-height:1.3;min-height:18px;overflow-wrap:anywhere}
 #bar .actions{display:flex;gap:6px;align-items:center}
@@ -64,16 +63,18 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 
 /* mapa */
 .sea-route{stroke:#7fa3c7;stroke-width:2.2;stroke-dasharray:2 7;stroke-linecap:round;opacity:.7;fill:none}
-.halo{stroke-width:7;stroke-linejoin:round;opacity:.55;fill:none}
-.terr{stroke:#081120;stroke-width:1.8;stroke-linejoin:round;transition:fill .25s}
+.halo{stroke-width:6;stroke-linejoin:round;opacity:.6;fill:none}
+.rim{fill:none;stroke-width:5.5;stroke-linejoin:round;opacity:.85;pointer-events:none}
+.rim.hide{display:none}.rim.dim{opacity:.3}
+.terr{stroke:#081120;stroke-width:1.3;stroke-linejoin:round;transition:fill .25s}
 .terr.sel{stroke:#fff;stroke-width:3.5}
 .terr.tgt{stroke:#fff;stroke-width:2.6;stroke-dasharray:6 4;animation:march 1s linear infinite}
 .terr.psel{stroke:#fff;stroke-width:3;stroke-dasharray:3 3}
 .terr.dim{filter:brightness(.5) saturate(.6)}
 @keyframes march{to{stroke-dashoffset:-20}}
-.badge{stroke-width:2.2;pointer-events:none}
+.badge{fill:#0c1626;stroke:#fffc;stroke-width:1.6;pointer-events:none}
 .hit{fill:transparent;stroke:none}
-.num{font:700 14px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none;stroke:none}
+.num{fill:#fff;font:700 14px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none;stroke:none}
 .tname{fill:#fff;font:600 8px system-ui,sans-serif;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#0c1626;stroke-width:2.4;stroke-linejoin:round}
 .far .tname{display:none}
 .cname{font:700 17px Georgia,serif;text-anchor:middle;pointer-events:none;letter-spacing:.06em;paint-order:stroke;stroke:#0f1c2e;stroke-width:5}

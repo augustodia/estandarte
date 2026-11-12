@@ -37,7 +37,7 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - **Remanejamento:** ao fim do turno, cada exército pode andar uma vez para um território vizinho seu.
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
-No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. O mapa pode ser colorido por continente (cada território num tom, dono indicado pela cor do marcador) ou por dono; o botão no canto do mapa alterna.
+No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; uma borda interna fina, na cor do continente, mostra a que continente ele pertence.
 
 ## O que cada um vê durante a partida
 
