@@ -113,7 +113,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 #ring .disc{fill:#0a1422e6}
 #ring .track{fill:none;stroke:#2b4466;stroke-width:4}
 #ring .time{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;transition:stroke-dasharray .25s linear}
-#ring .seg{fill:none;stroke-width:10}
+#ring .seg{fill:none;stroke-width:10;stroke-linecap:butt}
 #ring .start{fill:var(--ink)}
 #ring .rt{fill:var(--ink);font:700 19px/1 system-ui,sans-serif;text-anchor:middle}
 #ring .rs{fill:var(--mute);font:600 10px/1 system-ui,sans-serif;text-anchor:middle}
