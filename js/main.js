@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '17'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '18'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -645,15 +645,30 @@ function forceEnd() {
   app.sel = app.target = null;
   sync();
 }
-setInterval(() => {
-  const v = app.view, bar = $('#timer');
-  const on = v && v.phase === 'play' && app.tEnd && app.tLimit && !$('#game').hidden;
-  bar.hidden = !on;
-  if (!on) { app.lastSec = null; return; }
+// Anel de jogada: o aro de fora é o relógio do turno; o centro mostra o tempo (ou, sem relógio, os territórios de quem joga).
+const RING_C = 2 * Math.PI * 45;
+function updateRing() {
+  const el = $('#ring'), v = app.view;
+  if (el.hidden || !el.firstChild || !v) return null;
+  const time = el.querySelector('.time'), rt = el.querySelector('.rt'), rs = el.querySelector('.rs');
+  if (!(app.tEnd && app.tLimit)) { // sem relógio (turno livre, bot ou pareamento em curso)
+    time.setAttribute('stroke-dasharray', `0 ${RING_C}`);
+    rt.textContent = owned(v, v.turn); rs.textContent = 'terr.';
+    el.classList.remove('low');
+    return null;
+  }
   const left = app.tEnd - Date.now(), secs = Math.max(0, Math.ceil(left / 1000));
-  bar.querySelector('i').style.transform = `scaleX(${Math.max(0, Math.min(1, left / app.tLimit))})`;
-  bar.querySelector('b').textContent = secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : secs + ' s';
-  bar.classList.toggle('low', secs <= 10);
+  time.setAttribute('stroke-dasharray', `${(Math.max(0, Math.min(1, left / app.tLimit)) * RING_C).toFixed(1)} ${RING_C}`);
+  rt.textContent = secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : secs;
+  rs.textContent = secs >= 60 ? '' : 'seg';
+  el.classList.toggle('low', secs <= 10);
+  return secs;
+}
+setInterval(() => {
+  const v = app.view;
+  const on = v && v.phase === 'play' && !$('#game').hidden;
+  const secs = on ? updateRing() : null;
+  if (secs == null) { app.lastSec = null; return; }
   if (secs !== app.lastSec) {
     if (canAct() && app.lastSec != null) {
       if (secs === 10) { flash('10 segundos!', '#e06a5a', 'O turno vai encerrar sozinho', 1000, true); buzz([60, 40, 60]); play('warn'); }
@@ -805,14 +820,28 @@ function renderGame() {
     <button class="icon" data-do="cards" aria-label="Cartas">${ICON.cards}<span>${handSize(meP)}</span></button>
     <button class="icon" data-do="menu" aria-label="Menu">${ICON.menu}</button>`;
 
-  // ordem de jogada: quem joga agora (em destaque) e, na sequência, os próximos
+  // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir do topo);
+  // a de quem joga agora é a primeira e a mais grossa; o tamanho de cada fatia segue o número de territórios
   const seq = [];
   for (let k = 0; k < v.players.length; k++) { const i = (v.turn + k) % v.players.length; if (v.players[i].alive) seq.push(i); }
-  $('#order').innerHTML = v.phase !== 'play' ? '' : seq.map((i, k) => {
-    const p = v.players[i];
-    return `${k ? '<span class="sep">›</span>' : ''}<span class="oc${k ? '' : ' cur'}${i === vw ? ' me' : ''}" style="--c:${COLORS[p.color].c}" aria-label="${esc(p.name)}${k ? '' : ', jogando agora'}">
-      <i></i><span>${esc(p.name)}</span><small>${owned(v, i)}</small></span>`;
-  }).join('');
+  const ring = $('#ring');
+  ring.hidden = v.phase !== 'play';
+  if (!ring.hidden) {
+    const C = 2 * Math.PI * 31, gap = seq.length > 1 ? 2.5 : 0, counts = seq.map((i) => owned(v, i));
+    let lens = counts.map((c) => Math.max(8, (c / TERR.length) * C));
+    const sum = lens.reduce((x, y) => x + y, 0);
+    lens = lens.map((l) => (l * C) / sum);
+    let off = 0, segs = '', dot = '';
+    seq.forEach((i, k) => {
+      const L = lens[k];
+      segs += `<circle class="seg${k ? '' : ' cur'}" r="31" stroke="${COLORS[v.players[i].color].c}" stroke-dasharray="${(L - gap).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
+      if (i === vw) { const ang = ((off + (L - gap) / 2) / C) * 2 * Math.PI; dot = `<circle class="medot" cx="${(31 * Math.cos(ang)).toFixed(1)}" cy="${(31 * Math.sin(ang)).toFixed(1)}" r="3.2"/>`; }
+      off += L;
+    });
+    ring.setAttribute('aria-label', 'Ordem de jogada: ' + seq.map((i, k) => `${v.players[i].name}${k ? '' : ' (jogando)'}, ${counts[k]} territórios`).join('; '));
+    ring.innerHTML = `<svg viewBox="-50 -50 100 100"><circle class="disc" r="50"/><g transform="rotate(-90)"><circle class="track" r="45"/><circle class="time" r="45"/>${segs}${dot}</g><text class="rt" y="2"></text><text class="rs" y="14"></text></svg>`;
+    updateRing();
+  }
 
   // dados
   if (v.roll && v.roll.n !== app.lastRoll) {
