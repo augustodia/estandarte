@@ -174,23 +174,34 @@ video{width:100%;border-radius:12px;background:#000;max-height:46vh;object-fit:c
 
 @media (prefers-reduced-motion:reduce){.terr.tgt,#map.shake,#map.shake2{animation:none}.terr{transition:none}}
 @media (prefers-reduced-motion:reduce){.aim{animation:none}}
-/* celular deitado: mapa em cima, uma única faixa de controles no rodapé */
-@media (orientation:landscape) and (max-height:520px){
-#game:not([hidden]){display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr auto}
-#mapwrap{grid-column:1/3;grid-row:1}
-#hud{grid-column:1;grid-row:2;border-bottom:0;border-top:1px solid var(--line);padding:6px 8px max(6px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));gap:4px;max-width:46vw}
-#hud .turn{flex:0 1 auto;max-width:150px}
-#bar{grid-column:2;grid-row:2;flex-direction:row;align-items:center;gap:8px;min-width:0;padding:6px max(10px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) 4px}
-#bar .msg{flex:1 1 0;min-width:0;font-size:13px;line-height:1.25;max-height:2.5em;overflow:hidden}
-#bar{flex-wrap:wrap}
-#bar .actions{flex:none}#bar .actions .btn{flex:none}
-#bar .actions:has(.warn){flex:1 1 100%;justify-content:flex-end}#bar .actions .warn{height:32px;font-size:13px}
-#bar .foot{display:none}
-.icon{min-width:36px;height:36px;padding:0 6px}
-#flash{top:42%}#flash.mini{top:58px}
-.wincard{max-width:620px;display:grid;grid-template-columns:auto 1fr;column-gap:16px;align-items:center;padding:12px 16px}
-.wincard .cup{grid-row:1/4;width:60px;height:60px}.wincard h2{font-size:30px;margin-bottom:4px}.wincard .wl,.wincard h2,.wincard .wobj{text-align:left}
-.wincard .rank,.wincard .row{grid-column:1/3}.wincard .rank{display:grid;grid-template-columns:1fr 1fr;margin-bottom:8px}.rank li{padding:3px 8px}
-#toast{top:10px}
-.sheet{max-width:560px}
-}
+/* Layout deitado (classe .land, posta pelo JS): vale com o celular deitado de verdade ou com a tela girada à força. */
+body.land #game:not([hidden]){display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr auto}
+body.land #mapwrap{grid-column:1/3;grid-row:1}
+body.land #hud{grid-column:1;grid-row:2;border-bottom:0;border-top:1px solid var(--line);padding:6px 8px max(6px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));gap:4px;max-width:46vw}
+body.land #hud .turn{flex:0 1 auto;max-width:150px}
+body.land #bar{grid-column:2;grid-row:2;flex-direction:row;align-items:center;gap:8px;min-width:0;padding:6px max(10px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) 4px}
+body.land #bar .msg{flex:1 1 0;min-width:0;font-size:13px;line-height:1.25;max-height:2.5em;overflow:hidden}
+body.land #bar{flex-wrap:wrap}
+body.land #bar .actions{flex:none}
+body.land #bar .actions .btn{flex:none}
+body.land #bar .actions:has(.warn){flex:1 1 100%;justify-content:flex-end}
+body.land #bar .actions .warn{height:32px;font-size:13px}
+body.land #bar .foot{display:none}
+body.land .icon{min-width:36px;height:36px;padding:0 6px}
+body.land #flash{top:42%}
+body.land #flash.mini{top:58px}
+body.land .wincard{max-width:620px;display:grid;grid-template-columns:auto 1fr;column-gap:16px;align-items:center;padding:12px 16px}
+body.land .wincard .cup{grid-row:1/4;width:60px;height:60px}
+body.land .wincard h2{font-size:30px;margin-bottom:4px}
+body.land .wincard .wl,body.land .wincard h2,body.land .wincard .wobj{text-align:left}
+body.land .wincard .rank,body.land .wincard .row{grid-column:1/3}
+body.land .wincard .rank{display:grid;grid-template-columns:1fr 1fr;margin-bottom:8px}
+body.land .rank li{padding:3px 8px}
+body.land #toast{top:10px}
+body.land .sheet{max-width:560px}
+/* Tela girada à força: com o celular em pé, o palco inteiro roda 90° e o jogador vira o aparelho.
+   Largura, altura e posição são postas pelo JS em pixels. */
+#stage{position:absolute;inset:0}
+body.rot #stage{inset:auto;top:0;transform-origin:0 0;transform:rotate(90deg)}
+body.rot video{max-height:38vw}
+body.rot #hud{max-width:none}

@@ -51,7 +51,7 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 - **Reforço:** toque num território seu, ajuste a quantidade com − e + (ou "Máx") e toque em "Colocar". Tocar de novo no mesmo território soma 1.
 - **Ataque:** toque direto no inimigo (a origem passa a ser o seu vizinho com mais exércitos) ou toque antes na origem; linhas mostram os alvos possíveis. Escolha de 1 a 3 dados com − e + e toque em "Atacar", ou toque de novo no alvo. "Auto" repete o ataque com o máximo de dados até conquistar ou não poder mais.
 - **Conquista e remanejamento:** − e + definem quantos exércitos mover.
-- **Celular deitado:** o mapa ocupa a tela e todos os controles ficam numa faixa no rodapé.
+- **Sempre deitado:** durante a partida a tela fica deitada mesmo com o celular em pé (ela gira 90° e você vira o aparelho); o mapa ocupa a tela e os controles ficam numa faixa no rodapé. Dá para voltar ao modo automático no menu ☰.
 
 ## O que cada um vê durante a partida
 

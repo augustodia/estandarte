@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '21'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '22'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -52,8 +52,23 @@ function closeModal() {
 }
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+  applyLayout();
   if (id === 'game') requestAnimationFrame(fitView);
 }
+// Jogo sempre deitado: na partida, se o celular estiver em pé, o palco gira 90° (o jogador vira o aparelho).
+// Com o aparelho deitado de verdade nada gira. Dá para desligar no menu.
+const rotated = () => document.body.classList.contains('rot');
+function applyLayout() {
+  const inGame = !$('#game').hidden, portrait = innerHeight > innerWidth;
+  const rot = inGame && portrait && store.get('forceLand') !== false;
+  const st = $('#stage').style;
+  document.body.classList.toggle('rot', rot);
+  if (rot) { st.left = innerWidth + 'px'; st.width = innerHeight + 'px'; st.height = innerWidth + 'px'; }
+  else st.left = st.width = st.height = '';
+  document.body.classList.toggle('land', rot || (!portrait && innerHeight <= 520));
+}
+// posição do toque no sistema de coordenadas do palco (que pode estar girado)
+const pt = (e) => (rotated() ? { x: e.clientY, y: innerWidth - e.clientX } : { x: e.clientX, y: e.clientY });
 const myName = () => ($('#name').value.trim() || 'Jogador').slice(0, 14);
 
 function drawQr(text) {
@@ -451,7 +466,7 @@ function scaleMarks() {
 // Pan e zoom por viewBox, mantendo a proporção do contêiner.
 const cam = { x: 0, y: 0, z: 1 };
 // Caixa do mapa sem a inclinação em perspectiva (o retângulo transformado não serve para as contas de zoom).
-function boxOf() { const b = $('#mapwrap').getBoundingClientRect(); return { left: b.left, top: b.top, width: svg.clientWidth, height: svg.clientHeight }; }
+function boxOf() { const b = rotated() ? { left: 0, top: 0 } : $('#mapwrap').getBoundingClientRect(); return { left: b.left, top: b.top, width: svg.clientWidth, height: svg.clientHeight }; }
 function limits() {
   const r = boxOf();
   const contain = Math.min(r.width / (MAP_W + 2 * PAD), r.height / (MAP_H + 2 * PAD));
@@ -483,19 +498,21 @@ function fitView(toggle) {
 const ptrs = new Map();
 let gesture = null;
 svg.addEventListener('pointerdown', (e) => {
-  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (ptrs.size === 1) gesture = { sx: e.clientX, sy: e.clientY, moved: false, id: e.pointerId };
+  const q = pt(e);
+  ptrs.set(e.pointerId, { x: q.x, y: q.y });
+  if (ptrs.size === 1) gesture = { sx: q.x, sy: q.y, moved: false, id: e.pointerId };
   else if (gesture) gesture.moved = true;
 });
 svg.addEventListener('pointermove', (e) => {
   const p = ptrs.get(e.pointerId);
   if (!p) return;
   const prev = [...ptrs.values()].map((q) => ({ ...q }));
-  p.x = e.clientX; p.y = e.clientY;
+  const q = pt(e);
+  p.x = q.x; p.y = q.y;
   const cur = [...ptrs.values()];
   const r = boxOf();
   if (cur.length === 1) {
-    if (gesture && !gesture.moved && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) < 8) return;
+    if (gesture && !gesture.moved && Math.hypot(q.x - gesture.sx, q.y - gesture.sy) < 8) return;
     if (gesture) gesture.moved = true;
     cam.x -= (cur[0].x - prev[0].x) / cam.z; cam.y -= (cur[0].y - prev[0].y) / cam.z;
   } else if (cur.length === 2) {
@@ -526,12 +543,12 @@ const endPtr = (e) => {
 svg.addEventListener('pointerup', endPtr); svg.addEventListener('pointercancel', endPtr); svg.addEventListener('pointerleave', endPtr);
 svg.addEventListener('wheel', (e) => {
   e.preventDefault();
-  const r = boxOf(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const r = boxOf(), q = pt(e), mx = q.x - r.left, my = q.y - r.top;
   const wx = cam.x + mx / cam.z, wy = cam.y + my / cam.z;
   cam.z *= e.deltaY < 0 ? 1.15 : 1 / 1.15; applyCam();
   cam.x = wx - mx / cam.z; cam.y = wy - my / cam.z; applyCam();
 }, { passive: false });
-addEventListener('resize', () => { if (!$('#game').hidden) applyCam(); });
+addEventListener('resize', () => { applyLayout(); if (!$('#game').hidden) applyCam(); });
 $('#fit').onclick = () => fitView(true);
 
 /* ---------- alertas, efeitos e relógio ---------- */
@@ -968,7 +985,8 @@ function showMenu() {
   }).join('')}</ul>
   <div class="log">${v.log.slice().reverse().map(esc).join('<br>')}</div>
   ${host && v.players.some((p) => p.ctrl === 'remote' || app.seats[p.seat].gid) ? '<button class="btn small" data-do="invite">Reconectar por QR</button>' : ''}
-  <div class="row"><button class="btn small" data-do="sound">Som: ${soundOn() ? 'ligado' : 'desligado'}</button><button class="btn small" data-do="rules">Regras</button><button class="btn small" data-do="quit">Sair</button><button class="btn small primary" data-m="close">Voltar</button></div>`);
+  <div class="row"><button class="btn small" data-do="land">Tela deitada: ${store.get('forceLand') !== false ? 'sempre' : 'automática'}</button><button class="btn small" data-do="sound">Som: ${soundOn() ? 'ligado' : 'desligado'}</button></div>
+  <div class="row"><button class="btn small" data-do="rules">Regras</button><button class="btn small" data-do="quit">Sair</button><button class="btn small primary" data-m="close">Voltar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     const d = e.target.dataset;
     if (d.re != null) hostInvite(+d.re);
@@ -1032,6 +1050,7 @@ const actions = {
   },
   again() { store.del('save3'); app.game = null; app.view = null; app.winShown = false; $('#win').hidden = true; show('lobby'); sync(); },
   objective: showObjective,
+  land() { store.set('forceLand', store.get('forceLand') === false); applyLayout(); applyCam(); showMenu(); },
   winMap() { $('#win').hidden = true; },
   sound() { setSound(!soundOn()); store.set('sound', soundOn()); if (soundOn()) { unlock(); play('turn'); } showMenu(); },
   cards: showCards,
