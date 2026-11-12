@@ -1,11 +1,10 @@
 // Gera js/map.js a partir do Natural Earth 1:110m (domínio público), via world-atlas.
-// Uso: npm i --no-save topojson-client world-atlas polygon-clipping && node tools/gen-map.mjs
+// Uso: npm i --no-save topojson-client world-atlas && node tools/gen-map.mjs
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const topojson = require('topojson-client');
 const topo = require('world-atlas/countries-110m.json');
-const pc = require('polygon-clipping');
 
 const W = 1400, LON0 = -169.5, LAT_TOP = 75.5, LAT_BOT = -56;
 const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
@@ -26,9 +25,9 @@ const lens = (p, c, sigma, a) => {
 const lensCenters = [];
 const warp = (p, upTo = LENSES.length) => { for (let i = 0; i < upTo; i++) p = lens(p, lensCenters[i], LENSES[i][2], LENSES[i][3]); return p; };
 LENSES.forEach(([lon, lat], i) => lensCenters.push(warp(flat([lon, lat]), i)));
-// Perspectiva embutida na geometria (tabuleiro inclinado): transformação projetiva, o norte fica mais distante.
-// Feita aqui, e não com CSS 3D, para o desenho continuar vetorial e nítido em qualquer zoom.
-const PERSP = 0.34, SQUASH = 0.9, S_TOP = 1 / (1 + PERSP / 2), S_BOT = 1 / (1 - PERSP / 2);
+// Inclinação do tabuleiro embutida na geometria: o mapa é achatado na vertical (SQUASH), como visto de cima em ângulo.
+// PERSP > 0 faria as linhas convergirem para o norte; fica em 0 porque, com zoom numa lateral, a convergência parecia torta.
+const PERSP = 0, SQUASH = 0.9, S_TOP = 1 / (1 + PERSP / 2), S_BOT = 1 / (1 - PERSP / 2);
 const MAPW = Math.round(W * S_BOT), H = Math.round((H0 / 2) * SQUASH * (S_TOP + S_BOT));
 const proj = (ll) => {
   const [x, y] = warp(flat(ll));
@@ -170,19 +169,203 @@ function toPath(rings) {
   }
   return d;
 }
-const TERR = keys.map((k) => {
+// ---- formas simplificadas ----
+// O mapa é desenhado numa grade e redesenhado a partir dela. Na grade, cada território passa por um
+// "fechamento" (cresce e encolhe de volta): ilhas próximas se fundem, baías estreitas e buracos somem.
+// Depois, ilhotas são descartadas e as fronteiras são retraçadas e suavizadas, sempre iguais dos dois lados.
+const CLOSE = { ins: 17, nze: 15, cor: 12, cam: 12, ngu: 11, bri: 9, cao: 9, cac: 9, cal: 9, esc: 7, ext: 7, sea: 7, ita: 6, gro: 5, ala: 5 };
+const S = 2, GW = Math.ceil(MAPW * S), GH = Math.ceil(H * S), EPS = 2.6; // células por unidade; tolerância da suavização (células)
+const own = new Int16Array(GW * GH).fill(-1);
+function fillRing(ring, label) {
+  let y0 = Infinity, y1 = -Infinity;
+  for (const p of ring) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  for (let gy = Math.max(0, Math.floor(y0 * S)); gy <= Math.min(GH - 1, Math.ceil(y1 * S)); gy++) {
+    const yy = (gy + 0.5) / S, xs = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      if ((a[1] > yy) !== (b[1] > yy)) xs.push(a[0] + ((yy - a[1]) / (b[1] - a[1])) * (b[0] - a[0]));
+    }
+    xs.sort((p, q) => p - q);
+    for (let k = 0; k + 1 < xs.length; k += 2)
+      for (let gx = Math.max(0, Math.ceil(xs[k] * S - 0.5)); gx <= Math.min(GW - 1, Math.floor(xs[k + 1] * S - 0.5)); gx++)
+        if (own[gy * GW + gx] === -1) own[gy * GW + gx] = label;
+  }
+}
+keys.forEach((k, i) => {
   const g = groups[k];
   const rings = [...g.rings];
-  if (g.arcs.length) for (const poly of topojson.merge(topo, g.arcs).coordinates) for (const ring of poly) rings.push(ring.map(proj));
+  if (g.arcs.length) for (const poly of topojson.merge(topo, g.arcs).coordinates) rings.push(poly[0].map(proj)); // só o anel externo
+  rings.filter(keep).forEach((r) => fillRing(r, i));
+});
+// distância aproximada (chanfro 3-4) até as células marcadas em src
+function chamfer(src, w, h) {
+  const d = new Int32Array(w * h).fill(1e9);
+  for (let i = 0; i < w * h; i++) if (src[i]) d[i] = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x; let v = d[i];
+    if (x > 0) v = Math.min(v, d[i - 1] + 3);
+    if (y > 0) { v = Math.min(v, d[i - w] + 3); if (x > 0) v = Math.min(v, d[i - w - 1] + 4); if (x < w - 1) v = Math.min(v, d[i - w + 1] + 4); }
+    d[i] = v;
+  }
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+    const i = y * w + x; let v = d[i];
+    if (x < w - 1) v = Math.min(v, d[i + 1] + 3);
+    if (y < h - 1) { v = Math.min(v, d[i + w] + 3); if (x < w - 1) v = Math.min(v, d[i + w + 1] + 4); if (x > 0) v = Math.min(v, d[i + w - 1] + 4); }
+    d[i] = v;
+  }
+  return d;
+}
+const bbox = keys.map(() => [GW, GH, -1, -1]);
+for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { const l = own[y * GW + x]; if (l >= 0) { const b = bbox[l]; if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y; } }
+const fin = Int16Array.from(own);
+const order = keys.map((_, i) => i).sort((a, b) => (CLOSE[keys[a]] || 3.5) - (CLOSE[keys[b]] || 3.5)); // arquipélagos por último: cedem aos vizinhos
+for (const i of order) {
+  const R = Math.round((CLOSE[keys[i]] || 3.5) * S), pad = R + 3, [bx0, by0, bx1, by1] = bbox[i];
+  const wx = bx0 - pad, wy = by0 - pad, w = bx1 - bx0 + 1 + 2 * pad, h = by1 - by0 + 1 + 2 * pad; // a janela pode sair da grade: fora dela é mar
+  const A = new Uint8Array(w * h);
+  for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (own[y * GW + x] === i) A[(y - wy) * w + (x - wx)] = 1;
+  const d1 = chamfer(A, w, h), notD = new Uint8Array(w * h);
+  for (let k = 0; k < w * h; k++) notD[k] = d1[k] > R * 3 ? 1 : 0;
+  const d2 = chamfer(notD, w, h), C = new Uint8Array(w * h);
+  for (let k = 0; k < w * h; k++) C[k] = A[k] || d2[k] > R * 3 ? 1 : 0;
+  // tapa buracos: tudo o que não é alcançável pela borda da janela
+  const seen = new Uint8Array(w * h), st = [];
+  for (let x = 0; x < w; x++) st.push(x, (h - 1) * w + x);
+  for (let y = 0; y < h; y++) st.push(y * w, y * w + w - 1);
+  while (st.length) {
+    const k = st.pop();
+    if (seen[k] || C[k]) continue;
+    seen[k] = 1;
+    const x = k % w, y = (k - x) / w;
+    if (x > 0) st.push(k - 1); if (x < w - 1) st.push(k + 1); if (y > 0) st.push(k - w); if (y < h - 1) st.push(k + w);
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const gx = x + wx, gy = y + wy;
+    if (gx < 0 || gy < 0 || gx >= GW || gy >= GH || seen[y * w + x]) continue;
+    if (fin[gy * GW + gx] === -1) fin[gy * GW + gx] = i; // só ocupa mar: nunca a terra de outro território
+  }
+}
+// componentes conexos de um predicado; devolve listas de células
+function components(test) {
+  const mark = new Uint8Array(GW * GH), out = [];
+  for (let s0 = 0; s0 < GW * GH; s0++) {
+    if (mark[s0] || !test(s0)) continue;
+    const cells = [], st = [s0]; mark[s0] = 1;
+    while (st.length) {
+      const k = st.pop(); cells.push(k);
+      const x = k % GW;
+      for (const n of [x > 0 ? k - 1 : -1, x < GW - 1 ? k + 1 : -1, k - GW, k + GW]) if (n >= 0 && n < GW * GH && !mark[n] && test(n)) { mark[n] = 1; st.push(n); }
+    }
+    out.push(cells);
+  }
+  return out;
+}
+// ilhotas: de cada território fica só o que tem pelo menos 10% da sua maior parte
+keys.forEach((_, i) => {
+  const comps = components((k) => fin[k] === i), big = Math.max(...comps.map((c) => c.length));
+  for (const c of comps) if (c.length < Math.max(70 * S * S, big * 0.1)) for (const k of c) fin[k] = -1;
+});
+// lagos pequenos cercados de terra viram terra do vizinho
+for (const c of components((k) => fin[k] === -1)) {
+  if (c.length >= 700 * S * S) continue;
+  let pending = c;
+  for (let guard = 0; pending.length && guard < 400; guard++) {
+    const next = [], set = [];
+    for (const k of pending) {
+      const x = k % GW, nb = [x > 0 ? k - 1 : -1, x < GW - 1 ? k + 1 : -1, k - GW, k + GW].find((n) => n >= 0 && n < GW * GH && fin[n] >= 0);
+      if (nb === undefined) next.push(k); else set.push(k, fin[nb]);
+    }
+    if (!set.length) break;
+    for (let q = 0; q < set.length; q += 2) fin[set[q]] = set[q + 1];
+    pending = next;
+  }
+}
+// ---- da grade de volta para polígonos ----
+const at = (x, y) => (x < 0 || y < 0 || x >= GW || y >= GH ? -1 : fin[y * GW + x]);
+const VW = GW + 1;
+const isJunction = (v) => { const x = v % VW, y = (v - x) / VW; return new Set([at(x - 1, y - 1), at(x, y - 1), at(x - 1, y), at(x, y)]).size >= 3; };
+// contornos (sentido horário na tela) de cada rótulo dado por labelOf(célula)
+function traceLoops(labelOf, nLabels) {
+  const edges = Array.from({ length: nLabels }, () => new Map());
+  const add = (l, a, b) => { const m = edges[l]; if (m.has(a)) m.get(a).push(b); else m.set(a, [b]); };
+  const lab = (x, y) => (x < 0 || y < 0 || x >= GW || y >= GH ? -1 : labelOf(fin[y * GW + x]));
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const l = lab(x, y);
+    if (l < 0) continue;
+    const v = y * VW + x;
+    if (lab(x, y - 1) !== l) add(l, v, v + 1);
+    if (lab(x + 1, y) !== l) add(l, v + 1, v + 1 + VW);
+    if (lab(x, y + 1) !== l) add(l, v + 1 + VW, v + VW);
+    if (lab(x - 1, y) !== l) add(l, v + VW, v);
+  }
+  const dirOf = (a, b) => (b === a + 1 ? 0 : b === a + VW ? 1 : b === a - 1 ? 2 : 3);
+  return edges.map((m) => {
+    const loops = [];
+    for (const start of [...m.keys()]) {
+      while (m.has(start)) {
+        const loop = [start];
+        let cur = start, dir = -1;
+        for (;;) {
+          const outs = m.get(cur);
+          let pick = 0;
+          if (outs.length > 1 && dir >= 0) { // num ponto de aperto, vira à direita primeiro: mantém as partes separadas
+            const pref = [(dir + 1) % 4, dir, (dir + 3) % 4];
+            pick = outs.map((b, j) => [pref.indexOf(dirOf(cur, b)), j]).filter((q) => q[0] >= 0).sort((p, q) => p[0] - q[0])[0][1];
+          }
+          const nxt = outs.splice(pick, 1)[0];
+          if (!outs.length) m.delete(cur);
+          dir = dirOf(cur, nxt); cur = nxt;
+          if (cur === start) break;
+          loop.push(cur);
+        }
+        loops.push(loop);
+      }
+    }
+    return loops;
+  });
+}
+const P = (v) => [v % VW, Math.floor(v / VW)];
+function dp(pts, eps) { // Douglas–Peucker, extremos fixos
+  const keepIdx = new Uint8Array(pts.length); keepIdx[0] = keepIdx[pts.length - 1] = 1;
+  const st = [[0, pts.length - 1]];
+  while (st.length) {
+    const [a, b] = st.pop();
+    const [ax, ay] = pts[a], [bx, by] = pts[b], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+    let far = -1, fd = eps;
+    for (let i = a + 1; i < b; i++) { const d = len === 1 && !dx && !dy ? Math.hypot(pts[i][0] - ax, pts[i][1] - ay) : Math.abs(dy * (pts[i][0] - ax) - dx * (pts[i][1] - ay)) / len; if (d > fd) { fd = d; far = i; } }
+    if (far >= 0) { keepIdx[far] = 1; st.push([a, far], [far, b]); }
+  }
+  return pts.filter((_, i) => keepIdx[i]);
+}
+// simplifica um arco sempre no mesmo sentido, para os dois vizinhos chegarem à mesma linha
+function arc(vs) {
+  const a = vs[0], b = vs[vs.length - 1], flip = a > b || (a === b && vs[1] > vs[vs.length - 2]);
+  const pts = (flip ? [...vs].reverse() : vs).map(P), out = dp(pts, EPS);
+  return flip ? out.reverse() : out;
+}
+function simplifyLoop(loop) {
+  const jx = []; loop.forEach((v, i) => { if (isJunction(v)) jx.push(i); });
+  const out = [];
+  if (!jx.length) { // ilha sem vizinhos: começa no menor vértice e corta em dois arcos
+    const i0 = loop.indexOf(Math.min(...loop)), r = [...loop.slice(i0), ...loop.slice(0, i0)], mid = r.length >> 1;
+    out.push(...arc(r.slice(0, mid + 1)).slice(0, -1), ...arc([...r.slice(mid), r[0]]).slice(0, -1));
+  } else for (let q = 0; q < jx.length; q++) {
+    const i = jx[q], j = jx[(q + 1) % jx.length];
+    const seg = j > i ? loop.slice(i, j + 1) : [...loop.slice(i), ...loop.slice(0, j + 1)];
+    out.push(...arc(seg).slice(0, -1));
+  }
+  return out.map(([x, y]) => [x / S, y / S]);
+}
+const signed = (r) => r.reduce((s2, p, i) => { const q = r[(i + 1) % r.length]; return s2 + p[0] * q[1] - q[0] * p[1]; }, 0) / 2;
+// contornos externos; com lakes=true entram também os mares internos grandes que sobraram (viram furos no preenchimento)
+const ringsOf = (loops, lakes) => loops.map(simplifyLoop).filter((r) => r.length >= 3 && (signed(r) > 9 || (lakes && signed(r) < -9)));
+const terrLoops = traceLoops((l) => l, keys.length), contLoops = traceLoops((l) => (l < 0 ? -1 : T[keys[l]][1]), CONT.length);
+const TERR = keys.map((k, i) => {
   const [x, y] = proj([T[k][2], T[k][3]]);
-  g.all = rings.filter(keep);
-  return { n: T[k][0], c: T[k][1], x: Math.round(x), y: Math.round(y), d: toPath(rings), adj: [] };
+  return { n: T[k][0], c: T[k][1], x: Math.round(x), y: Math.round(y), d: toPath(ringsOf(terrLoops[i])), adj: [] };
 });
-// contorno externo de cada continente: união das formas dos seus territórios
-const outline = CONT.map((_, ci) => {
-  const polys = keys.filter((k) => T[k][1] === ci).flatMap((k) => groups[k].all.map((r) => [[[...r, r[0]]]]));
-  return toPath(pc.union(...polys).flatMap((poly) => poly));
-});
+// contorno externo de cada continente, feito dos mesmos arcos das fronteiras dos territórios
+const outline = contLoops.map((loops) => toPath(ringsOf(loops, true)));
 const SEA = [];
 for (const e of EDGES) {
   const [a, sep, b] = e.split(/([-~])/);

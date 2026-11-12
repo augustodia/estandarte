@@ -37,7 +37,7 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - **Remanejamento:** ao fim do turno, cada exército pode andar uma vez para um território vizinho seu.
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
-O tabuleiro aparece inclinado, em perspectiva, como numa mesa. O mapa não é fiel em tamanho, de propósito: Europa, América Central e as ilhas da Ásia e da Oceania são ampliadas para ficarem fáceis de ver e tocar. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
+O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ásia e da Oceania são ampliadas, arquipélagos viram blocos únicos e ilhotas e baías pequenas somem, para tudo ficar fácil de ver e tocar. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
 
 ## O que cada um vê durante a partida
 
@@ -56,7 +56,7 @@ Sem build e sem dependências em tempo de execução além de duas bibliotecas d
 | `js/game.js` | Motor de regras puro (estado serializável, `apply(estado, jogador, ação)`), visão filtrada por jogador e bot |
 | `js/map.js` | Mapa-múndi: 42 territórios em 6 continentes (9, 4, 7, 6, 12 e 4), fronteiras e rotas marítimas (gerado) |
 | `js/sound.js` | Efeitos sonoros sintetizados (Web Audio), sem arquivos de áudio |
-| `tools/gen-map.mjs` | Gera `js/map.js` a partir do Natural Earth 1:110m |
+| `tools/gen-map.mjs` | Gera `js/map.js` a partir do Natural Earth 1:110m: recorta os territórios, amplia regiões pequenas e simplifica as formas numa grade |
 | `js/net.js` | WebRTC DataChannel e compactação do SDP para caber no QR |
 | `js/main.js` | Interface, pareamento, câmera/leitor de QR, pan e zoom do mapa |
 | `sw.js` | Cache offline |
