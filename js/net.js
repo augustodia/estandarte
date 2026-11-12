@@ -53,12 +53,16 @@ export function unpackSdp(code) {
   return { type, sdp: lines.join('\r\n') + '\r\n' };
 }
 
+// Espera a coleta de endereços terminar (ou GATHER_MS). Se nesse prazo ainda não houver nenhum endereço,
+// espera mais um pouco: um código sem endereços nunca conectaria.
 function gathered(pc) {
-  return new Promise((res) => {
-    if (pc.iceGatheringState === 'complete') return res();
-    const done = () => { clearTimeout(timer); res(); };
-    const timer = setTimeout(done, GATHER_MS);
-    pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && done());
+  const hasCand = () => /a=candidate:/.test(pc.localDescription?.sdp || '');
+  return new Promise((res, rej) => {
+    if (pc.iceGatheringState === 'complete') return hasCand() ? res() : rej(new Error('sem-rede'));
+    let timer;
+    const finish = () => { clearTimeout(timer); hasCand() ? res() : rej(new Error('sem-rede')); };
+    timer = setTimeout(() => { if (hasCand()) finish(); else timer = setTimeout(finish, 4000); }, GATHER_MS);
+    pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && finish());
   });
 }
 

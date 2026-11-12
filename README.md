@@ -21,6 +21,13 @@ Também dá para jogar várias pessoas no mesmo aparelho e completar a mesa com 
 
 Se um convidado cair (tela bloqueada, app fechado, página recarregada), o anfitrião vê o botão **Reconectar** na barra do jogo e gera um novo QR. O convidado toca em **Reconectar à partida** na tela inicial, lê o QR e volta para o mesmo lugar, com suas cartas e seu objetivo. O anfitrião também pode trocar um jogador ausente por um bot no menu ☰, e retomar uma partida salva pela tela inicial.
 
+### Estabilidade da conexão
+
+- O convidado repete o "olá" inicial até o anfitrião responder, porque a primeira mensagem pode se perder se chegar antes de o canal abrir do outro lado.
+- O anfitrião pergunta a cada 3 s se cada convidado está vivo. Quem fica 9 s sem responder aparece como "sem resposta", sem ser derrubado: se a rede voltar, o aviso some sozinho. O convidado faz o mesmo em relação ao anfitrião.
+- Cada pergunta leva o número da última jogada. Se o convidado estiver defasado, pede o estado de novo; o mesmo acontece ao desbloquear a tela ou voltar para o app.
+- Se não houver nenhuma rede (nem Wi-Fi, nem hotspot), o convite avisa em vez de gerar um QR que nunca conectaria.
+
 ### Sem internet
 
 Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto para jogar sem internet") e não precisa mais de rede externa: basta todos estarem no mesmo Wi-Fi ou no hotspot de um dos celulares.
@@ -42,7 +49,7 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 ## Controles
 
 - **Reforço:** toque num território seu, ajuste a quantidade com − e + (ou "Máx") e toque em "Colocar". Tocar de novo no mesmo território soma 1.
-- **Ataque:** toque na origem; linhas mostram os alvos possíveis. Toque no alvo, escolha de 1 a 3 dados com − e + e toque em "Atacar". "Auto" repete o ataque com o máximo de dados até conquistar ou não poder mais.
+- **Ataque:** toque direto no inimigo (a origem passa a ser o seu vizinho com mais exércitos) ou toque antes na origem; linhas mostram os alvos possíveis. Escolha de 1 a 3 dados com − e + e toque em "Atacar", ou toque de novo no alvo. "Auto" repete o ataque com o máximo de dados até conquistar ou não poder mais.
 - **Conquista e remanejamento:** − e + definem quantos exércitos mover.
 - **Celular deitado:** o mapa ocupa a tela e todos os controles ficam numa faixa no rodapé.
 

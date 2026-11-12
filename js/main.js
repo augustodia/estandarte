@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '13'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '14'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -135,7 +135,15 @@ function hostHandlers(targetSeat) {
   return {
     onopen() {},
     onmessage(msg, link) {
+      const known = seatOfLink(link);
+      if (known >= 0) { // qualquer mensagem prova que o convidado está vivo
+        const st = app.seats[known]; st.seen = Date.now();
+        if (st.lag) { st.lag = false; app.game ? renderGame() : renderLobby(); }
+      }
+      if (msg.t === 'pong') return;
+      if (msg.t === 'sync') return sync(); // o convidado percebeu que está defasado e pediu o estado de novo
       if (msg.t === 'hello') {
+        if (known >= 0) return sync(); // "olá" repetido (o convidado insiste até ouvir resposta): só reenvia o estado
         const name = String(msg.name || 'Convidado').slice(0, 14);
         const gid = String(msg.gid || '').slice(0, 40);
         // quem já tinha assento (mesmo aparelho) volta para ele, inclusive no meio da partida
@@ -144,12 +152,12 @@ function hostHandlers(targetSeat) {
         if (si != null && app.seats[si]) {
           const st = app.seats[si];
           if (st.link && st.link !== link) { const old = st.link; st.link = null; old.close(); }
-          st.link = link; st.ctrl = 'remote'; if (gid) st.gid = gid;
+          st.link = link; st.ctrl = 'remote'; st.seen = Date.now(); st.lag = false; if (gid) st.gid = gid;
           const pi = playerOfSeat(si);
           if (pi >= 0) app.game.players[pi].ctrl = 'remote';
           toast(`${st.name} ${app.game ? 'voltou à partida' : 'conectou'}.`);
         } else if (!app.game && app.seats.length < 6) {
-          app.seats.push({ name, color: freeColor(), ctrl: 'remote', link, gid });
+          app.seats.push({ name, color: freeColor(), ctrl: 'remote', link, gid, seen: Date.now() });
           toast(`${name} conectou.`);
         } else return link.send({ t: 'err', m: app.game ? 'A partida já começou. Peça ao anfitrião o QR do seu jogador (menu ☰).' : 'A sala está cheia.' });
         closeModal();
@@ -184,7 +192,7 @@ async function hostInvite(targetSeat = null) {
   if (app.game && !app.pausedAt) { app.pausedAt = Date.now(); sync(); } // relógio do turno pausa durante o pareamento
   let inv, stop = () => {};
   try { inv = await createInvite(hostHandlers(targetSeat)); }
-  catch (e) { stopStream(camStream); app.pausedAt = null; closeModal(); return toast('Seu navegador não conseguiu criar a conexão.'); }
+  catch (e) { stopStream(camStream); app.pausedAt = null; closeModal(); return toast(e.message === 'sem-rede' ? 'Sem rede local: conecte-se a um Wi-Fi ou ao hotspot de alguém e tente de novo.' : 'Seu navegador não conseguiu criar a conexão.', 5000); }
   const url = inviteUrl(inv.code);
   const accept = (raw) => {
     const code = extractCode(raw);
@@ -245,11 +253,33 @@ function sync() {
     else s.link.send({ t: 'lobby', seats: pub, you: si, secs: app.cfg.secs });
   });
   if (g) {
-    store.set('save3', { seats: app.seats.map(({ link, ...s }) => s), game: g });
+    store.set('save3', { seats: app.seats.map(({ link, seen, lag, ...s }) => s), game: g });
     app.view = viewFor(g, viewer());
     renderGame(); scheduleBot();
   } else renderLobby();
 }
+// Batimento: o anfitrião pergunta a cada 3 s; quem fica 9 s calado é marcado como "sem resposta",
+// sem derrubar a conexão (ela pode voltar sozinha). O convidado faz o mesmo em relação ao anfitrião.
+setInterval(() => {
+  if (app.role === 'host') {
+    let changed = false;
+    for (const s of app.seats) {
+      if (!s.link) continue;
+      s.link.send({ t: 'ping', n: app.game ? app.game.n : null });
+      if (!s.lag && Date.now() - (s.seen || 0) > 9000) { s.lag = true; changed = true; }
+    }
+    if (changed) app.game ? renderGame() : renderLobby();
+  } else if (app.role === 'guest' && app.link && app.heard && !app.hostLag && Date.now() - app.heard > 9000) {
+    app.hostLag = true;
+    if (app.view) renderGame();
+  }
+}, 3000);
+// Ao voltar para o app (tela desbloqueada, troca de aba), confere o estado na hora.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (app.role === 'guest' && app.link) app.link.send({ t: 'sync' });
+  else if (app.role === 'host' && (app.game || app.seats.length)) sync();
+});
 function scheduleBot() {
   clearTimeout(app.botTimer);
   const g = app.game;
@@ -268,12 +298,25 @@ function viewer() {
 /* ---------- convidado ---------- */
 const guestHandlers = {
   onopen(link) {
-    app.role = 'guest'; app.link = link;
-    link.send({ t: 'hello', name: myName(), gid: guestId() });
+    app.role = 'guest'; app.link = link; app.heard = 0; app.hostLag = false;
     store.set('guest', true);
+    // A primeira mensagem pode se perder se chegar antes de o canal abrir do outro lado:
+    // repete o "olá" até ouvir qualquer resposta do anfitrião.
+    const hello = () => link.send({ t: 'hello', name: myName(), gid: guestId() });
+    hello();
+    let tries = 0;
+    const iv = setInterval(() => { if (app.link !== link || app.heard || ++tries > 40) return clearInterval(iv); hello(); }, 500);
     closeModal(); toast('Conectado!');
   },
-  onmessage(msg) {
+  onmessage(msg, link) {
+    if (app.link !== link) return;
+    app.heard = Date.now();
+    if (app.hostLag) { app.hostLag = false; if (app.view) renderGame(); }
+    if (msg.t === 'ping') { // responde e confere se o estado local é o mais recente
+      link.send({ t: 'pong' });
+      if (app.view && msg.n != null && msg.n !== app.view.n) link.send({ t: 'sync' });
+      return;
+    }
     if (msg.t === 'lobby') { app.lobby = msg; app.view = null; show('lobby'); renderLobby(); }
     else if (msg.t === 'state') {
       app.view = msg.s; app.me = msg.you;
@@ -297,7 +340,7 @@ async function guestJoin(raw) {
   const camStream = await openCamera();
   let j;
   try { j = await joinInvite(code, guestHandlers); }
-  catch (e) { closeModal(); return toast('Convite inválido ou expirado.'); }
+  catch (e) { closeModal(); return toast(e.message === 'sem-rede' ? 'Sem rede local: conecte-se ao mesmo Wi-Fi ou hotspot do anfitrião e tente de novo.' : 'Convite inválido ou expirado.', 5000); }
   finally { stopStream(camStream); }
   if (app.link) { const old = app.link; app.link = null; old.close(); }
   modal(`<h3>Mostre este QR ao anfitrião</h3><p>No celular dele: “Ler resposta”. A conexão abre sozinha em seguida.</p>
@@ -636,9 +679,17 @@ function tapTerritory(t) {
       else app.sel = t;
       app.target = null;
     } else if (v.step === 'attack') {
-      if (mine) { app.sel = T[t].a >= 2 ? t : null; app.target = null; if (T[t].a < 2) toast('É preciso 2 ou mais exércitos para atacar daqui.'); }
+      if (mine) {
+        if (T[t].a < 2) { app.sel = app.target = null; toast('É preciso 2 ou mais exércitos para atacar daqui.'); }
+        else if (app.target != null && adj(t, app.target)) app.sel = t; // troca a origem e mantém o alvo
+        else { app.sel = t; app.target = null; }
+      } else if (app.target === t && app.sel != null) return actions.attack(); // tocar de novo no alvo ataca
       else if (app.sel != null && adj(app.sel, t)) app.target = t;
-      else { app.target = null; if (app.sel != null) toast('Esse território não faz fronteira com o selecionado.'); }
+      else { // tocou direto no inimigo: a origem passa a ser o vizinho seu com mais exércitos
+        const from = TERR[t].adj.filter((j) => T[j].o === me && T[j].a >= 2).sort((a, b) => T[b].a - T[a].a)[0];
+        if (from == null) { app.target = null; toast('Nenhum território seu com 2 ou mais exércitos faz fronteira com esse.'); }
+        else { app.sel = from; app.target = t; }
+      }
     } else if (v.step === 'move') {
       if (mine && app.sel != null && t !== app.sel && adj(app.sel, t)) app.target = t;
       else if (!mine || t === app.sel) app.sel = app.target = null;
@@ -772,10 +823,10 @@ function renderGame() {
     btns = stepper() + '<button class="btn small primary" data-do="occupyOk">Mover</button>';
   } else if (v.step === 'attack') {
     if (rng) {
-      msg = `${TERR[app.sel].n} (${T[app.sel].a}) ⚔ ${TERR[app.target].n} (${T[app.target].a})`;
+      msg = `${TERR[app.sel].n} (${T[app.sel].a}) ⚔ ${TERR[app.target].n} (${T[app.target].a}) · toque de novo no alvo para atacar`;
       btns = stepper(app.n === 1 ? 'dado' : 'dados') + '<button class="btn small primary" data-do="attack">Atacar</button><button class="btn small" data-do="blitz">Auto</button><button class="btn small ghost" data-do="endAttack">Encerrar</button>';
     } else {
-      msg = app.sel != null ? 'Agora toque num vizinho inimigo ligado pelas linhas.' : 'Toque num território seu para atacar a partir dele.';
+      msg = app.sel != null ? 'Toque num inimigo ligado pelas linhas.' : 'Toque no inimigo que quer atacar (ou num território seu para escolher a origem).';
       btns = '<button class="btn small" data-do="endAttack">Encerrar ataques</button>';
     }
   } else if (rng) {
@@ -786,8 +837,10 @@ function renderGame() {
     btns = '<button class="btn small primary" data-do="endTurn">Encerrar turno</button>';
   }
   if (app.role === 'host' && v.phase === 'play') {
-    const off = app.seats.filter((s) => s.ctrl === 'remote' && !s.link);
-    if (off.length) warn = `<div class="actions"><button class="btn small warn" data-do="invite">Reconectar ${esc(off.length === 1 ? off[0].name : off.length + ' jogadores')} (offline)</button></div>`;
+    const off = app.seats.filter((s) => s.ctrl === 'remote' && (!s.link || s.lag));
+    if (off.length) warn = `<div class="actions"><button class="btn small warn" data-do="invite">Reconectar ${esc(off.length === 1 ? off[0].name : off.length + ' jogadores')} (${off.some((s) => !s.link) ? 'offline' : 'sem resposta'})</button></div>`;
+  } else if (app.role === 'guest' && app.link && app.hostLag && v.phase === 'play') {
+    warn = '<div class="actions"><button class="btn small warn" data-do="join">Anfitrião sem resposta · reconectar</button></div>';
   }
   if (can) { // compartilha a seleção atual com quem está assistindo
     const key = `${v.n}:${app.sel}:${app.target}`;
@@ -831,8 +884,8 @@ function showMenu() {
   const v = app.view, host = app.role === 'host';
   modal(`<h3>Jogadores</h3><ul class="plist">${v.players.map((p, i) => {
     const seat = host ? app.seats[p.seat] : null;
-    const offline = host && p.ctrl === 'remote' && !seat.link;
-    return `<li><span class="dot" style="background:${COLORS[p.color].c}"></span><span class="who">${p.alive ? '' : '☠ '}<b>${esc(p.name)}</b> · ${owned(v, i)} terr. · ${handSize(p)} cartas${p.ctrl === 'bot' ? ' · bot' : ''}${offline ? ' · <span class="off">offline</span>' : ''}</span>
+    const offline = host && p.ctrl === 'remote' && (!seat.link || seat.lag);
+    return `<li><span class="dot" style="background:${COLORS[p.color].c}"></span><span class="who">${p.alive ? '' : '☠ '}<b>${esc(p.name)}</b> · ${owned(v, i)} terr. · ${handSize(p)} cartas${p.ctrl === 'bot' ? ' · bot' : ''}${offline ? ` · <span class="off">${seat.link ? 'sem resposta' : 'offline'}</span>` : ''}</span>
       ${host && p.ctrl === 'remote' && p.alive ? `<button class="btn small" data-re="${p.seat}">QR</button>` : ''}${offline && p.alive ? `<button class="btn small" data-bot="${i}">Virar bot</button>` : ''}</li>`;
   }).join('')}</ul>
   <div class="log">${v.log.slice().reverse().map(esc).join('<br>')}</div>
