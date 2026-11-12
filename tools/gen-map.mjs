@@ -9,11 +9,31 @@ const pc = require('polygon-clipping');
 
 const W = 1400, LON0 = -169.5, LAT_TOP = 75.5, LAT_BOT = -56;
 const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-const K = W / (2 * Math.PI), H = Math.round((merc(LAT_TOP) - merc(LAT_BOT)) * K);
-const proj = ([lon, lat]) => {
+const K = W / (2 * Math.PI), H0 = (merc(LAT_TOP) - merc(LAT_BOT)) * K;
+const flat = ([lon, lat]) => {
   if (lon < LON0) lon += 360;
   lat = Math.max(LAT_BOT, Math.min(LAT_TOP, lat));
   return [((lon - LON0) / 360) * W, (merc(LAT_TOP) - merc(lat)) * K];
+};
+// O mapa não é fiel em tamanho, de propósito: "lentes" ampliam regiões de territórios pequenos
+// (Europa, América Central, ilhas da Ásia e da Oceania) para ficarem fáceis de ver e tocar.
+// Cada lente é uma ampliação radial suave, que preserva vizinhanças. [lon, lat, raio em px, ganho]
+const LENSES = [[12, 49, 95, 0.65], [-84, 15, 55, 0.75], [118, 2, 90, 0.55], [146, -6, 36, 0.5], [137, 37, 42, 0.65], [172, -41, 42, 0.95]];
+const lens = (p, c, sigma, a) => {
+  const dx = p[0] - c[0], dy = p[1] - c[1], m = 1 + a * Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+  return [c[0] + dx * m, c[1] + dy * m];
+};
+const lensCenters = [];
+const warp = (p, upTo = LENSES.length) => { for (let i = 0; i < upTo; i++) p = lens(p, lensCenters[i], LENSES[i][2], LENSES[i][3]); return p; };
+LENSES.forEach(([lon, lat], i) => lensCenters.push(warp(flat([lon, lat]), i)));
+// Perspectiva embutida na geometria (tabuleiro inclinado): transformação projetiva, o norte fica mais distante.
+// Feita aqui, e não com CSS 3D, para o desenho continuar vetorial e nítido em qualquer zoom.
+const PERSP = 0.34, SQUASH = 0.9, S_TOP = 1 / (1 + PERSP / 2), S_BOT = 1 / (1 - PERSP / 2);
+const MAPW = Math.round(W * S_BOT), H = Math.round((H0 / 2) * SQUASH * (S_TOP + S_BOT));
+const proj = (ll) => {
+  const [x, y] = warp(flat(ll));
+  const sc = 1 / (1 + PERSP * (0.5 - y / H0));
+  return [MAPW / 2 + (x - W / 2) * sc, (H0 / 2) * SQUASH * S_TOP + (y - H0 / 2) * SQUASH * sc];
 };
 
 const CONT = [
@@ -74,7 +94,7 @@ const splitWhole = { 'United States of America': ([, lat]) => (lat > 50 ? 'ala' 
 const SEED = {};
 const DROP = new Set(['Antarctica', 'Fr. S. Antarctic Lands']);
 // fronteiras: terrestres e rotas marítimas (~)
-const EDGES = `ala-cao ala~ext cao-cac cac-cal cao-euo cac-euo cac-eul cal-eul cal~gro gro~esc euo-eul euo-mex eul-mex eul~cam mex-cam cam-col
+const EDGES = `ala-cao ala~ext cao-cac cac-cal cao-euo cac-euo cac-eul cal-eul cal~gro gro~esc euo-eul euo-mex eul~cam mex-cam cam-col
 col-and col-bra and-bra and-arg bra-arg bra~afo
 bri~esc bri~fra esc-euc esc-rus esc~eor fra-euc fra-ita fra~mag euc-ita euc-eor ita-eor ita-tur ita~mag eor-rus rus-tur rus-asc rus-sib
 mag-egi mag-afo mag-afc egi-afc egi-afl egi-ara afo-afc afc-afl afc-afa afl-afa afl~ara
@@ -131,7 +151,7 @@ function clipHalf(ring, a, b) {
 }
 const area = (r) => Math.abs(r.reduce((s, p, i) => { const q = r[(i + 1) % r.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0) / 2);
 const f1 = (v) => +v.toFixed(1);
-const keep = (ring) => { const xs = ring.map((p) => p[0]); return Math.max(...xs) - Math.min(...xs) <= W / 2 && area(ring) >= 5; };
+const keep = (ring) => { const xs = ring.map((p) => p[0]); return Math.max(...xs) - Math.min(...xs) <= W / 2 && area(ring) >= 9; };
 function toPath(rings) {
   let d = '';
   for (const ring of rings) {
@@ -173,11 +193,11 @@ for (const e of EDGES) {
 TERR.forEach((t) => t.adj.sort((a, b) => a - b));
 const CONTINENTS = CONT.map((c) => { const [x, y] = proj(c.at); return { n: c.n, bonus: c.bonus, color: c.color, x: Math.round(x), y: Math.round(y), d: outline[CONT.indexOf(c)] }; });
 const out = `// Gerado por tools/gen-map.mjs (geografia: Natural Earth, domínio público). Não editar à mão.
-export const MAP_W=${W}, MAP_H=${H};
+export const MAP_W=${MAPW}, MAP_H=${H};
 export const CONTINENTS=${JSON.stringify(CONTINENTS).replace(/\},\{/g, '},\n{')};
 export const TERR=${JSON.stringify(TERR).replace(/\},\{/g, '},\n{')};
 // rotas marítimas [a, b, cruzaBorda?]
 export const SEA=${JSON.stringify(SEA)};
 `;
 writeFileSync(new URL('../js/map.js', import.meta.url), out);
-console.log(`${TERR.length} territórios, ${EDGES.length} fronteiras, ${W}x${H}, ${(out.length / 1024).toFixed(0)} KB; vazios: ${TERR.filter((t) => !t.d).map((t) => t.n)}`);
+console.log(`${TERR.length} territórios, ${EDGES.length} fronteiras, ${MAPW}x${H}, ${(out.length / 1024).toFixed(0)} KB; vazios: ${TERR.filter((t) => !t.d).map((t) => t.n)}`);

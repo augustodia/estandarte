@@ -50,10 +50,10 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .icon{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:none;background:var(--deep);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);min-width:38px;height:38px;padding:0 8px;font:600 13px/1 system-ui,sans-serif}
 .icon svg{width:18px;height:18px}
 #mapwrap{flex:1;min-height:0;position:relative;background:var(--sea);overflow:hidden}
-/* tabuleiro visto em perspectiva, como numa mesa */
-#tilt{position:absolute;inset:0;transform:perspective(1000px) rotateX(26deg) scale(.98);transform-origin:50% 50%}
+/* a perspectiva do tabuleiro vem pronta na geometria do mapa (tools/gen-map.mjs) */
+#tilt{position:absolute;inset:0}
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;stroke:none;overflow:visible}
-.depth{fill:#050a13;stroke:#050a13;stroke-width:1.5;stroke-linejoin:round;transform:translateY(5px)}
+.depth{fill:#050a13;stroke:#050a13;stroke-width:1;stroke-linejoin:round;transform:translateY(var(--depth,4px))}
 .mapbtn{position:absolute;bottom:10px;height:34px;border-radius:17px;border:1px solid var(--line);background:#15263dd9;color:var(--ink);font:600 12px/1 system-ui,sans-serif;padding:0 12px;display:inline-flex;align-items:center;justify-content:center}
 #fit{right:10px;width:34px;padding:0}#fit svg{width:16px;height:16px}
 #bar{background:var(--panel);border-top:1px solid var(--line);padding:8px 10px max(8px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
@@ -68,11 +68,11 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .sea-route{stroke:#7fa3c7;stroke-width:2.2;stroke-dasharray:2 7;stroke-linecap:round;opacity:.7;fill:none}
 /* Continente como "ilha": um canal escuro no contorno externo (moat) separa um continente do outro,
    e uma linha na cor do continente corre pelo mar, afastada da costa (aura recortada por auracut). */
-.aura{fill:none;stroke-width:17;stroke-linejoin:round}
-.auracut{fill:none;stroke:var(--sea);stroke-width:10.5;stroke-linejoin:round}
-.moat{fill:none;stroke:var(--sea);stroke-width:6;stroke-linejoin:round;pointer-events:none}
+.aura{fill:none;stroke-width:var(--aura,15);stroke-linejoin:round}
+.auracut{fill:none;stroke:var(--sea);stroke-width:var(--cut,9);stroke-linejoin:round}
+.moat{fill:none;stroke:var(--sea);stroke-width:var(--moat,3);stroke-linejoin:round;pointer-events:none}
 /* alternativas para comparar (?estilo=2 faixa cheia, ?estilo=3 brilho suave) */
-.st2 .aura{stroke-width:20;opacity:.75}.st2 .auracut,.st3 .auracut{display:none}
+.st2 .aura{opacity:.75}.st2 .auracut,.st3 .auracut{display:none}
 .st3 .aura{stroke-width:42;opacity:.3}
 .terr{stroke:#081120;stroke-width:1px;vector-effect:non-scaling-stroke;stroke-linejoin:round;transition:fill .25s}
 .terr.sel{stroke:#fff;stroke-width:3px}

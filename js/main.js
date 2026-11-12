@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '10'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '11'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -374,7 +374,7 @@ const nodes = [];
     el('text', { class: 'tname', x: 0, y: 24 }, g).textContent = t.n;
     const badge = el('circle', { class: 'badge', cx: 0, cy: 0, r: 12.5 }, g);
     const num = el('text', { class: 'num', x: 0, y: 0.5 }, g);
-    el('circle', { class: 'hit', cx: 0, cy: 0, r: 15, 'data-t': i }, g);
+    el('circle', { class: 'hit', cx: 0, cy: 0, r: 19, 'data-t': i }, g);
     nodes.push({ poly, num, badge, g });
   });
   CONTINENTS.forEach((c, ci) => {
@@ -390,8 +390,16 @@ const nodes = [];
 let markK = 0;
 function scaleMarks() {
   // ao afastar o zoom os marcadores crescem (até um limite) para continuarem legíveis e tocáveis
-  const k = Math.round(Math.min(1.9, Math.max(1, 10.5 / (12.5 * cam.z))) * 50) / 50;
+  const k = Math.round(Math.min(2.2, Math.max(1, 10.5 / (12.5 * cam.z))) * 50) / 50;
   svg.classList.toggle('far', cam.z < 0.5);
+  // contornos de continente com espessura limitada em pixels: ao aproximar o zoom eles não engrossam
+  // nem cobrem ilhas e territórios estreitos
+  const u = (units, px) => Math.min(units, px / cam.z).toFixed(2);
+  const cut = +u(8, 9);
+  svg.style.setProperty('--moat', u(3.2, 4));
+  svg.style.setProperty('--cut', cut);
+  svg.style.setProperty('--aura', (cut + +u(5.5, 6)).toFixed(2));
+  svg.style.setProperty('--depth', u(3, 3.5) + 'px');
   if (k === markK) return;
   markK = k;
   nodes.forEach((nd, i) => nd.g.setAttribute('transform', `translate(${TERR[i].x} ${TERR[i].y}) scale(${k})`));

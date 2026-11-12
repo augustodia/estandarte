@@ -37,7 +37,7 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - **Remanejamento:** ao fim do turno, cada exército pode andar uma vez para um território vizinho seu.
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
-O tabuleiro aparece inclinado, em perspectiva, como numa mesa. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
+O tabuleiro aparece inclinado, em perspectiva, como numa mesa. O mapa não é fiel em tamanho, de propósito: Europa, América Central e as ilhas da Ásia e da Oceania são ampliadas para ficarem fáceis de ver e tocar. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
 
 ## O que cada um vê durante a partida
 
