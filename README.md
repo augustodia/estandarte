@@ -6,19 +6,26 @@ Jogo de estratégia por turnos para 2 a 6 jogadores: distribua exércitos, conqu
 
 ## Como conectar os aparelhos
 
-1. Um jogador toca em **Criar partida** e depois em **Convidar por QR**.
-2. O convidado aponta a câmera para o QR (ou usa **Entrar em partida** dentro do app).
+1. O anfitrião toca em **Criar partida** e depois em **Convidar por QR**.
+2. O convidado abre o jogo, toca em **Entrar em partida** e lê o QR do anfitrião (a câmera do celular também abre o link).
 3. O celular do convidado mostra um QR de resposta; o anfitrião toca em **Ler resposta** e aponta para ele.
 4. Repita para cada convidado e toque em **Iniciar partida**.
 
+Quando o navegador pedir a câmera, permita. Além de ler os QR codes, a permissão faz o navegador informar o IP local real do aparelho; sem ela ele usa um nome mDNS que outros celulares da rede nem sempre resolvem, e a conexão não abre.
+
 Também dá para jogar várias pessoas no mesmo aparelho e completar a mesa com bots.
 
-Dicas de rede:
+### Reconexão
 
-- Funciona melhor com todos no mesmo Wi-Fi ou no hotspot de um dos celulares (não precisa de internet depois de o app estar instalado/em cache).
-- Em redes diferentes a conexão depende de STUN público e pode falhar atrás de NAT simétrico (4G/5G de algumas operadoras). Não há servidor TURN.
-- Mantenha a tela ligada. Se alguém cair, o anfitrião abre ☰ e gera um novo QR para aquele jogador.
-- A partida fica salva no aparelho do anfitrião e pode ser retomada pela tela inicial.
+Se um convidado cair (tela bloqueada, app fechado, página recarregada), o anfitrião vê o botão **Reconectar** na barra do jogo e gera um novo QR. O convidado toca em **Reconectar à partida** na tela inicial, lê o QR e volta para o mesmo lugar, com suas cartas e seu objetivo. O anfitrião também pode trocar um jogador ausente por um bot no menu ☰, e retomar uma partida salva pela tela inicial.
+
+### Sem internet
+
+Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto para jogar sem internet") e não precisa mais de rede externa: basta todos estarem no mesmo Wi-Fi ou no hotspot de um dos celulares.
+
+- No iPhone, o app instalado na tela de início e o Safari têm caches separados. Sem internet, abra o app instalado e use **Entrar em partida** em vez da câmera do sistema.
+- Redes com isolamento entre clientes (comum em Wi-Fi público) bloqueiam a conexão direta.
+- Em redes diferentes a conexão depende de STUN público e pode falhar em algumas operadoras de 4G/5G. Não há servidor TURN.
 
 ## Regras em resumo
 
@@ -28,6 +35,8 @@ Dicas de rede:
 - **Remanejamento:** ao fim do turno, cada exército pode andar uma vez para um território vizinho seu.
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
+No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover.
+
 ## Arquitetura
 
 Sem build e sem dependências em tempo de execução além de duas bibliotecas de QR embutidas em `vendor/`.
@@ -35,7 +44,8 @@ Sem build e sem dependências em tempo de execução além de duas bibliotecas d
 | Arquivo | Papel |
 | --- | --- |
 | `js/game.js` | Motor de regras puro (estado serializável, `apply(estado, jogador, ação)`), visão filtrada por jogador e bot |
-| `js/map.js` | Mapa: 42 territórios, 6 continentes, adjacências e rotas marítimas |
+| `js/map.js` | Mapa-múndi: 46 territórios, 6 continentes, fronteiras e rotas marítimas (gerado) |
+| `tools/gen-map.mjs` | Gera `js/map.js` a partir do Natural Earth 1:110m |
 | `js/net.js` | WebRTC DataChannel e compactação do SDP para caber no QR |
 | `js/main.js` | Interface, pareamento, câmera/leitor de QR, pan e zoom do mapa |
 | `sw.js` | Cache offline |
@@ -53,5 +63,6 @@ Câmera e service worker exigem HTTPS (ou `localhost`).
 
 ## Créditos de terceiros
 
+- Geografia: [Natural Earth](https://www.naturalearthdata.com/) (domínio público), via [world-atlas](https://github.com/topojson/world-atlas)
 - [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) — MIT
 - [jsQR](https://github.com/cozmo/jsQR) — Apache-2.0 (`vendor/jsQR.LICENSE`)

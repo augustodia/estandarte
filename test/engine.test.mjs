@@ -9,9 +9,10 @@ function rngFrom(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5)
 TERR.forEach((t, i) => t.adj.forEach((j) => assert(TERR[j].adj.includes(i), `adj assimétrica ${i}-${j}`)));
 const seen = new Set([0]); const q = [0];
 while (q.length) TERR[q.pop()].adj.forEach((j) => { if (!seen.has(j)) { seen.add(j); q.push(j); } });
-assert.equal(seen.size, 42); assert.equal(TERR.length, 42);
+assert.equal(seen.size, TERR.length, 'mapa desconexo');
+TERR.forEach((t) => assert(t.d && t.adj.length, 'território sem forma ou sem fronteira: ' + t.n));
 
-assert(validTrade([0, 3, 6])); assert(validTrade([0, 1, 2])); assert(!validTrade([0, 3, 1])); assert(validTrade([0, 3, 42])); assert(!validTrade([0, 0, 3]));
+assert(validTrade([0, 3, 6])); assert(validTrade([0, 1, 2])); assert(!validTrade([0, 3, 1])); assert(validTrade([0, 3, TERR.length])); assert(!validTrade([0, 0, 3]));
 
 let finished = 0, turnsTotal = 0;
 for (let seed = 1; seed <= 300; seed++) {
@@ -25,7 +26,7 @@ for (let seed = 1; seed <= 300; seed++) {
     assert.equal(err, null, `seed ${seed}: ${err} ${JSON.stringify(a)}`);
     assert(s.terr.every((t) => t.a >= 1 && s.players[t.o].alive), 'território inválido');
     const cards = s.deck.length + s.discard.length + s.players.reduce((k, q) => k + q.cards.length, 0);
-    assert.equal(cards, 44, 'cartas não conservadas');
+    assert.equal(cards, TERR.length + 2, 'cartas não conservadas');
     if (s.phase === 'play') assert.notEqual(apply(s, (s.turn + 1) % n, { t: 'endTurn' }, rng), null, 'ação fora da vez aceita');
   }
   if (s.phase === 'over') { finished++; turnsTotal += s.round; }
@@ -33,4 +34,4 @@ for (let seed = 1; seed <= 300; seed++) {
   assert.equal(typeof v.deck, 'number');
   if (s.phase === 'play' && n > 1) assert.equal(v.players[1].obj, null);
 }
-console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal / finished).toFixed(1)} rodadas; ${OBJECTIVES.length} objetivos, ${COLORS.length} cores, ${SEA.length} rotas marítimas`);
+console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal / finished).toFixed(1)} rodadas; ${TERR.length} territórios, ${OBJECTIVES.length} objetivos, ${COLORS.length} cores, ${SEA.length} rotas marítimas`);

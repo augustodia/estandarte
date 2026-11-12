@@ -13,6 +13,7 @@ export const COLORS = [
 export const SYMBOLS = ['●', '■', '▲', '★']; // 3 = coringa
 const NT = TERR.length;
 const WILD = [NT, NT + 1];
+export const GOAL = Math.round(NT * 0.57), GOAL2 = Math.round(NT * 0.43);
 const TRADE_TABLE = [4, 6, 8, 10, 12, 15];
 export const tradeValue = (n) => (n < TRADE_TABLE.length ? TRADE_TABLE[n] : 15 + 5 * (n - 5));
 export const cardSymbol = (c) => (c >= NT ? 3 : c % 3);
@@ -30,8 +31,8 @@ export const OBJECTIVES = [
   { k: 'cont', c: [S(4), S(2)] },
   { k: 'cont', c: [S(3), S(1)], extra: 1 },
   { k: 'cont', c: [S(2), S(0)], extra: 1 },
-  { k: 'count', n: 24, min: 1 },
-  { k: 'count', n: 18, min: 2 },
+  { k: 'count', n: GOAL, min: 1 },
+  { k: 'count', n: GOAL2, min: 2 },
   ...COLORS.map((_, i) => ({ k: 'kill', color: i })),
 ];
 export function objectiveText(o) {
@@ -44,7 +45,7 @@ export function objectiveText(o) {
     return o.min > 1
       ? `Dominar ${o.n} territórios, com pelo menos ${o.min} exércitos em cada um.`
       : `Dominar ${o.n} territórios.`;
-  return `Eliminar o exército ${COLORS[o.color].n}. Se for o seu, não estiver em jogo ou outro jogador o eliminar, seu objetivo passa a ser dominar 24 territórios.`;
+  return `Eliminar o exército ${COLORS[o.color].n}. Se for o seu, não estiver em jogo ou outro jogador o eliminar, seu objetivo passa a ser dominar ${GOAL} territórios.`;
 }
 
 const shuffle = (a, rng) => {
@@ -109,7 +110,7 @@ function objectiveMet(s, p) {
       if (s.players[target].alive) return false;
       if (s.players[target].killedBy === p) return true;
     }
-    o = { k: 'count', n: 24, min: 1 };
+    o = { k: 'count', n: GOAL, min: 1 };
   }
   if (o.k === 'count') return s.terr.filter((t) => t.o === p && t.a >= o.min).length >= o.n;
   if (!o.c.every((c) => ownsContinent(s, p, c))) return false;

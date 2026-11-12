@@ -23,8 +23,10 @@
     <label class="field">Seu nome<input id="name" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado"></label>
     <button class="btn primary" data-do="host">Criar partida</button>
     <button class="btn" data-do="join">Entrar em partida</button>
+    <button class="btn" data-do="rejoin" id="rejoin" hidden>Reconectar à partida</button>
     <button class="btn" data-do="resume" id="resume" hidden>Continuar partida salva</button>
     <button class="btn ghost" data-do="rules">Como jogar</button>
+    <p class="tag" id="offline" hidden>✓ Pronto para jogar sem internet</p>
   </section>
   <section id="lobby" class="screen" hidden>
     <h2>Sala</h2>

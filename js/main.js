@@ -69,8 +69,22 @@ function extractCode(text) {
   return text;
 }
 
+// Pedir a câmera antes de criar a conexão tem um segundo efeito: com a permissão concedida,
+// o navegador informa o IP local real em vez de um nome mDNS, que outros aparelhos da rede
+// (principalmente Android) muitas vezes não conseguem resolver.
+const stopStream = (s) => s && s.getTracks().forEach((t) => t.stop());
+async function openCamera() {
+  try { return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); } catch { return null; }
+}
+const guestId = () => {
+  let id = store.get('gid');
+  if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('gid', id); }
+  return id;
+};
+
 // Abre a câmera dentro de `box` e chama onCode a cada QR lido. Retorna função para parar.
-function startScanner(box, onCode) {
+// Se `shared` for passado, usa esse stream e não o encerra ao parar.
+function startScanner(box, onCode, shared) {
   let stream, raf, stopped = false;
   const video = document.createElement('video');
   video.setAttribute('playsinline', ''); video.muted = true;
@@ -88,12 +102,14 @@ function startScanner(box, onCode) {
     }
     raf = requestAnimationFrame(tick);
   };
-  (navigator.mediaDevices?.getUserMedia
-    ? navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-    : Promise.reject(new Error('sem câmera')))
-    .then((s) => { stream = s; if (stopped) return s.getTracks().forEach((t) => t.stop()); video.srcObject = s; video.play(); tick(); })
-    .catch(() => { box.innerHTML = '<p>Não foi possível abrir a câmera. Use o campo de código abaixo.</p>'; });
-  return () => { stopped = true; cancelAnimationFrame(raf); stream && stream.getTracks().forEach((t) => t.stop()); };
+  const live = shared && shared.getTracks().some((t) => t.readyState === 'live');
+  (live ? Promise.resolve(shared) : openCamera()).then((s) => {
+    if (!s) { box.innerHTML = '<p>Não foi possível abrir a câmera. Use o campo de código abaixo.</p>'; return; }
+    stream = s;
+    if (stopped) { if (!live) stopStream(s); return; }
+    video.srcObject = s; video.play().catch(() => {}); tick();
+  });
+  return () => { stopped = true; cancelAnimationFrame(raf); if (!live) stopStream(stream); };
 }
 
 async function copyText(text) {
@@ -116,16 +132,22 @@ function hostHandlers(targetSeat) {
     onmessage(msg, link) {
       if (msg.t === 'hello') {
         const name = String(msg.name || 'Convidado').slice(0, 14);
-        if (targetSeat != null && app.seats[targetSeat]) {
-          const st = app.seats[targetSeat];
-          if (st.link && st.link !== link) st.link.close();
-          st.link = link; st.ctrl = 'remote';
-          const pi = playerOfSeat(targetSeat);
+        const gid = String(msg.gid || '').slice(0, 40);
+        // quem já tinha assento (mesmo aparelho) volta para ele, inclusive no meio da partida
+        let si = targetSeat;
+        if (si == null && gid) { const k = app.seats.findIndex((s) => s.gid === gid && s.ctrl !== 'local'); if (k >= 0) si = k; }
+        if (si != null && app.seats[si]) {
+          const st = app.seats[si];
+          if (st.link && st.link !== link) { const old = st.link; st.link = null; old.close(); }
+          st.link = link; st.ctrl = 'remote'; if (gid) st.gid = gid;
+          const pi = playerOfSeat(si);
           if (pi >= 0) app.game.players[pi].ctrl = 'remote';
+          toast(`${st.name} ${app.game ? 'voltou à partida' : 'conectou'}.`);
         } else if (!app.game && app.seats.length < 6) {
-          app.seats.push({ name, color: freeColor(), ctrl: 'remote', link });
-        } else return link.send({ t: 'err', m: 'A sala está cheia ou a partida já começou.' });
-        closeModal(); toast(`${name} conectou.`);
+          app.seats.push({ name, color: freeColor(), ctrl: 'remote', link, gid });
+          toast(`${name} conectou.`);
+        } else return link.send({ t: 'err', m: app.game ? 'A partida já começou. Peça ao anfitrião o QR do seu jogador (menu ☰).' : 'A sala está cheia.' });
+        closeModal();
         sync();
       } else if (msg.t === 'act' && app.game) {
         const pi = playerOfSeat(seatOfLink(link));
@@ -147,10 +169,11 @@ function hostHandlers(targetSeat) {
 }
 
 async function hostInvite(targetSeat = null) {
-  modal('<h3>Preparando convite…</h3>');
+  modal('<h3>Preparando convite…</h3><p>Se o navegador pedir, permita a câmera: ela lê o QR de resposta e ajuda os aparelhos a se encontrarem na rede local.</p>');
+  const camStream = await openCamera();
   let inv, stop = () => {};
   try { inv = await createInvite(hostHandlers(targetSeat)); }
-  catch (e) { closeModal(); return toast('Seu navegador não conseguiu criar a conexão.'); }
+  catch (e) { stopStream(camStream); closeModal(); return toast('Seu navegador não conseguiu criar a conexão.'); }
   const url = inviteUrl(inv.code);
   const accept = (raw) => {
     const code = extractCode(raw);
@@ -162,20 +185,20 @@ async function hostInvite(targetSeat = null) {
       if (!inv.link.open && $('#scanbox')) $('#scanbox').innerHTML = '<p class="off">Não conectou. Confiram se os aparelhos estão na mesma rede Wi-Fi (ou no hotspot de um deles) e gerem um novo convite.</p>';
     }, 15000);
   };
-  modal(`<h3>${targetSeat != null ? 'Reconectar ' + esc(app.seats[targetSeat].name) : 'Convidar jogador'}</h3>
-    <ol><li>O convidado aponta a câmera para este QR (ou usa “Entrar em partida”).</li>
+  modal(`<h3>${targetSeat != null ? 'Reconectar ' + esc(app.seats[targetSeat].name) : app.game ? 'Reconectar jogador' : 'Convidar jogador'}</h3>
+    <ol><li>O convidado abre o jogo, toca em “${app.game ? 'Reconectar à partida' : 'Entrar em partida'}” e lê este QR (a câmera do celular também serve).</li>
     <li>O celular dele mostra um QR de resposta: leia-o aqui.</li></ol>
     <div class="qr" id="qrbox"></div>
     <div class="row"><button class="btn small" data-m="copy">Copiar link</button><button class="btn small primary" data-m="scan">Ler resposta</button></div>
     <div id="scanbox"></div>
     <label class="field">Ou cole o código de resposta<textarea id="paste" rows="2"></textarea></label>
     <div class="row"><button class="btn small" data-m="ok">Usar código colado</button><button class="btn small ghost" data-m="close">Cancelar</button></div>`,
-  () => { stop(); if (!inv.link.open) setTimeout(() => !inv.link.open && inv.cancel(), 20000); });
+  () => { stop(); stopStream(camStream); if (!inv.link.open) setTimeout(() => !inv.link.open && inv.cancel(), 20000); });
   $('#qrbox').append(drawQr(url));
   $('#modal .sheet').onclick = (e) => {
     const m = e.target.dataset.m;
     if (m === 'copy') copyText(url);
-    if (m === 'scan') { $('#qrbox').hidden = true; stop = startScanner($('#scanbox'), accept); }
+    if (m === 'scan') { $('#qrbox').hidden = true; stop = startScanner($('#scanbox'), accept, camStream); }
     if (m === 'ok') accept($('#paste').value);
     if (m === 'close') { inv.cancel(); closeModal(); }
   };
@@ -198,7 +221,7 @@ function sync() {
     else s.link.send({ t: 'lobby', seats: pub, you: si });
   });
   if (g) {
-    store.set('save', { seats: app.seats.map(({ link, ...s }) => s), game: g });
+    store.set('save2', { seats: app.seats.map(({ link, ...s }) => s), game: g });
     app.view = viewFor(g, viewer());
     renderGame(); scheduleBot();
   } else renderLobby();
@@ -222,7 +245,8 @@ function viewer() {
 const guestHandlers = {
   onopen(link) {
     app.role = 'guest'; app.link = link;
-    link.send({ t: 'hello', name: myName() });
+    link.send({ t: 'hello', name: myName(), gid: guestId() });
+    store.set('guest', true);
     closeModal(); toast('Conectado!');
   },
   onmessage(msg) {
@@ -240,10 +264,12 @@ const guestHandlers = {
 async function guestJoin(raw) {
   const code = extractCode(raw);
   if (!/^1~o/.test(code)) return toast('Esse não é um QR de convite.');
-  modal('<h3>Preparando resposta…</h3>');
+  modal('<h3>Preparando resposta…</h3><p>Se o navegador pedir, permita a câmera: sem ela a conexão na rede local pode não abrir.</p>');
+  const camStream = await openCamera();
   let j;
   try { j = await joinInvite(code, guestHandlers); }
   catch (e) { closeModal(); return toast('Convite inválido ou expirado.'); }
+  finally { stopStream(camStream); }
   if (app.link) { const old = app.link; app.link = null; old.close(); }
   modal(`<h3>Mostre este QR ao anfitrião</h3><p>No celular dele: “Ler resposta”. A conexão abre sozinha em seguida.</p>
     <div class="qr" id="qrbox"></div>
@@ -256,7 +282,7 @@ async function guestJoin(raw) {
 }
 function guestScan() {
   let stop = () => {};
-  modal(`<h3>Entrar em partida</h3><p>Aponte para o QR de convite na tela do anfitrião.</p><div id="scanbox"></div>
+  modal(`<h3>${store.get('guest') ? 'Reconectar à partida' : 'Entrar em partida'}</h3><p>Aponte para o QR na tela do anfitrião${store.get('guest') ? ' (ele gera um novo em ☰ → Reconectar por QR)' : ''}.</p><div id="scanbox"></div>
     <label class="field">Ou cole o link/código do convite<textarea id="paste" rows="2"></textarea></label>
     <div class="row"><button class="btn small" data-m="ok">Usar código colado</button><button class="btn small ghost" data-m="close">Cancelar</button></div>`,
   () => stop());
@@ -298,34 +324,35 @@ const el = (tag, attrs, parent) => {
   parent && parent.append(e);
   return e;
 };
+const PAD = 30;
 const nodes = [];
 (function buildMap() {
-  const halo = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), labels = el('g', {}, svg);
-  SEA.forEach(([a, b]) => el('line', { class: 'sea-route', x1: TERR[a].x, y1: TERR[a].y, x2: TERR[b].x, y2: TERR[b].y }, routes));
+  const halo = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
+  SEA.forEach(([a, b, wrap]) => {
+    const A = TERR[a], B = TERR[b];
+    if (wrap) { // rota que dá a volta no mapa: um trecho até cada borda
+      const [l, r] = A.x < B.x ? [A, B] : [B, A];
+      el('line', { class: 'sea-route', x1: l.x, y1: l.y, x2: -PAD, y2: l.y }, routes);
+      el('line', { class: 'sea-route', x1: r.x, y1: r.y, x2: MAP_W + PAD, y2: r.y }, routes);
+    } else el('line', { class: 'sea-route', x1: A.x, y1: A.y, x2: B.x, y2: B.y }, routes);
+  });
   TERR.forEach((t, i) => {
     const col = CONTINENTS[t.c].color;
-    el('polygon', { class: 'halo', points: t.p, fill: col, stroke: col }, halo);
-    const poly = el('polygon', { class: 'terr', points: t.p, 'data-t': i }, land);
-    el('text', { class: 'tname', x: t.x, y: t.y + 30 }, labels).textContent = t.n;
-    el('circle', { class: 'badge', cx: t.x, cy: t.y - 2, r: 16 }, labels);
-    const num = el('text', { class: 'num', x: t.x, y: t.y - 1 }, labels);
+    el('path', { class: 'halo', d: t.d, fill: 'none', stroke: col }, halo);
+    const poly = el('path', { class: 'terr', d: t.d, 'data-t': i, 'fill-rule': 'evenodd' }, land);
+    el('text', { class: 'tname', x: t.x, y: t.y + 23 }, labels).textContent = t.n;
+    el('circle', { class: 'badge', cx: t.x, cy: t.y, r: 12.5, stroke: col }, labels);
+    const num = el('text', { class: 'num', x: t.x, y: t.y + 0.5 }, labels);
+    el('circle', { class: 'hit', cx: t.x, cy: t.y, r: 15, 'data-t': i }, hits);
     nodes.push({ poly, num });
   });
-  // rótulo do continente acima do território mais ao norte
-  CONTINENTS.forEach((c, ci) => {
-    let top = null;
-    TERR.forEach((t) => {
-      if (t.c !== ci) return;
-      const y = Math.min(...t.p.split(' ').map((q) => +q.split(',')[1]));
-      if (!top || y < top.y) top = { x: t.x, y };
-    });
-    el('text', { class: 'cname', x: top.x, y: Math.max(24, top.y - 14), fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
+  CONTINENTS.forEach((c) => {
+    el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
   });
 })();
 
 // Pan e zoom por viewBox, mantendo a proporção do contêiner.
 const cam = { x: 0, y: 0, z: 1 };
-const PAD = 30;
 function limits() {
   const r = svg.getBoundingClientRect();
   const contain = Math.min(r.width / (MAP_W + 2 * PAD), r.height / (MAP_H + 2 * PAD));
@@ -345,7 +372,7 @@ let camReady = false;
 function fitView(toggle) {
   const { r, contain, cover } = limits();
   if (!r.width) return;
-  const mid = Math.min(cover, contain * 1.7);
+  const mid = Math.min(cover, contain * 2.4);
   if (toggle === true) cam.z = Math.abs(cam.z - contain) < 0.01 ? mid : contain;
   else if (camReady) return applyCam();
   else cam.z = mid;
@@ -386,7 +413,13 @@ const endPtr = (e) => {
   const had = ptrs.delete(e.pointerId);
   if (had && e.type === 'pointerup' && gesture && gesture.id === e.pointerId && !gesture.moved && ptrs.size === 0) {
     const hit = document.elementFromPoint(e.clientX, e.clientY);
-    if (hit && hit.dataset && hit.dataset.t != null) tapTerritory(+hit.dataset.t);
+    let t = hit && hit.dataset && hit.dataset.t != null ? +hit.dataset.t : null;
+    if (t == null) { // toque no mar: aceita o território cujo marcador está a até 24px do dedo
+      const r = svg.getBoundingClientRect(), wx = cam.x + (e.clientX - r.left) / cam.z, wy = cam.y + (e.clientY - r.top) / cam.z;
+      let best = 24 / cam.z;
+      TERR.forEach((q, i) => { const d = Math.hypot(q.x - wx, q.y - wy); if (d < best) { best = d; t = i; } });
+    }
+    if (t != null) tapTerritory(t);
     else { app.sel = app.target = null; renderGame(); }
   }
   if (ptrs.size === 0) gesture = null;
@@ -503,7 +536,7 @@ function renderGame() {
     btns = app.role === 'host' ? '<button class="btn small primary" data-do="again">Nova partida</button>' : '';
   } else if (!can) {
     msg = app.role === 'guest' && !app.link ? '<span class="off">Sem conexão.</span> Peça um novo QR ao anfitrião.' : `Aguardando ${esc(cur.name)}…`;
-    if (app.role === 'guest' && !app.link) btns = '<button class="btn small primary" data-do="join">Ler QR de reconexão</button>';
+    if (app.role === 'guest' && !app.link) btns = '<button class="btn small primary" data-do="join">Reconectar (ler QR)</button>';
   } else if (v.step === 'reinforce') {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     msg = mustTrade(v) ? 'Você tem 5 ou mais cartas: troque antes de reforçar.' : `Toque em territórios seus para reforçar: <b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}.`;
@@ -520,6 +553,10 @@ function renderGame() {
   } else {
     msg = app.sel != null ? `Mover de ${TERR[app.sel].n} (até ${v.movable[app.sel] || 0}): toque no destino.` : 'Remaneje: toque na origem e depois num vizinho seu.';
     btns = chips + '<button class="btn small primary" data-do="endTurn">Encerrar turno</button>';
+  }
+  if (app.role === 'host' && v.phase === 'play') {
+    const off = app.seats.filter((s) => s.ctrl === 'remote' && !s.link);
+    if (off.length) btns += `<button class="btn small warn" data-do="invite">Reconectar ${esc(off.length === 1 ? off[0].name : off.length + ' jogadores')}</button>`;
   }
   const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span>Você: ${esc(meP.name)}</span>`;
   $('#bar').innerHTML = `<div class="msg">${msg}</div><div class="row">${btns}</div><div class="foot"><span class="info">${info}</span>${you}</div>`;
@@ -560,6 +597,7 @@ function showMenu() {
       ${host && p.ctrl === 'remote' && p.alive ? `<button class="btn small" data-re="${p.seat}">QR</button>` : ''}${offline && p.alive ? `<button class="btn small" data-bot="${i}">Virar bot</button>` : ''}</li>`;
   }).join('')}</ul>
   <div class="log">${v.log.slice().reverse().map(esc).join('<br>')}</div>
+  ${host && v.players.some((p) => p.ctrl === 'remote' || app.seats[p.seat].gid) ? '<button class="btn small" data-do="invite">Reconectar por QR</button>' : ''}
   <div class="row"><button class="btn small" data-do="rules">Regras</button><button class="btn small" data-do="quit">Sair da partida</button><button class="btn small primary" data-m="close">Voltar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     const d = e.target.dataset;
@@ -575,9 +613,9 @@ function showRules() {
   <li><b>Conquista:</b> ao zerar a defesa você ocupa o território com 1 a 3 exércitos e, no fim do turno, ganha uma carta.</li>
   <li><b>Cartas:</b> troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória.</li>
   <li><b>Remanejamento:</b> ao final, mova exércitos entre territórios vizinhos seus; cada exército anda uma vez por turno.</li>
-  <li><b>Rotas marítimas:</b> linhas pontilhadas também são fronteiras.</li></ul>
+  <li><b>Rotas marítimas:</b> linhas pontilhadas também são fronteiras. O Alasca liga com o Extremo Oriente pela borda do mapa.</li></ul>
   <h3>Conexão</h3>
-  <p>Os aparelhos falam direto entre si (WebRTC). Funciona melhor com todos no mesmo Wi-Fi ou no hotspot de um dos celulares. Mantenha a tela ligada; se alguém cair, o anfitrião gera um novo QR em ☰.</p>
+  <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>
   <button class="btn" data-m="close">Fechar</button>`);
 }
 
@@ -586,16 +624,18 @@ function leave() {
   clearTimeout(app.botTimer);
   if (app.role === 'host') app.seats.forEach((s) => s.link && s.link.close());
   if (app.link) { const l = app.link; app.link = null; l.close(); }
+  if (app.role === 'guest') store.del('guest');
   Object.assign(app, { role: null, seats: [], game: null, view: null, me: null, lobby: null, sel: null, target: null, info: null, lastViewer: null });
-  $('#resume').hidden = !store.get('save');
+  refreshHome();
   closeModal(); show('home');
 }
 const actions = {
   host: hostStart,
   join: guestScan,
+  rejoin: guestScan,
   rules: showRules,
   resume() {
-    const sv = store.get('save');
+    const sv = store.get('save2');
     if (!sv) return;
     app.role = 'host'; app.seats = sv.seats; app.game = sv.game; app.lastViewer = null;
     show('game'); sync();
@@ -618,7 +658,7 @@ const actions = {
     modal(`<h3>Sair da partida?</h3><p>${app.role === 'host' ? 'A partida fica salva neste aparelho e pode ser retomada na tela inicial.' : 'Você poderá voltar lendo um novo QR do anfitrião.'}</p>
       <div class="row"><button class="btn primary" data-do="leave">Sair</button><button class="btn" data-m="close">Ficar</button></div>`);
   },
-  again() { store.del('save'); app.game = null; app.view = null; show('lobby'); sync(); },
+  again() { store.del('save2'); app.game = null; app.view = null; show('lobby'); sync(); },
   objective: showObjective,
   cards: showCards,
   menu: showMenu,
@@ -646,7 +686,11 @@ document.addEventListener('click', (e) => {
 /* ---------- inicialização ---------- */
 $('#name').value = store.get('name') || '';
 $('#name').addEventListener('input', () => store.set('name', $('#name').value));
-$('#resume').hidden = !store.get('save');
+function refreshHome() {
+  $('#resume').hidden = !store.get('save2');
+  $('#rejoin').hidden = !store.get('guest');
+}
+refreshHome();
 
 let wake = null;
 async function keepAwake() {
@@ -655,20 +699,23 @@ async function keepAwake() {
 document.addEventListener('visibilitychange', keepAwake);
 document.addEventListener('click', () => !wake && keepAwake(), { once: true });
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.ready.then(() => caches.has('estandarte-v2')).then((ok) => { $('#offline').hidden = !ok; }).catch(() => {});
+}
 
 function fromHash() {
   if (!location.hash.startsWith('#j=')) return;
   const raw = location.href;
   history.replaceState(null, '', location.pathname + location.search);
-  if (!store.get('name')) {
-    modal(`<h3>Entrar na partida</h3><label class="field">Seu nome<input id="jname" maxlength="14"></label><button class="btn primary" data-m="go">Entrar</button>`);
-    $('#modal .sheet').onclick = (e) => {
-      if (e.target.dataset.m !== 'go') return;
-      $('#name').value = $('#jname').value.trim(); store.set('name', $('#name').value);
-      guestJoin(raw);
-    };
-  } else guestJoin(raw);
+  modal(`<h3>Entrar na partida</h3><label class="field">Seu nome<input id="jname" maxlength="14" value="${esc(store.get('name') || '')}"></label>
+    <p>Ao entrar, o navegador vai pedir a câmera. Permita: é o que faz a conexão funcionar na rede local.</p>
+    <button class="btn primary" data-m="go">Entrar</button>`);
+  $('#modal .sheet').onclick = (e) => {
+    if (e.target.dataset.m !== 'go') return;
+    $('#name').value = $('#jname').value.trim(); store.set('name', $('#name').value);
+    guestJoin(raw);
+  };
 }
 addEventListener('hashchange', fromHash);
 fromHash();
