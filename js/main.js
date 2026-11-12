@@ -27,7 +27,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '8'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '9'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -356,7 +356,7 @@ const el = (tag, attrs, parent) => {
 const PAD = 30;
 const nodes = [];
 (function buildMap() {
-  const aura = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
+  const aura = el('g', {}, svg), routes = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
   SEA.forEach(([a, b, wrap]) => {
     const A = TERR[a], B = TERR[b];
     if (wrap) { // rota que dá a volta no mapa: um trecho até cada borda
@@ -383,6 +383,7 @@ const nodes = [];
     el('path', { class: 'aura', d: c.d, stroke: c.color }, aura);
     el('path', { class: 'auracut', d: c.d }, aura);
     el('path', { class: 'moat', d: c.d }, moat);
+    el('path', { class: 'depth', d: c.d }, depth); // "espessura" do tabuleiro, deslocada para baixo
   });
 })();
 let markK = 0;
@@ -397,8 +398,10 @@ function scaleMarks() {
 
 // Pan e zoom por viewBox, mantendo a proporção do contêiner.
 const cam = { x: 0, y: 0, z: 1 };
+// Caixa do mapa sem a inclinação em perspectiva (o retângulo transformado não serve para as contas de zoom).
+function boxOf() { const b = $('#mapwrap').getBoundingClientRect(); return { left: b.left, top: b.top, width: svg.clientWidth, height: svg.clientHeight }; }
 function limits() {
-  const r = svg.getBoundingClientRect();
+  const r = boxOf();
   const contain = Math.min(r.width / (MAP_W + 2 * PAD), r.height / (MAP_H + 2 * PAD));
   const cover = Math.max(r.width / MAP_W, r.height / MAP_H);
   return { r, contain, cover, max: Math.max(cover * 2.2, 1.4) };
@@ -438,7 +441,7 @@ svg.addEventListener('pointermove', (e) => {
   const prev = [...ptrs.values()].map((q) => ({ ...q }));
   p.x = e.clientX; p.y = e.clientY;
   const cur = [...ptrs.values()];
-  const r = svg.getBoundingClientRect();
+  const r = boxOf();
   if (cur.length === 1) {
     if (gesture && !gesture.moved && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) < 8) return;
     if (gesture) gesture.moved = true;
@@ -460,9 +463,8 @@ const endPtr = (e) => {
     const hit = document.elementFromPoint(e.clientX, e.clientY);
     let t = hit && hit.dataset && hit.dataset.t != null ? +hit.dataset.t : null;
     if (t == null) { // toque no mar: aceita o território cujo marcador está a até 24px do dedo
-      const r = svg.getBoundingClientRect(), wx = cam.x + (e.clientX - r.left) / cam.z, wy = cam.y + (e.clientY - r.top) / cam.z;
-      let best = 24 / cam.z;
-      TERR.forEach((q, i) => { const d = Math.hypot(q.x - wx, q.y - wy); if (d < best) { best = d; t = i; } });
+      let best = 24; // medido na tela, para valer também com o mapa em perspectiva
+      nodes.forEach((nd, i) => { const b = nd.badge.getBoundingClientRect(), d = Math.hypot(b.left + b.width / 2 - e.clientX, b.top + b.height / 2 - e.clientY); if (d < best) { best = d; t = i; } });
     }
     if (t != null) tapTerritory(t);
     else { app.sel = app.target = null; renderGame(); }
@@ -472,7 +474,7 @@ const endPtr = (e) => {
 svg.addEventListener('pointerup', endPtr); svg.addEventListener('pointercancel', endPtr); svg.addEventListener('pointerleave', endPtr);
 svg.addEventListener('wheel', (e) => {
   e.preventDefault();
-  const r = svg.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const r = boxOf(), mx = e.clientX - r.left, my = e.clientY - r.top;
   const wx = cam.x + mx / cam.z, wy = cam.y + my / cam.z;
   cam.z *= e.deltaY < 0 ? 1.15 : 1 / 1.15; applyCam();
   cam.x = wx - mx / cam.z; cam.y = wy - my / cam.z; applyCam();
