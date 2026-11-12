@@ -4,6 +4,7 @@ import {
   poolTotal, validTrade, bestTrade, tradeValue, cardSymbol, cardName, mustTrade, handSize,
 } from './game.js';
 import { createInvite, joinInvite } from './net.js';
+import { play, unlock, soundOn, setSound } from './sound.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -27,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '9'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '10'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -244,7 +245,7 @@ function sync() {
     else s.link.send({ t: 'lobby', seats: pub, you: si, secs: app.cfg.secs });
   });
   if (g) {
-    store.set('save2', { seats: app.seats.map(({ link, ...s }) => s), game: g });
+    store.set('save3', { seats: app.seats.map(({ link, ...s }) => s), game: g });
     app.view = viewFor(g, viewer());
     renderGame(); scheduleBot();
   } else renderLobby();
@@ -536,22 +537,24 @@ function processEvents(v) {
     if (first && e.t !== 'turn') continue;
     if (e.t === 'turn') {
       if (v.phase !== 'play') continue;
-      if (mine(e.p)) { flash('Sua vez!', col(e.p), v.round === 0 ? 'Distribua seus exércitos' : PHASE_ALERT.reinforce[1], 1000, true); buzz([120, 60, 120]); }
-      else flash(`Vez de ${nm(e.p)}`, col(e.p));
+      if (mine(e.p)) { flash('Sua vez!', col(e.p), v.round === 0 ? 'Distribua seus exércitos' : PHASE_ALERT.reinforce[1], 1000, true); buzz([120, 60, 120]); play('turn'); }
+      else { flash(`Vez de ${nm(e.p)}`, col(e.p)); play('other'); }
     } else if (e.t === 'phase') {
-      if (mine(e.p)) { flash(PHASE_ALERT[e.step][0], col(e.p), PHASE_ALERT[e.step][1], 1000, true); buzz(40); }
-    } else if (e.t === 'place') { fxPulse(e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); }
+      if (mine(e.p)) { flash(PHASE_ALERT[e.step][0], col(e.p), PHASE_ALERT[e.step][1], 1000, true); buzz(40); play('phase'); }
+    } else if (e.t === 'place') { fxPulse(e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('place'); }
     else if (e.t === 'trade') {
       flash(mine(e.p) ? `+${e.v} exércitos` : `${nm(e.p)} trocou cartas`, col(e.p), mine(e.p) ? (e.auto ? 'Troca automática de cartas' : 'Troca de cartas') : `+${e.v} exércitos`, 1000, mine(e.p));
       (e.bonus || []).forEach((t) => { fxPulse(t, col(e.p)); fxFloat(t, '+2', '#fff'); });
+      play('trade');
     }
-    else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); }
+    else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('move'); }
     else if (e.t === 'attack') {
       fxArrow(e.from, e.to, col(e.p));
       if (e.la) fxFloat(e.from, '−' + e.la, '#ff8a7a');
       if (e.ld) fxFloat(e.to, '−' + e.ld, '#ff8a7a');
       shake(e.won);
       const involved = mine(e.p) || mine(e.def);
+      play('dice'); play(!e.won ? 'attack' : mine(e.def) && !mine(e.p) ? 'lost' : 'conquer');
       if (e.won) {
         fxPulse(e.to, col(e.p), true);
         if (involved) buzz([80, 40, 160]);
@@ -559,10 +562,10 @@ function processEvents(v) {
         else if (mine(e.def)) flash('Território perdido', col(e.p), `${nm(e.p)} tomou ${TERR[e.to].n}`, 1000, true);
         else flash(`${nm(e.p)} conquistou`, col(e.p), TERR[e.to].n);
       } else if (involved) buzz(70);
-    } else if (e.t === 'card') { if (mine(e.p)) flash('Carta recebida', col(e.p), 'Veja em 🂠'); }
-    else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); }
-    else if (e.t === 'timeout') flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p));
-    else if (e.t === 'win') { flash(`${nm(e.p)} venceu!`, col(e.p), '', 2500, true); buzz([150, 80, 150, 80, 300]); }
+    } else if (e.t === 'card') { if (mine(e.p)) { flash('Carta recebida', col(e.p), 'Toque no ícone de cartas para ver'); play('card'); } }
+    else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); play('dead'); }
+    else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p)); play('timeout'); }
+    else if (e.t === 'win') { play('win'); flash(`${nm(e.p)} venceu!`, col(e.p), '', 2500, true); buzz([150, 80, 150, 80, 300]); }
   }
 }
 
@@ -590,8 +593,8 @@ setInterval(() => {
   bar.classList.toggle('low', secs <= 10);
   if (secs !== app.lastSec) {
     if (canAct() && app.lastSec != null) {
-      if (secs === 10) { flash('10 segundos!', '#e06a5a', 'O turno vai encerrar sozinho', 1000, true); buzz([60, 40, 60]); }
-      else if (secs <= 5 && secs > 0) buzz(35);
+      if (secs === 10) { flash('10 segundos!', '#e06a5a', 'O turno vai encerrar sozinho', 1000, true); buzz([60, 40, 60]); play('warn'); }
+      else if (secs <= 5 && secs > 0) { buzz(35); play('tick'); }
     }
     app.lastSec = secs;
   }
@@ -786,7 +789,7 @@ function showMenu() {
   }).join('')}</ul>
   <div class="log">${v.log.slice().reverse().map(esc).join('<br>')}</div>
   ${host && v.players.some((p) => p.ctrl === 'remote' || app.seats[p.seat].gid) ? '<button class="btn small" data-do="invite">Reconectar por QR</button>' : ''}
-  <div class="row"><button class="btn small" data-do="rules">Regras</button><button class="btn small" data-do="quit">Sair da partida</button><button class="btn small primary" data-m="close">Voltar</button></div>`);
+  <div class="row"><button class="btn small" data-do="sound">Som: ${soundOn() ? 'ligado' : 'desligado'}</button><button class="btn small" data-do="rules">Regras</button><button class="btn small" data-do="quit">Sair</button><button class="btn small primary" data-m="close">Voltar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     const d = e.target.dataset;
     if (d.re != null) hostInvite(+d.re);
@@ -823,7 +826,7 @@ const actions = {
   rejoin: guestScan,
   rules: showRules,
   resume() {
-    const sv = store.get('save2');
+    const sv = store.get('save3');
     if (!sv) return;
     app.role = 'host'; app.seats = sv.seats; app.game = sv.game; app.lastViewer = null; app.turnKey = null; app.evN = null;
     if (!app.game.ev) app.game.ev = [];
@@ -847,8 +850,9 @@ const actions = {
     modal(`<h3>Sair da partida?</h3><p>${app.role === 'host' ? 'A partida fica salva neste aparelho e pode ser retomada na tela inicial.' : 'Você poderá voltar lendo um novo QR do anfitrião.'}</p>
       <div class="row"><button class="btn primary" data-do="leave">Sair</button><button class="btn" data-m="close">Ficar</button></div>`);
   },
-  again() { store.del('save2'); app.game = null; app.view = null; show('lobby'); sync(); },
+  again() { store.del('save3'); app.game = null; app.view = null; show('lobby'); sync(); },
   objective: showObjective,
+  sound() { setSound(!soundOn()); store.set('sound', soundOn()); if (soundOn()) { unlock(); play('turn'); } showMenu(); },
   cards: showCards,
   autoTrade() { const v = app.view, me = v.players[v.turn]; const tr = Array.isArray(me.cards) && bestTrade(me.cards, v.terr, v.turn); if (tr) act({ t: 'trade', cards: tr }); },
   menu: showMenu,
@@ -876,6 +880,9 @@ document.addEventListener('click', (e) => {
 
 /* ---------- inicialização ---------- */
 $('#name').value = store.get('name') || '';
+if (store.get('sound') === false) setSound(false);
+// o navegador só libera áudio depois de um toque do usuário
+for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, unlock, { passive: true });
 $('#ver').textContent = 'versão ' + VERSION;
 // estilos alternativos do destaque de continente, para comparar: ?estilo=2 ou ?estilo=3
 const estilo = new URLSearchParams(location.search).get('estilo');
@@ -883,7 +890,7 @@ if (estilo === '2' || estilo === '3') svg.classList.add('st' + estilo);
 if (store.get('cfg')) Object.assign(app.cfg, store.get('cfg'));
 $('#name').addEventListener('input', () => store.set('name', $('#name').value));
 function refreshHome() {
-  $('#resume').hidden = !store.get('save2');
+  $('#resume').hidden = !store.get('save3');
   $('#rejoin').hidden = !store.get('guest');
 }
 refreshHome();

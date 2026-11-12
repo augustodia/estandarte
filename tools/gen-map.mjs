@@ -18,31 +18,31 @@ const proj = ([lon, lat]) => {
 
 const CONT = [
   { n: 'América do Norte', bonus: 5, color: '#f0d9a0', at: [-146, 27] },
-  { n: 'América do Sul', bonus: 3, color: '#a8e0b0', at: [-104, -28] },
+  { n: 'América do Sul', bonus: 2, color: '#a8e0b0', at: [-104, -28] },
   { n: 'Europa', bonus: 5, color: '#a9d4f5', at: [-24, 47] },
-  { n: 'África', bonus: 4, color: '#f2b08c', at: [-10, -14] },
+  { n: 'África', bonus: 3, color: '#f2b08c', at: [-10, -14] },
   { n: 'Ásia', bonus: 7, color: '#f0b0cf', at: [74, -4] },
   { n: 'Oceania', bonus: 2, color: '#c9c0f5', at: [128, -46] },
 ];
 // chave: [nome, continente, rótulo lon, lat]
 const T = {
-  ala: ['Alasca', 0, -152, 65], cao: ['Canadá Oeste', 0, -118, 58], cal: ['Canadá Leste', 0, -78, 54], gro: ['Groenlândia', 0, -42, 69],
+  ala: ['Alasca', 0, -152, 65], cao: ['Canadá Oeste', 0, -123, 59], cac: ['Canadá Central', 0, -98, 57], cal: ['Canadá Leste', 0, -73, 53], gro: ['Groenlândia', 0, -42, 69],
   euo: ['EUA Oeste', 0, -112, 41], eul: ['EUA Leste', 0, -86, 37], mex: ['México', 0, -102, 24], cam: ['América Central', 0, -86, 14],
-  col: ['Colômbia', 1, -68, 6], and: ['Peru', 1, -74, -10], ama: ['Amazônia', 1, -60, -5], bra: ['Brasil', 1, -46, -13], arg: ['Argentina', 1, -64, -33], chi: ['Chile', 1, -71.5, -43],
-  bri: ['Reino Unido', 2, -2, 54], esc: ['Escandinávia', 2, 15, 63], ibe: ['Ibéria', 2, -4, 40], fra: ['França', 2, 3, 47], euc: ['Europa Central', 2, 12.5, 51.5],
+  col: ['Colômbia', 1, -69, 6], and: ['Peru e Chile', 1, -74.5, -11], bra: ['Brasil', 1, -52, -10], arg: ['Argentina', 1, -64, -34],
+  bri: ['Reino Unido', 2, -2, 54], esc: ['Escandinávia', 2, 15, 63], fra: ['Europa Ocidental', 2, 1, 45], euc: ['Europa Central', 2, 12.5, 51.5],
   ita: ['Itália e Bálcãs', 2, 20.5, 43.5], eor: ['Ucrânia', 2, 31, 50], rus: ['Rússia', 2, 45, 57],
   mag: ['Magrebe', 3, 3, 29], egi: ['Egito', 3, 30, 22], afo: ['África Ocidental', 3, -3, 13], afc: ['Congo', 3, 20, 2], afl: ['África Oriental', 3, 38, 3],
-  afa: ['África Austral', 3, 24, -20], mad: ['Madagascar', 3, 47, -19],
+  afa: ['África Austral', 3, 24, -20],
   tur: ['Turquia', 4, 36, 39.5], ara: ['Arábia', 4, 45, 24], ira: ['Irã', 4, 60, 31], asc: ['Cazaquistão', 4, 66, 46], ind: ['Índia', 4, 79, 22],
   sib: ['Sibéria', 4, 92, 63], ext: ['Extremo Oriente', 4, 140, 63], mon: ['Mongólia', 4, 104, 47], cho: ['China Ocidental', 4, 88, 36], chl: ['China', 4, 113, 31],
   cor: ['Japão e Coreia', 4, 138.5, 36.5], sea: ['Sudeste Asiático', 4, 102, 16],
-  ins: ['Indonésia', 5, 114, 0], ngu: ['Nova Guiné', 5, 144, -6], auo: ['Austrália Oeste', 5, 123, -25], aul: ['Austrália Leste', 5, 145, -25], nze: ['Nova Zelândia', 5, 172, -42],
+  ins: ['Indonésia', 5, 114, 0], ngu: ['Nova Guiné', 5, 144, -6], aus: ['Austrália', 5, 134, -25], nze: ['Nova Zelândia', 5, 172, -42],
 };
 const whole = {
   gro: 'Greenland', mex: 'Mexico',
   cam: 'Guatemala;Belize;Honduras;El Salvador;Nicaragua;Costa Rica;Panama;Cuba;Haiti;Dominican Rep.;Jamaica;Bahamas;Puerto Rico;Trinidad and Tobago',
-  col: 'Colombia;Venezuela;Guyana;Suriname', and: 'Ecuador;Peru;Bolivia', arg: 'Argentina;Uruguay;Paraguay;Falkland Is.', chi: 'Chile',
-  bri: 'United Kingdom;Ireland', esc: 'Sweden;Finland;Denmark;Iceland', ibe: 'Spain;Portugal', fra: 'Belgium;Netherlands;Luxembourg;Switzerland',
+  col: 'Colombia;Venezuela;Guyana;Suriname', and: 'Ecuador;Peru;Bolivia;Chile', bra: 'Brazil', arg: 'Argentina;Uruguay;Paraguay;Falkland Is.',
+  bri: 'United Kingdom;Ireland', esc: 'Sweden;Finland;Denmark;Iceland', fra: 'Spain;Portugal;Belgium;Netherlands;Luxembourg;Switzerland',
   euc: 'Germany;Poland;Czechia;Austria;Slovakia;Hungary',
   ita: 'Italy;Slovenia;Croatia;Bosnia and Herz.;Serbia;Montenegro;Kosovo;Albania;Macedonia;Greece;Bulgaria;Romania',
   eor: 'Ukraine;Belarus;Moldova;Lithuania;Latvia;Estonia',
@@ -50,15 +50,15 @@ const whole = {
   afo: "Mauritania;Mali;Niger;Senegal;Gambia;Guinea-Bissau;Guinea;Sierra Leone;Liberia;Côte d'Ivoire;Ghana;Togo;Benin;Burkina Faso;Nigeria",
   afc: 'Chad;Cameroon;Central African Rep.;Eq. Guinea;Gabon;Congo;Dem. Rep. Congo',
   afl: 'Ethiopia;Eritrea;Djibouti;Somalia;Somaliland;Kenya;Uganda;Tanzania;Rwanda;Burundi',
-  afa: 'Angola;Zambia;Malawi;Mozambique;Zimbabwe;Namibia;Botswana;South Africa;Lesotho;eSwatini', mad: 'Madagascar',
+  afa: 'Angola;Zambia;Malawi;Mozambique;Zimbabwe;Namibia;Botswana;South Africa;Lesotho;eSwatini;Madagascar',
   tur: 'Turkey;Cyprus;N. Cyprus;Georgia;Armenia;Azerbaijan',
   ara: 'Saudi Arabia;Yemen;Oman;United Arab Emirates;Qatar;Kuwait;Jordan;Israel;Palestine;Lebanon;Syria;Iraq',
   ira: 'Iran;Afghanistan;Pakistan', asc: 'Kazakhstan;Uzbekistan;Turkmenistan;Kyrgyzstan;Tajikistan', ind: 'India;Nepal;Bhutan;Bangladesh;Sri Lanka',
   mon: 'Mongolia', chl: 'Taiwan', cor: 'Japan;North Korea;South Korea', sea: 'Myanmar;Thailand;Laos;Cambodia;Vietnam',
-  ins: 'Indonesia;Brunei;Timor-Leste;Philippines', ngu: 'Papua New Guinea;Solomon Is.', nze: 'New Zealand;New Caledonia;Vanuatu;Fiji',
+  ins: 'Indonesia;Brunei;Timor-Leste;Philippines', ngu: 'Papua New Guinea;Solomon Is.', aus: 'Australia', nze: 'New Zealand;New Caledonia;Vanuatu;Fiji',
 };
 // países divididos entre territórios (Voronoi pelos rótulos) e regras por polígono
-const split = { 'United States of America': ['euo', 'eul'], Canada: ['cao', 'cal'], Russia: ['rus', 'sib', 'ext'], Brazil: ['ama', 'bra'], China: ['cho', 'chl'], Australia: ['auo', 'aul'] };
+const split = { 'United States of America': ['euo', 'eul'], Canada: ['cao', 'cac', 'cal'], Russia: ['rus', 'sib', 'ext'], China: ['cho', 'chl'] };
 const perPoly = {
   France: ([lon]) => (lon < -40 ? 'col' : 'fra'),
   Malaysia: ([lon]) => (lon > 108 ? 'ins' : 'sea'),
@@ -70,16 +70,16 @@ const dropPoly = {
 };
 // polígonos inteiros de um país dividido que vão direto para um território
 const splitWhole = { 'United States of America': ([, lat]) => (lat > 50 ? 'ala' : null) };
-// sementes do corte quando diferem do rótulo (alinha as divisas do Canadá e dos EUA)
-const SEED = { cao: [-114, 58], cal: [-74, 54] };
+// sementes do corte quando diferem do rótulo
+const SEED = {};
 const DROP = new Set(['Antarctica', 'Fr. S. Antarctic Lands']);
 // fronteiras: terrestres e rotas marítimas (~)
-const EDGES = `ala-cao ala~ext cao-cal cao-euo cal-eul cal~gro gro~esc euo-eul euo-mex eul-mex eul~cam mex-cam cam-col
-col-and col-ama and-ama and-bra and-arg and-chi ama-bra bra-arg arg-chi bra~afo
-bri~esc bri~fra esc-euc esc-rus esc~eor ibe-fra ibe~mag fra-euc fra-ita euc-ita euc-eor ita-eor ita-tur ita~mag eor-rus rus-tur rus-asc rus-sib
-mag-egi mag-afo mag-afc egi-afc egi-afl egi-ara afo-afc afc-afl afc-afa afl-afa afa~mad afl~mad afl~ara
+const EDGES = `ala-cao ala~ext cao-cac cac-cal cao-euo cac-euo cac-eul cal-eul cal~gro gro~esc euo-eul euo-mex eul-mex eul~cam mex-cam cam-col
+col-and col-bra and-bra and-arg bra-arg bra~afo
+bri~esc bri~fra esc-euc esc-rus esc~eor fra-euc fra-ita fra~mag euc-ita euc-eor ita-eor ita-tur ita~mag eor-rus rus-tur rus-asc rus-sib
+mag-egi mag-afo mag-afc egi-afc egi-afl egi-ara afo-afc afc-afl afc-afa afl-afa afl~ara
 tur-ara tur-ira ara-ira ira-asc ira-ind ira-cho asc-sib asc-cho ind-cho ind-sea sib-mon sib-cho sib-ext ext-mon ext-chl ext~cor mon-cho mon-chl cho-chl cho-sea chl-sea chl-cor
-sea~ins cor~ins ins-ngu ins~auo ngu~aul ngu~nze auo-aul aul~nze`.split(/\s+/);
+sea~ins cor~ins ins-ngu ins~aus ngu~aus ngu~nze aus~nze`.split(/\s+/);
 
 const keys = Object.keys(T), idx = Object.fromEntries(keys.map((k, i) => [k, i]));
 const byName = {};

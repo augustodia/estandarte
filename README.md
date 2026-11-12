@@ -44,6 +44,7 @@ O tabuleiro aparece inclinado, em perspectiva, como numa mesa. No celular, o map
 - **Alertas no centro da tela** (somem em 1 s): "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!", "Território perdido", "Vez de Fulano".
 - **Ações ao vivo:** quem espera vê o território que o jogador da vez selecionou e o alvo que ele está mirando, além de reforços (+N), setas de ataque e de movimento, perdas (−N) e os dados.
 - **Tremor e vibração:** o mapa treme a cada ataque (mais forte em conquistas) e o aparelho vibra para atacante e defensor. A vibração depende do navegador: funciona no Android; o Safari do iPhone não oferece essa função.
+- **Sons:** cada ação tem um efeito (reforço, dados, ataque, conquista, perda, sua vez, relógio acabando, vitória). Dá para desligar no menu ☰. No iPhone, a chave de silencioso também cala os sons.
 - **Tempo por turno:** o anfitrião escolhe na sala (livre, 1, 2 ou 3 min). Uma barra mostra o tempo; nos últimos 10 s ela fica vermelha e avisa. Ao zerar, os reforços restantes são colocados automaticamente e o turno passa. O relógio pausa enquanto o anfitrião reconecta alguém.
 
 ## Arquitetura
@@ -53,7 +54,8 @@ Sem build e sem dependências em tempo de execução além de duas bibliotecas d
 | Arquivo | Papel |
 | --- | --- |
 | `js/game.js` | Motor de regras puro (estado serializável, `apply(estado, jogador, ação)`), visão filtrada por jogador e bot |
-| `js/map.js` | Mapa-múndi: 46 territórios, 6 continentes, fronteiras e rotas marítimas (gerado) |
+| `js/map.js` | Mapa-múndi: 42 territórios em 6 continentes (9, 4, 7, 6, 12 e 4), fronteiras e rotas marítimas (gerado) |
+| `js/sound.js` | Efeitos sonoros sintetizados (Web Audio), sem arquivos de áudio |
 | `tools/gen-map.mjs` | Gera `js/map.js` a partir do Natural Earth 1:110m |
 | `js/net.js` | WebRTC DataChannel e compactação do SDP para caber no QR |
 | `js/main.js` | Interface, pareamento, câmera/leitor de QR, pan e zoom do mapa |
