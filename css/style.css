@@ -63,13 +63,13 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 
 /* mapa */
 .sea-route{stroke:#7fa3c7;stroke-width:2.2;stroke-dasharray:2 7;stroke-linecap:round;opacity:.7;fill:none}
-.halo{stroke-width:6;stroke-linejoin:round;opacity:.6;fill:none}
-.rim{fill:none;stroke-width:5.5;stroke-linejoin:round;opacity:.85;pointer-events:none}
+/* filete do continente: 1,25px visível por dentro do território, com a mesma espessura em qualquer zoom */
+.rim{fill:none;stroke-width:2.5px;vector-effect:non-scaling-stroke;stroke-linejoin:round;opacity:.8;pointer-events:none}
 .rim.hide{display:none}.rim.dim{opacity:.3}
-.terr{stroke:#081120;stroke-width:1.3;stroke-linejoin:round;transition:fill .25s}
-.terr.sel{stroke:#fff;stroke-width:3.5}
-.terr.tgt{stroke:#fff;stroke-width:2.6;stroke-dasharray:6 4;animation:march 1s linear infinite}
-.terr.psel{stroke:#fff;stroke-width:3;stroke-dasharray:3 3}
+.terr{stroke:#081120;stroke-width:1px;vector-effect:non-scaling-stroke;stroke-linejoin:round;transition:fill .25s}
+.terr.sel{stroke:#fff;stroke-width:3px}
+.terr.tgt{stroke:#fff;stroke-width:2.5px;stroke-dasharray:6 4;animation:march 1s linear infinite}
+.terr.psel{stroke:#fff;stroke-width:2.5px;stroke-dasharray:3 3}
 .terr.dim{filter:brightness(.5) saturate(.6)}
 @keyframes march{to{stroke-dashoffset:-20}}
 .badge{fill:#0c1626;stroke:#fffc;stroke-width:1.6;pointer-events:none}

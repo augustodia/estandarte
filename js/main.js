@@ -27,7 +27,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '5'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '6'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -356,7 +356,7 @@ const el = (tag, attrs, parent) => {
 const PAD = 30;
 const nodes = [];
 (function buildMap() {
-  const defs = el('defs', {}, svg), halo = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), rims = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
+  const defs = el('defs', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), rims = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
   SEA.forEach(([a, b, wrap]) => {
     const A = TERR[a], B = TERR[b];
     if (wrap) { // rota que dá a volta no mapa: um trecho até cada borda
@@ -367,9 +367,9 @@ const nodes = [];
   });
   TERR.forEach((t, i) => {
     const col = CONTINENTS[t.c].color;
-    el('path', { class: 'halo', id: 'h' + i, d: t.d, fill: 'none', stroke: col }, halo);
+    el('path', { id: 'h' + i, d: t.d }, defs);
     const poly = el('path', { class: 'terr', d: t.d, 'data-t': i, 'fill-rule': 'evenodd' }, land);
-    // borda interna na cor do continente: o traço é recortado pela própria forma, então só aparece por dentro
+    // filete interno na cor do continente: o traço é recortado pela própria forma, então só aparece por dentro
     el('use', { href: '#h' + i }, el('clipPath', { id: 'c' + i }, defs));
     const rim = el('path', { class: 'rim', d: t.d, stroke: col, 'clip-path': `url(#c${i})` }, rims);
     // marcador (exércitos + nome) num grupo próprio, para poder manter o tamanho na tela ao afastar o zoom
