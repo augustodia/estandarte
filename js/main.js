@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '16'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '17'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -810,8 +810,8 @@ function renderGame() {
   for (let k = 0; k < v.players.length; k++) { const i = (v.turn + k) % v.players.length; if (v.players[i].alive) seq.push(i); }
   $('#order').innerHTML = v.phase !== 'play' ? '' : seq.map((i, k) => {
     const p = v.players[i];
-    return `${k ? '<span class="sep">›</span>' : ''}<button class="oc${k ? '' : ' cur'}${i === vw ? ' me' : ''}" data-do="menu" style="--c:${COLORS[p.color].c}" aria-label="${esc(p.name)}${k ? '' : ', jogando agora'}">
-      <i></i><span>${esc(p.name)}</span><small>${owned(v, i)}</small></button>`;
+    return `${k ? '<span class="sep">›</span>' : ''}<span class="oc${k ? '' : ' cur'}${i === vw ? ' me' : ''}" style="--c:${COLORS[p.color].c}" aria-label="${esc(p.name)}${k ? '' : ', jogando agora'}">
+      <i></i><span>${esc(p.name)}</span><small>${owned(v, i)}</small></span>`;
   }).join('');
 
   // dados
