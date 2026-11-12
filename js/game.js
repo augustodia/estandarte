@@ -1,6 +1,6 @@
 // Motor de regras: funções puras sobre um estado serializável.
 // O anfitrião é a autoridade: aplica ações e distribui visões filtradas.
-import { TERR, CONTINENTS } from './map.js';
+import { TERR, CONTINENTS, SEA } from './map.js';
 
 export const COLORS = [
   { n: 'Carmim', c: '#d64545' },
@@ -15,6 +15,31 @@ const NT = TERR.length;
 const WILD = [NT, NT + 1];
 export const GOAL = Math.round(NT * 0.57), GOAL2 = Math.round(NT * 0.43);
 const TRADE_TABLE = [4, 6, 8, 10, 12, 15];
+// ---- regras opcionais: eventos de rodada e pactos ----
+const SEA_LINK = new Set(SEA.flatMap(([a, b]) => [a + '-' + b, b + '-' + a]));
+export const isSea = (a, b) => SEA_LINK.has(a + '-' + b);
+// Evento sorteado no início de cada rodada (a partir da 2ª), valendo para todos até a rodada acabar.
+export const EVENTS = {
+  storm: { n: 'Tempestade', d: (c) => `Quem ataca territórios de ${CONTINENTS[c].n} rola no máximo 2 dados.`, cont: true },
+  ceasefire: { n: 'Cessar-fogo', d: (c) => `Nenhum território de ${CONTINENTS[c].n} pode ser atacado nesta rodada.`, cont: true },
+  sea: { n: 'Mar revolto', d: () => 'As ligações por mar estão fechadas: sem ataques nem movimentos por elas.' },
+  recruit: { n: 'Recrutamento', d: () => 'Todos recebem 2 exércitos a mais no reforço.' },
+  shortage: { n: 'Escassez', d: () => 'Todos recebem 2 exércitos a menos no reforço (mínimo 3).' },
+  fort: { n: 'Trincheiras', d: () => 'A defesa soma 1 ao seu maior dado (até 6).' },
+  charge: { n: 'Ofensiva', d: () => 'O ataque soma 1 ao seu maior dado (até 6).' },
+};
+export const eventText = (e) => (e ? EVENTS[e.k].d(e.c) : '');
+export const PACT_ROUNDS = 3, PACT_PENALTY = 3;
+export const pactOf = (s, a, b) => (s.pacts || []).find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a)) || null;
+// Motivo pelo qual from não pode atacar to agora por causa de evento ou pacto; null se pode.
+export function attackBlock(s, from, to) {
+  const e = s.event, def = s.terr[to].o;
+  if (e && e.k === 'sea' && isSea(from, to)) return 'Mar revolto: as ligações por mar estão fechadas nesta rodada.';
+  if (e && e.k === 'ceasefire' && TERR[to].c === e.c) return `Cessar-fogo: ${CONTINENTS[e.c].n} não pode ser atacada nesta rodada.`;
+  const pact = pactOf(s, s.terr[from].o, def);
+  if (pact) return `Você tem um pacto com ${s.players[def].name} até o fim da rodada ${pact.until + 1}. Para atacar, rompa o pacto no início do seu turno.`;
+  return null;
+}
 export const tradeValue = (n) => (n < TRADE_TABLE.length ? TRADE_TABLE[n] : 15 + 5 * (n - 5));
 export const cardSymbol = (c) => (c >= NT ? 3 : c % 3);
 export const cardName = (c) => (c >= NT ? 'Coringa' : TERR[c].n);
@@ -62,7 +87,8 @@ const log = (s, msg) => {
 const pname = (s, i) => s.players[i].name;
 
 // seats: [{name, color, ctrl}]
-export function newGame(seats, rng = Math.random) {
+// opts: { events, pacts } ligam as regras opcionais; sem elas o jogo é o clássico.
+export function newGame(seats, rng = Math.random, opts = {}) {
   const n = seats.length;
   const pool = OBJECTIVES.map((_, i) => i).filter((i) => {
     const o = OBJECTIVES[i];
@@ -82,6 +108,7 @@ export function newGame(seats, rng = Math.random) {
     pool: { free: 0, cont: {} }, deck: shuffle([...TERR.map((_, i) => i), ...WILD], rng),
     discard: [], trades: 0, occupy: null, movable: null, roll: null, log: [], winner: null, n: 0,
     ev: [], // eventos da última ação, para animações e alertas em todos os aparelhos
+    opts: { events: !!opts.events, pacts: !!opts.pacts }, event: null, pacts: [], offer: null,
   };
   startTurn(s);
   return s;
@@ -96,7 +123,10 @@ function startTurn(s) {
   s.step = 'reinforce';
   s.occupy = null; s.movable = null; s.roll = null;
   s.players[p].conquered = false;
-  s.pool = { free: Math.max(3, Math.floor(owned(s, p) / 2)), cont: {} };
+  let base = Math.max(3, Math.floor(owned(s, p) / 2));
+  if (s.event && s.event.k === 'recruit') base += 2;
+  if (s.event && s.event.k === 'shortage') base = Math.max(3, base - 2);
+  s.pool = { free: base, cont: {} };
   CONTINENTS.forEach((c, i) => { if (ownsContinent(s, p, i)) s.pool.cont[i] = c.bonus; });
   s.ev.push({ t: 'turn', p });
   // com 5 cartas ou mais a troca é obrigatória: o jogo faz sozinho, com a melhor trinca
@@ -177,14 +207,34 @@ function nextTurn(s, rng) {
     if (s.deck.length) { pl.cards.push(s.deck.pop()); s.ev.push({ t: 'card', p: s.turn }); log(s, `${pl.name} recebeu uma carta.`); }
   }
   let t = s.turn;
+  const round0 = s.round;
   do {
     t = (t + 1) % s.players.length;
     if (t === 0) s.round++;
   } while (!s.players[t].alive);
   s.turn = t;
+  s.offer = null; // proposta de pacto sem resposta vence com o turno de quem propôs
+  if (s.round !== round0) newRound(s, rng);
   startTurn(s);
 }
 
+function newRound(s, rng) {
+  // pactos vencidos
+  for (const x of s.pacts.filter((q) => s.round > q.until)) { s.ev.push({ t: 'pactEnd', a: x.a, b: x.b }); log(s, `O pacto entre ${pname(s, x.a)} e ${pname(s, x.b)} terminou.`); }
+  s.pacts = s.pacts.filter((q) => s.round <= q.until);
+  if (!s.opts.events) return;
+  const keys = Object.keys(EVENTS).filter((k) => !s.event || k !== s.event.k); // nunca repete o da rodada anterior
+  const k = keys[Math.floor(rng() * keys.length)];
+  s.event = EVENTS[k].cont ? { k, c: Math.floor(rng() * CONTINENTS.length) } : { k };
+  s.ev.push({ t: 'event', k, c: s.event.c });
+  log(s, `Evento da rodada ${s.round + 1}: ${EVENTS[k].n}. ${eventText(s.event)}`);
+}
+// pactos deixam de existir para quem foi eliminado, e todos acabam quando sobram só dois jogadores
+function prunePacts(s) {
+  const alive = s.players.filter((q) => q.alive).length;
+  s.pacts = s.pacts.filter((x) => alive > 2 && s.players[x.a].alive && s.players[x.b].alive);
+  if (s.offer && (alive <= 2 || !s.players[s.offer.from].alive || !s.players[s.offer.to].alive)) s.offer = null;
+}
 const rollDice = (n, rng) => Array.from({ length: n }, () => 1 + Math.floor(rng() * 6)).sort((a, b) => b - a);
 
 // Regras que precisam valer depois de qualquer jogada. Devolve a descrição do problema, ou null.
@@ -205,6 +255,8 @@ export function invariant(s) {
     if (alive < 2) return 'partida deveria ter terminado';
     if (s.round === 0 && (s.step !== 'reinforce' || s.occupy || s.roll)) return 'ataque ou movimento na primeira rodada';
     if (s.step !== 'reinforce' && poolTotal(s) > 0) return 'saiu do reforço com exércitos por colocar';
+    if ((s.pacts || []).some((x) => x.a === x.b || !s.players[x.a].alive || !s.players[x.b].alive) || (!s.opts.pacts && (s.pacts.length || s.offer))) return 'pacto inválido';
+    if (!s.opts.events && s.event) return 'evento em partida sem eventos';
     if (s.occupy && (s.step !== 'attack' || s.terr[s.occupy.from].o !== s.turn || s.terr[s.occupy.to].o !== s.turn || s.terr[s.occupy.from].a - s.occupy.max < 1)) return 'ocupação inconsistente';
   }
   return null;
@@ -222,6 +274,18 @@ export function apply(s, p, a, rng = Math.random) {
 }
 function applyAction(s, p, a, rng) {
   if (s.phase !== 'play') return 'A partida não está em andamento.';
+  if (a.t === 'pactReply') { // única jogada que se faz fora da vez: responder a uma proposta de pacto
+    if (!s.offer || s.offer.to !== p) return 'Não há proposta de pacto para você.';
+    const from = s.offer.from;
+    s.n++; s.ev = []; s.offer = null;
+    if (a.accept) {
+      const until = s.round + PACT_ROUNDS;
+      s.pacts.push({ a: from, b: p, until });
+      s.ev.push({ t: 'pact', a: from, b: p, until });
+      log(s, `Pacto entre ${pname(s, from)} e ${pname(s, p)} até o fim da rodada ${until + 1}.`);
+    } else { s.ev.push({ t: 'pactNo', a: from, b: p }); log(s, `${pname(s, p)} recusou o pacto de ${pname(s, from)}.`); }
+    return null;
+  }
   if (p !== s.turn) return 'Não é a sua vez.';
   const pl = s.players[p];
   const T = s.terr;
@@ -263,11 +327,15 @@ function applyAction(s, p, a, rng) {
       const f = T[a.from], d = T[a.to];
       if (!f || !d || f.o !== p || d.o === p || !TERR[a.from].adj.includes(a.to)) return 'Ataque inválido.';
       if (f.a < 2) return 'É preciso ter ao menos 2 exércitos para atacar.';
-      const defender = d.o;
+      const blocked = attackBlock(s, a.from, a.to);
+      if (blocked) return blocked;
+      const defender = d.o, storm = s.event && s.event.k === 'storm' && TERR[a.to].c === s.event.c;
       let last, tla = 0, tld = 0;
       do {
-        const maxA = Math.min(3, f.a - 1), nA = a.blitz ? maxA : Math.max(1, Math.min(maxA, a.dice | 0 || maxA)); // dados escolhidos pelo atacante
+        const maxA = Math.min(storm ? 2 : 3, f.a - 1), nA = a.blitz ? maxA : Math.max(1, Math.min(maxA, a.dice | 0 || maxA)); // dados escolhidos pelo atacante
         const att = rollDice(nA, rng), def = rollDice(Math.min(3, d.a), rng);
+        if (s.event && s.event.k === 'charge') att[0] = Math.min(6, att[0] + 1);
+        if (s.event && s.event.k === 'fort') def[0] = Math.min(6, def[0] + 1);
         let la = 0, ld = 0;
         for (let i = 0; i < Math.min(att.length, def.length); i++) att[i] > def[i] ? ld++ : la++;
         f.a -= la; d.a -= ld; tla += la; tld += ld;
@@ -287,6 +355,7 @@ function applyAction(s, p, a, rng) {
           dp.alive = false; dp.killedBy = p;
           pl.cards.push(...dp.cards); dp.cards = [];
           s.ev.push({ t: 'dead', p: defender, by: p });
+          prunePacts(s);
           log(s, `${dp.name} foi eliminado por ${pl.name}.`);
         }
         checkWin(s, p);
@@ -315,11 +384,37 @@ function applyAction(s, p, a, rng) {
       if (!Number.isInteger(a.from) || !Number.isInteger(a.to)) return 'Movimento inválido.';
       const f = T[a.from], d = T[a.to];
       if (!f || !d || f.o !== p || d.o !== p || !TERR[a.from].adj.includes(a.to)) return 'Movimento inválido.';
+      if (s.event && s.event.k === 'sea' && isSea(a.from, a.to)) return 'Mar revolto: as ligações por mar estão fechadas nesta rodada.';
       const n = Math.min(Math.max(1, a.n | 0), s.movable[a.from] || 0, f.a - 1);
       if (n < 1) return 'Sem exércitos disponíveis para mover daqui.';
       f.a -= n; d.a += n; s.movable[a.from] -= n;
       s.ev.push({ t: 'move', p, from: a.from, to: a.to, k: n });
       checkWin(s, p);
+      return null;
+    }
+    case 'pactOffer': {
+      if (!s.opts.pacts) return 'Esta partida não tem pactos.';
+      const q = s.players[a.to];
+      if (!Number.isInteger(a.to) || !q || !q.alive || a.to === p) return 'Jogador inválido.';
+      if (s.players.filter((x) => x.alive).length <= 2) return 'Com só dois jogadores não há pactos.';
+      if (pactOf(s, p, a.to)) return 'Vocês já têm um pacto.';
+      if (s.offer) return 'Já há uma proposta aguardando resposta.';
+      if (pl.offered === s.round + ':' + s.turn) return 'Só uma proposta de pacto por turno.';
+      pl.offered = s.round + ':' + s.turn;
+      s.offer = { from: p, to: a.to };
+      s.ev.push({ t: 'pactAsk', a: p, b: a.to });
+      return null;
+    }
+    case 'pactBreak': {
+      const pact = Number.isInteger(a.with) ? pactOf(s, p, a.with) : null;
+      if (!pact) return 'Não há pacto com esse jogador.';
+      if (s.step !== 'reinforce') return 'O pacto só pode ser rompido no início do seu turno, antes de terminar o reforço.';
+      const lost = Math.min(PACT_PENALTY, s.pool.free);
+      s.pool.free -= lost;
+      s.pacts = s.pacts.filter((x) => x !== pact);
+      s.ev.push({ t: 'pactBreak', a: p, b: a.with, lost });
+      log(s, `${pl.name} rompeu o pacto com ${pname(s, a.with)} e perdeu ${lost} exército${lost === 1 ? '' : 's'} do reforço.`);
+      if (poolTotal(s) === 0) { s.step = 'attack'; s.ev.push({ t: 'phase', p, step: 'attack' }); }
       return null;
     }
     case 'endTurn': {
@@ -342,6 +437,8 @@ export function viewFor(s, p) {
 }
 export const handSize = (q) => (Array.isArray(q.cards) ? q.cards.length : q.cards);
 
+// Resposta de um bot a uma proposta de pacto: aceita se quem propõe tem mais territórios que ele.
+export const botPactReply = (s) => ({ t: 'pactReply', accept: owned(s, s.offer.from) >= owned(s, s.offer.to) });
 // Bot simples: concentra reforços onde tem mais vantagem, ataca com vantagem e leva tropas do interior para a fronteira.
 export function botAction(s) {
   const p = s.turn, T = s.terr, pl = s.players[p];
@@ -364,6 +461,7 @@ export function botAction(s) {
     T.forEach((t, i) => {
       if (t.o !== p || t.a < 3) return;
       enemies(i).forEach((j) => {
+        if (attackBlock(s, i, j)) return; // respeita eventos e pactos
         const adv = t.a - T[j].a;
         if (adv >= 1 && (!best || adv > best.adv)) best = { adv, from: i, to: j };
       });
@@ -381,7 +479,7 @@ export function botAction(s) {
   for (const k of Object.keys(s.movable || {})) {
     const i = +k, n = Math.min(s.movable[i], T[i].a - 1);
     if (n < 1 || dist[i] === 0) continue;
-    const j = TERR[i].adj.find((x) => T[x].o === p && dist[x] < dist[i]);
+    const j = TERR[i].adj.find((x) => T[x].o === p && dist[x] < dist[i] && !(s.event && s.event.k === 'sea' && isSea(i, x)));
     if (j !== undefined) return { t: 'move', from: i, to: j, n };
   }
   return { t: 'endTurn' };

@@ -19,6 +19,8 @@ Também dá para jogar várias pessoas no mesmo aparelho e completar a mesa com 
 
 ### Reconexão
 
+**Volta automática, sem QR.** Enquanto um convidado está conectado, o anfitrião deixa pronta uma conexão reserva para ele: o convidado guarda um certificado fixo no aparelho e os dois combinam, pelo canal que já existe, as credenciais da próxima conexão. Se o convidado cair (tela bloqueada, página recarregada, Wi-Fi oscilou), ele abre essa reserva sozinho em poucos segundos e volta para o mesmo lugar. A cada volta uma nova reserva é combinada. Isso não funciona quando o anfitrião reinicia o jogo, quando a rede dele muda ou em navegadores que não aceitam a técnica; nesses casos vale o QR, como abaixo.
+
 Se um convidado cair (tela bloqueada, app fechado, página recarregada), o anfitrião vê o botão **Reconectar** na barra do jogo e gera um novo QR. O convidado toca em **Reconectar à partida** na tela inicial, lê o QR e volta para o mesmo lugar, com suas cartas e seu objetivo. O anfitrião também pode trocar um jogador ausente por um bot no menu ☰, e retomar uma partida salva pela tela inicial.
 
 ### Estabilidade da conexão
@@ -45,6 +47,13 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
 
 O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ásia e da Oceania são ampliadas, arquipélagos viram blocos únicos e ilhotas e baías pequenas somem, para tudo ficar fácil de ver e tocar. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
+
+## Regras extras (opcionais)
+
+Ligadas pelo anfitrião na sala, antes de começar. Desligadas, a partida é a clássica.
+
+- **Eventos de rodada:** da 2ª rodada em diante, cada rodada sorteia um evento que vale para todos até ela acabar: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
+- **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 3 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Romper antes só no início do próprio turno, ao custo de 3 exércitos do reforço, e todos são avisados. Com dois jogadores em jogo os pactos acabam.
 
 ## Controles
 

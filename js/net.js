@@ -49,12 +49,70 @@ export function unpackSdp(code) {
       ? `a=candidate:${i + 1} 1 udp ${2122260223 - i} ${ip} ${port} typ host`
       : `a=candidate:${i + 1} 1 udp ${1686052607 - i} ${ip} ${port} typ srflx raddr 0.0.0.0 rport 0`);
   });
-  lines.push('a=end-of-candidates');
+  if (cs) lines.push('a=end-of-candidates'); // sem endereços (conexão reserva), a lista fica em aberto
   return { type, sdp: lines.join('\r\n') + '\r\n' };
 }
 
 // Espera a coleta de endereços terminar (ou GATHER_MS). Se nesse prazo ainda não houver nenhum endereço,
 // espera mais um pouco: um código sem endereços nunca conectaria.
+// ---- identidade fixa do aparelho ----
+// Um certificado guardado no aparelho mantém a mesma "impressão digital" entre recargas da página.
+// É isso que permite combinar de antemão uma conexão reserva (abaixo) e voltar à partida sem QR.
+let cert = null;
+export async function initCert() {
+  try {
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('estandarte', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    const get = () => new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get('cert'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    let c = await get();
+    if (!(c instanceof RTCCertificate) || c.expires - Date.now() < 3 * 864e5) {
+      c = await RTCPeerConnection.generateCertificate({ name: 'ECDSA', namedCurve: 'P-256' });
+      await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(c, 'cert'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    }
+    if (!c.getFingerprints().some((f) => f.algorithm === 'sha-256')) return null;
+    cert = c;
+  } catch { cert = null; } // sem certificado fixo tudo funciona como antes, só sem reconexão automática
+  return myFingerprint();
+}
+export function myFingerprint() {
+  if (!cert) return null;
+  const f = cert.getFingerprints().find((x) => x.algorithm === 'sha-256');
+  return b64u(f.value.split(':').map((h) => parseInt(h, 16)));
+}
+const newPc = () => new RTCPeerConnection(cert ? { iceServers: ICE, certificates: [cert] } : { iceServers: ICE });
+const token = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b % 62]).join('');
+
+// ---- conexão reserva: reconexão sem QR ----
+// Enquanto a conexão principal está viva, o anfitrião deixa pronta uma segunda conexão para o mesmo convidado
+// e já aplica nela a "resposta" que o convidado vai dar: a impressão digital dele é fixa e as credenciais da
+// próxima conexão são combinadas agora. Se o convidado cair (tela bloqueada, página recarregada), ele monta
+// a outra ponta só com o que guardou e as duas se encontram na rede local, sem trocar mais nada.
+export async function armSpare(guestFp, handlers) {
+  const pc = newPc();
+  const dc = pc.createDataChannel('jogo', { negotiated: true, id: 0 });
+  const link = wrap(pc, dc, handlers);
+  await pc.setLocalDescription(await pc.createOffer());
+  await gathered(pc);
+  const gu = token(8), gp = token(24);
+  await pc.setRemoteDescription(unpackSdp(['1', 'aa', gu, gp, guestFp, ''].join('~')));
+  return { link, code: packSdp(pc.localDescription), gu, gp, cancel: () => link.close() };
+}
+// Convidado: tenta a conexão reserva. opened(ms) resolve true se o canal abrir nesse prazo.
+export async function useSpare(spare, handlers) {
+  if (!cert) throw new Error('sem-certificado');
+  const pc = newPc();
+  const dc = pc.createDataChannel('jogo', { negotiated: true, id: 0 });
+  const link = wrap(pc, dc, handlers);
+  await pc.setRemoteDescription(unpackSdp(spare.code));
+  const ans = await pc.createAnswer();
+  // usa as credenciais combinadas de antemão em vez das sorteadas agora
+  await pc.setLocalDescription({ type: 'answer', sdp: ans.sdp.replace(/a=ice-ufrag:\S+/, 'a=ice-ufrag:' + spare.gu).replace(/a=ice-pwd:\S+/, 'a=ice-pwd:' + spare.gp).replace(/a=setup:\w+/, 'a=setup:active') });
+  return {
+    link,
+    cancel: () => link.close(),
+    opened: (ms) => new Promise((res) => { const t0 = Date.now(), iv = setInterval(() => { if (link.open || Date.now() - t0 > ms) { clearInterval(iv); res(link.open); } }, 100); }),
+  };
+}
+
 function gathered(pc) {
   const hasCand = () => /a=candidate:/.test(pc.localDescription?.sdp || '');
   return new Promise((res, rej) => {
@@ -86,7 +144,7 @@ function wrap(pc, dc, h) {
 
 // Anfitrião: cria um convite. Retorna { code, accept(answerCode), cancel() }.
 export async function createInvite(handlers) {
-  const pc = new RTCPeerConnection({ iceServers: ICE });
+  const pc = newPc();
   const dc = pc.createDataChannel('jogo', { ordered: true });
   const link = wrap(pc, dc, handlers);
   await pc.setLocalDescription(await pc.createOffer());
@@ -103,7 +161,7 @@ export async function createInvite(handlers) {
 export async function joinInvite(offerCode, handlers) {
   const offer = unpackSdp(offerCode);
   if (offer.type !== 'offer') throw new Error('Este código não é um convite.');
-  const pc = new RTCPeerConnection({ iceServers: ICE });
+  const pc = newPc();
   const out = { link: null };
   pc.ondatachannel = (e) => { out.link = wrap(pc, e.channel, handlers); };
   await pc.setRemoteDescription(offer);

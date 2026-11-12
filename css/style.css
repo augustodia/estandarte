@@ -205,3 +205,15 @@ body.land .sheet{max-width:560px}
 body.rot #stage{inset:auto;top:0;transform-origin:0 0;transform:rotate(90deg)}
 body.rot video{max-height:38vw}
 body.rot #hud{max-width:none}
+/* regras opcionais: evento da rodada e pactos */
+.evt{color:var(--gold,#e2b04a)}
+.icon.call{border-color:#e2b04a;color:#e2b04a;animation:callpulse 1s ease-in-out infinite}
+@keyframes callpulse{50%{background:#4a3a14}}
+.row.wrap{flex-wrap:wrap}
+.row.wrap .btn{flex:1 1 auto}
+.row.wrap .btn .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+@media (prefers-reduced-motion:reduce){.icon.call{animation:none}}
+#evchip{position:absolute;left:86px;bottom:16px;z-index:2;display:inline-flex;align-items:center;gap:5px;max-width:min(270px,calc(100% - 150px));height:28px;padding:0 10px 0 7px;border-radius:999px;border:1px solid #e2b04a99;background:#0a1422e6;color:#e2b04a;font:600 12px/1 system-ui,sans-serif}
+#evchip[hidden]{display:none}
+#evchip svg{width:14px;height:14px;flex:none;fill:currentColor;stroke:none}
+#evchip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

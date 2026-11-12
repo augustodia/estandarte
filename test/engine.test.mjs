@@ -83,3 +83,60 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
   assert.equal(round0Attacks, 0, 'houve ataque na primeira rodada');
   console.log(`ok — jogadas ao acaso: ${accepted} aceitas, ${refused} recusadas sem efeito, 0 ataques na primeira rodada`);
 }
+
+// Regras opcionais: eventos de rodada e pactos
+{
+  const G = await import('../js/game.js');
+  const { SEA: SEAS, CONTINENTS: CONT } = await import('../js/map.js');
+  const mk = (n, opts, seed = 5) => { const rng = rngFrom(seed); return [newGame(Array.from({ length: n }, (_, i) => ({ name: 'P' + i, color: i, ctrl: 'local' })), rng, opts), rng]; };
+  const toAttack = (s, rng) => { while (s.round === 0 || s.step !== 'attack') { if (s.step === 'attack') apply(s, s.turn, { t: 'endAttack' }, rng); const a = s.step === 'reinforce' ? botAction(s) : { t: 'endTurn' }; assert.equal(apply(s, s.turn, a.t === 'trade' || a.t === 'place' ? a : { t: 'endTurn' }, rng), null); } };
+  // sem as opções, nada disso existe
+  { const [s, rng] = mk(3, {}); toAttack(s, rng); assert.equal(s.event, null); assert.notEqual(apply(s, s.turn, { t: 'pactOffer', to: (s.turn + 1) % 3 }, rng), null); }
+  // eventos: um por rodada a partir da 2ª, nunca repetido em seguida
+  { const [s, rng] = mk(3, { events: true }); assert.equal(s.event, null); let last = null, seen = new Set();
+    for (let i = 0; i < 4000 && s.phase === 'play'; i++) { const r = s.round; apply(s, s.turn, botAction(s), rng); if (s.round !== r) { assert(s.event && G.EVENTS[s.event.k], 'rodada sem evento'); assert.notEqual(s.event.k, last, 'evento repetido'); last = s.event.k; seen.add(last); } }
+    assert(seen.size >= 5, 'pouca variedade de eventos: ' + [...seen]); }
+  // cada efeito, forçando o evento
+  { const [s, rng] = mk(3, { events: true }); toAttack(s, rng); const p = s.turn;
+    const [a, b] = SEAS.find(([x, y, , , , , w]) => !w); s.terr[a] = { o: p, a: 5 }; s.terr[b] = { o: (p + 1) % 3, a: 1 };
+    s.event = { k: 'sea' }; assert.match(apply(s, p, { t: 'attack', from: a, to: b }, rng), /Mar revolto/);
+    s.event = { k: 'ceasefire', c: TERR[b].c }; assert.match(apply(s, p, { t: 'attack', from: a, to: b }, rng), /Cessar-fogo/);
+    s.event = { k: 'storm', c: TERR[b].c }; s.terr[b].a = 9; assert.equal(apply(s, p, { t: 'attack', from: a, to: b, dice: 3 }, rng), null); assert.equal(s.roll.att.length, 2, 'tempestade deveria limitar a 2 dados');
+    let hi = 0; s.event = { k: 'charge' }; for (let i = 0; i < 60; i++) { s.terr[a].a = 9; s.terr[b] = { o: (p + 1) % 3, a: 9 }; s.occupy = null; apply(s, p, { t: 'attack', from: a, to: b }, rng); hi = Math.max(hi, ...s.roll.att, ...s.roll.def); assert(s.roll.att[0] >= 2, 'ofensiva não somou ao maior dado'); }
+    assert(hi <= 6, 'dado passou de 6'); }
+  { const [s] = mk(3, { events: true }); const base = Math.max(3, Math.floor(G.owned(s, 0) / 2)); const rng = rngFrom(9);
+    while (s.round === 0) apply(s, s.turn, botAction(s), rng); // chega à 2ª rodada com algum evento; confere a conta do reforço
+    const want = Math.max(3, Math.floor(G.owned(s, s.turn) / 2)), k = s.event.k;
+    assert.equal(s.pool.free, k === 'recruit' ? want + 2 : k === 'shortage' ? Math.max(3, want - 2) : want, 'reforço com evento ' + k); }
+  // pactos: proposta, resposta fora da vez, bloqueio de ataque, rompimento com custo, prazo
+  { const [s, rng] = mk(3, { pacts: true }); toAttack(s, rng); const p = s.turn, q = (p + 1) % 3, r = (p + 2) % 3;
+    assert.equal(apply(s, p, { t: 'pactOffer', to: q }, rng), null); assert.deepEqual(s.offer, { from: p, to: q });
+    assert.notEqual(apply(s, r, { t: 'pactReply', accept: true }, rng), null, 'terceiro respondeu');
+    assert.notEqual(apply(s, p, { t: 'pactOffer', to: r }, rng), null, 'duas propostas no mesmo turno');
+    assert.equal(apply(s, q, { t: 'pactReply', accept: true }, rng), null); assert(G.pactOf(s, p, q) && !s.offer);
+    const from = s.terr.findIndex((t, i) => t.o === p && TERR[i].adj.some((j) => s.terr[j].o === q)), to = TERR[from].adj.find((j) => s.terr[j].o === q); s.terr[from].a = 6;
+    assert.match(apply(s, p, { t: 'attack', from, to }, rng), /pacto/); assert.match(apply(s, p, { t: 'pactBreak', with: q }, rng), /início do seu turno/);
+    const until = G.pactOf(s, p, q).until; assert.equal(until, s.round + G.PACT_ROUNDS);
+    apply(s, p, { t: 'endAttack' }, rng); apply(s, p, { t: 'endTurn' }, rng);
+    while (s.turn !== p) apply(s, s.turn, botAction(s), rng);
+    const free = s.pool.free; assert.equal(apply(s, p, { t: 'pactBreak', with: q }, rng), null); assert.equal(s.pool.free, Math.max(0, free - G.PACT_PENALTY)); assert.equal(G.pactOf(s, p, q), null);
+    // prazo: outro pacto e deixa as rodadas passarem
+    apply(s, p, botAction(s), rng); while (s.step === 'reinforce' && s.turn === p) apply(s, p, botAction(s), rng);
+    if (s.turn === p && s.phase === 'play') { assert.equal(apply(s, p, { t: 'pactOffer', to: r }, rng), null); assert.equal(apply(s, r, G.botPactReply(s), rng) , null); const had = !!G.pactOf(s, p, r), u = had ? G.pactOf(s, p, r).until : 0;
+      for (let i = 0; i < 3000 && s.phase === 'play' && s.round <= u + 1; i++) { const x = botAction(s); if (x.t === 'attack' && had && s.round <= u) assert(!([s.terr[x.from].o, s.terr[x.to].o].includes(p) && [s.terr[x.from].o, s.terr[x.to].o].includes(r)), 'bot atacou parceiro de pacto'); apply(s, s.turn, x, rng); }
+      if (s.phase === 'play' && had) assert.equal(G.pactOf(s, p, r), null, 'pacto não venceu no prazo'); } }
+  // jogadas ao acaso com as duas opções ligadas
+  { const kinds = ['place', 'attack', 'occupy', 'endAttack', 'move', 'endTurn', 'trade', 'pactOffer', 'pactReply', 'pactBreak'];
+    let ok = 0;
+    for (let seed = 1; seed <= 60; seed++) { const rng = rngFrom(7000 + seed), n = 3 + (seed % 4), R = (k) => Math.floor(rng() * k);
+      const s = newGame(Array.from({ length: n }, (_, i) => ({ name: 'F' + i, color: i, ctrl: 'bot' })), rng, { events: true, pacts: true });
+      for (let step = 0; step < 1500 && s.phase === 'play'; step++) { const smart = rng() < 0.6, p = smart || rng() < 0.7 ? s.turn : R(n);
+        const a = s.offer && rng() < 0.5 ? G.botPactReply(s) : smart ? botAction(s) : { t: kinds[R(kinds.length)], t0: R(44), from: R(44), to: R(n + 40), with: R(n), n: R(30), accept: rng() < 0.5, cards: [R(44), R(44), R(44)] };
+        const who = a.t === 'pactReply' && s.offer && rng() < 0.8 ? s.offer.to : p, before = JSON.stringify(s), r0 = s.round, ev0 = s.event;
+        const err = apply(s, who, a, rng);
+        if (err) { assert.equal(JSON.stringify(s), before); continue; }
+        ok++; assert.equal(G.invariant(s), null, `seed ${seed}: ${G.invariant(s)} após ${JSON.stringify(a)}`);
+        if (a.t === 'attack') { const e = s.ev.find((x) => x.t === 'attack'); assert(!(ev0 && ev0.k === 'ceasefire' && TERR[e.to].c === ev0.c), 'ataque durante cessar-fogo'); assert(!(ev0 && ev0.k === 'sea' && G.isSea(e.from, e.to)), 'ataque por mar com mar revolto'); }
+        if (r0 === 0) assert(!s.ev.some((x) => x.t === 'attack'), 'ataque na primeira rodada'); } }
+    console.log(`ok — eventos e pactos: efeitos conferidos e ${ok} jogadas ao acaso sem quebrar regras`); }
+}
