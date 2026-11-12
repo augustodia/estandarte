@@ -55,7 +55,8 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 
 ## O que cada um vê durante a partida
 
-- **Alertas no centro da tela** (somem em 1 s): "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!", "Território perdido", "Vez de Fulano".
+- **Alertas no centro da tela** (somem em 1 s) só para o que é seu: "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!". O que os outros fazem aparece num aviso pequeno no topo, sem cobrir o mapa.
+- **Destaque da jogada alheia:** o território que o jogador da vez selecionou (ou onde um bot acabou de agir) fica aceso e o resto do mapa esmaece.
 - **Ações ao vivo:** quem espera vê o território que o jogador da vez selecionou e o alvo que ele está mirando, além de reforços (+N), setas de ataque e de movimento, perdas (−N) e os dados.
 - **Tremor e vibração:** o mapa treme a cada ataque (mais forte em conquistas) e o aparelho vibra para atacante e defensor. A vibração depende do navegador: funciona no Android; o Safari do iPhone não oferece essa função.
 - **Sons:** cada ação tem um efeito (reforço, dados, ataque, conquista, perda, sua vez, relógio acabando, vitória). Dá para desligar no menu ☰. No iPhone, a chave de silencioso também cala os sons.
@@ -75,13 +76,13 @@ Sem build e sem dependências em tempo de execução além de duas bibliotecas d
 | `js/main.js` | Interface, pareamento, câmera/leitor de QR, pan e zoom do mapa |
 | `sw.js` | Cache offline |
 
-O anfitrião é a autoridade: valida as ações, rola os dados e envia a cada convidado apenas o que ele pode ver (mãos e objetivos alheios ficam ocultos).
+O anfitrião é a autoridade: valida as ações, rola os dados e envia a cada convidado apenas o que ele pode ver (mãos e objetivos alheios ficam ocultos). Toda jogada é transacional: se for inválida, ou se deixasse o jogo num estado que quebra alguma regra (ataque na primeira rodada, território sem exército, cartas duplicadas, vez de jogador eliminado…), ela é recusada e nada muda.
 
 ## Desenvolvimento
 
 ```sh
 python3 -m http.server 8765   # abra http://localhost:8765
-node test/engine.test.mjs     # simula 300 partidas entre bots e checa invariantes
+node test/engine.test.mjs     # 300 partidas entre bots + 140 mil jogadas ao acaso checando as regras
 ```
 
 Câmera e service worker exigem HTTPS (ou `localhost`).

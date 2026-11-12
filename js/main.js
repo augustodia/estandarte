@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '14'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '15'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -284,7 +284,7 @@ function scheduleBot() {
   clearTimeout(app.botTimer);
   const g = app.game;
   if (!g || g.phase !== 'play' || g.players[g.turn].ctrl !== 'bot') return;
-  app.botTimer = setTimeout(() => { apply(g, g.turn, botAction(g)); sync(); }, g.step === 'attack' ? 900 : 450);
+  app.botTimer = setTimeout(() => { apply(g, g.turn, botAction(g)); sync(); }, g.step === 'attack' ? 1150 : 700); // devagar o bastante para dar tempo de ver cada jogada
 }
 function viewer() {
   if (app.role === 'guest') return app.me;
@@ -540,8 +540,9 @@ const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch {
 // passam na frente dos demais, para "Sua vez!" nunca ficar preso atrás de avisos de outros.
 const flashQ = [];
 let flashCur = null, flashTimer = null;
-function flash(text, color, sub = '', ms = 1000, urgent = false) {
-  const f = { text, color, sub, ms, urgent };
+// mini = aviso discreto no topo, para o que os outros fazem: não cobre o mapa.
+function flash(text, color, sub = '', ms = 1000, urgent = false, mini = false) {
+  const f = { text, color, sub, ms, urgent, mini };
   if (urgent) { for (let i = flashQ.length - 1; i >= 0; i--) if (!flashQ[i].urgent) flashQ.splice(i, 1); }
   else { const i = flashQ.findIndex((q) => !q.urgent); if (i >= 0) flashQ.splice(i, 1); }
   flashQ.push(f);
@@ -555,6 +556,7 @@ function nextFlash() {
   if (!f) { box.hidden = true; return; }
   box.querySelector('b').textContent = f.text; box.querySelector('small').textContent = f.sub;
   box.style.setProperty('--c', f.color || '#f1e6cf'); box.style.animationDuration = f.ms + 'ms';
+  box.classList.toggle('mini', f.mini);
   box.hidden = false; box.classList.remove('go'); void box.offsetWidth; box.classList.add('go');
   flashTimer = setTimeout(nextFlash, f.ms);
 }
@@ -570,6 +572,12 @@ function fxArrow(a, b, color) {
   if (Math.abs(A.x - B.x) < MAP_W / 2) later(el('line', { class: 'fx-arrow', x1: A.x, y1: A.y, x2: B.x, y2: B.y, stroke: color }, fx), 1100);
   later(el('circle', { class: 'fx-dot', cx: B.x, cy: B.y, r: 7, fill: color, stroke: '#fff', 'stroke-width': 2 }, fx), 1100);
 }
+// Destaque passageiro dos territórios envolvidos na jogada de outro jogador (o resto do mapa esmaece).
+function spotlight(ids, ms = 1000) {
+  app.spot = { set: new Set(ids), until: Date.now() + ms };
+  clearTimeout(app.spotTimer);
+  app.spotTimer = setTimeout(() => { app.spot = null; renderGame(); }, ms + 30);
+}
 function shake(big) { svg.classList.remove('shake', 'shake2'); void svg.getBoundingClientRect(); svg.classList.add(big ? 'shake2' : 'shake'); }
 
 const PHASE_ALERT = {
@@ -581,6 +589,7 @@ const PHASE_ALERT = {
 function processEvents(v) {
   if (app.evN === v.n) return;
   const first = app.evN == null;
+  if (first) app.roundSeen = v.round;
   app.evN = v.n;
   const col = (p) => COLORS[v.players[p].color].c, nm = (p) => v.players[p].name;
   const mine = (p) => (app.role === 'guest' ? p === app.me : v.players[p].ctrl === 'local');
@@ -588,34 +597,37 @@ function processEvents(v) {
     if (first && e.t !== 'turn') continue;
     if (e.t === 'turn') {
       if (v.phase !== 'play') continue;
+      if (v.round === 1 && app.roundSeen === 0) flash('Rodada 2', '#e2b04a', 'A partir de agora os ataques estão liberados', 1400, true);
+      app.roundSeen = v.round;
       if (mine(e.p)) { flash('Sua vez!', col(e.p), v.round === 0 ? 'Distribua seus exércitos' : PHASE_ALERT.reinforce[1], 1000, true); buzz([120, 60, 120]); play('turn'); }
-      else { flash(`Vez de ${nm(e.p)}`, col(e.p)); play('other'); }
+      else { flash(`Vez de ${nm(e.p)}`, col(e.p), '', 900, false, true); play('other'); }
     } else if (e.t === 'phase') {
       if (mine(e.p)) { flash(PHASE_ALERT[e.step][0], col(e.p), PHASE_ALERT[e.step][1], 1000, true); buzz(40); play('phase'); }
-    } else if (e.t === 'place') { fxPulse(e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('place'); }
+    } else if (e.t === 'place') { fxPulse(e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('place'); if (!mine(e.p)) spotlight([e.to]); }
     else if (e.t === 'trade') {
-      flash(mine(e.p) ? `+${e.v} exércitos` : `${nm(e.p)} trocou cartas`, col(e.p), mine(e.p) ? (e.auto ? 'Troca automática de cartas' : 'Troca de cartas') : `+${e.v} exércitos`, 1000, mine(e.p));
+      if (mine(e.p)) flash(`+${e.v} exércitos`, col(e.p), e.auto ? 'Troca automática de cartas' : 'Troca de cartas', 1000, true);
+      else { flash(`${nm(e.p)} trocou cartas: +${e.v}`, col(e.p), '', 1000, false, true); if ((e.bonus || []).length) spotlight(e.bonus); }
       (e.bonus || []).forEach((t) => { fxPulse(t, col(e.p)); fxFloat(t, '+2', '#fff'); });
       play('trade');
     }
-    else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('move'); }
+    else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('move'); if (!mine(e.p)) spotlight([e.from, e.to]); }
     else if (e.t === 'attack') {
       fxArrow(e.from, e.to, col(e.p));
       if (e.la) fxFloat(e.from, '−' + e.la, '#ff8a7a');
       if (e.ld) fxFloat(e.to, '−' + e.ld, '#ff8a7a');
       shake(e.won);
+      if (!mine(e.p)) spotlight([e.from, e.to], 1200);
       const involved = mine(e.p) || mine(e.def);
       play('dice'); play(!e.won ? 'attack' : mine(e.def) && !mine(e.p) ? 'lost' : 'conquer');
       if (e.won) {
         fxPulse(e.to, col(e.p), true);
         if (involved) buzz([80, 40, 160]);
         if (mine(e.p)) flash('Conquistou!', col(e.p), TERR[e.to].n, 1000, true);
-        else if (mine(e.def)) flash('Território perdido', col(e.p), `${nm(e.p)} tomou ${TERR[e.to].n}`, 1000, true);
-        else flash(`${nm(e.p)} conquistou`, col(e.p), TERR[e.to].n);
+        else if (mine(e.def)) flash(`${nm(e.p)} tomou ${TERR[e.to].n}`, col(e.p), '', 1200, false, true); // aviso discreto: o mapa fica livre para ver o que acontece
       } else if (involved) buzz(70);
     } else if (e.t === 'card') { if (mine(e.p)) { flash('Carta recebida', col(e.p), 'Toque no ícone de cartas para ver'); play('card'); } }
     else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); play('dead'); }
-    else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p)); play('timeout'); }
+    else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p), !mine(e.p)); play('timeout'); }
     else if (e.t === 'win') { play('win'); flash(`${nm(e.p)} venceu!`, col(e.p), '', 2500, true); buzz([150, 80, 150, 80, 300]); }
   }
 }
@@ -751,14 +763,20 @@ function renderGame() {
   }
   // no reforço, quando só restam bônus de continente, apaga onde não dá para colocar
   const bonusOnly = can && v.step === 'reinforce' && v.pool.free === 0 && !mustTrade(v);
+  const spot = !can && app.spot && app.spot.until > Date.now() ? app.spot.set : null, front = [];
   nodes.forEach((nd, i) => {
     nd.poly.setAttribute('fill', COLORS[v.players[T[i].o].color].c);
     nd.num.textContent = T[i].a;
     const hl = app.target != null ? i === app.target : targets.has(i);
-    const dim = app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0);
-    const ps = pk && (i === pk.sel ? ' psel' : i === pk.target ? ' tgt' : '');
-    nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + (ps || ''));
+    // quem joga: esmaece o que não é origem nem alvo possível; quem assiste: esmaece tudo menos
+    // o que o jogador da vez selecionou (ou, sem seleção, os territórios da última jogada)
+    const dim = can ? (app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0))
+      : pk ? i !== pk.sel && i !== pk.target : spot ? !spot.has(i) : false;
+    const ps = pk ? (i === pk.sel ? ' sel' : i === pk.target ? ' tgt' : '') : spot && spot.has(i) ? ' lit' : '';
+    nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + ps);
+    if (i === app.sel || hl || ps) front.push(nd.poly);
   });
+  front.forEach((p) => p.parentNode.appendChild(p)); // destacados por cima dos vizinhos, para o contorno aparecer inteiro
 
   // linhas até onde dá para atacar ou mover (e, para quem assiste, a mira do jogador da vez)
   aimLayer.replaceChildren();

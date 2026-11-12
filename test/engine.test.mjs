@@ -51,3 +51,35 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
   assert.equal(s.deck.length + s.discard.length + s.players.reduce((k, q) => k + q.cards.length, 0), TERR.length + 2);
   console.log('ok — troca automática com 5 cartas');
 }
+
+// Jogadas aleatórias, válidas e inválidas, de qualquer jogador: as regras nunca podem ser quebradas,
+// e uma jogada recusada não pode mudar nada.
+{
+  const { invariant } = await import('../js/game.js');
+  const kinds = ['place', 'attack', 'occupy', 'endAttack', 'move', 'endTurn', 'trade', 'bogus'];
+  let accepted = 0, refused = 0, round0Attacks = 0;
+  for (let seed = 1; seed <= 120; seed++) {
+    const rng = rngFrom(1000 + seed), n = 2 + (seed % 5);
+    const R = (k) => Math.floor(rng() * k);
+    const s = newGame(Array.from({ length: n }, (_, i) => ({ name: 'F' + i, color: i, ctrl: 'bot' })), rng);
+    for (let step = 0; step < 1500 && s.phase === 'play'; step++) {
+      const smart = rng() < 0.55; // mistura jogadas do bot com jogadas ao acaso
+      const p = smart || rng() < 0.8 ? s.turn : R(n);
+      const a = smart ? botAction(s) : { t: kinds[R(kinds.length)], t0: R(46) - 2, from: R(46) - 2, to: R(46) - 2, n: R(40) - 5, dice: R(6) - 1, blitz: rng() < 0.3, cards: [R(46), R(46), R(46)] };
+      const before = JSON.stringify(s), armies = s.terr.reduce((k, t) => k + t.a, 0), round = s.round;
+      const err = apply(s, p, a, rng);
+      if (err) { refused++; assert.equal(JSON.stringify(s), before, 'jogada recusada alterou o estado: ' + JSON.stringify(a)); continue; }
+      accepted++;
+      assert.equal(invariant(s), null, `seed ${seed}: ${invariant(s)} após ${JSON.stringify(a)}`);
+      const after = s.terr.reduce((k, t) => k + t.a, 0), evs = s.ev.map((e) => e.t);
+      if (round === 0 && (evs.includes('attack') || evs.includes('move'))) round0Attacks++;
+      const tradeBonus = s.ev.filter((e) => e.t === 'trade').reduce((k, e) => k + 2 * e.bonus.length, 0); // +2 por carta de território próprio
+      if (a.t === 'move' || a.t === 'occupy' || a.t === 'endAttack') assert.equal(after, armies, 'exércitos criados ou perdidos sem combate');
+      if (a.t === 'endTurn' || a.t === 'trade') assert.equal(after, armies + tradeBonus, 'exércitos criados fora de reforço ou troca');
+      if (a.t === 'attack') assert(after <= armies, 'ataque criou exércitos');
+      if (a.t === 'place') assert(after - tradeBonus > armies && after - tradeBonus - armies <= Math.max(1, a.n), 'reforço fora do pedido');
+    }
+  }
+  assert.equal(round0Attacks, 0, 'houve ataque na primeira rodada');
+  console.log(`ok — jogadas ao acaso: ${accepted} aceitas, ${refused} recusadas sem efeito, 0 ataques na primeira rodada`);
+}

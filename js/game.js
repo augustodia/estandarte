@@ -186,8 +186,40 @@ function nextTurn(s, rng) {
 
 const rollDice = (n, rng) => Array.from({ length: n }, () => 1 + Math.floor(rng() * 6)).sort((a, b) => b - a);
 
+// Regras que precisam valer depois de qualquer jogada. Devolve a descrição do problema, ou null.
+export function invariant(s) {
+  const alive = s.players.filter((q) => q.alive).length;
+  if (!['play', 'over'].includes(s.phase)) return 'fase inválida';
+  if (!['reinforce', 'attack', 'move'].includes(s.step)) return 'etapa inválida';
+  for (const t of s.terr) {
+    if (!Number.isInteger(t.a) || t.a < 1) return 'território sem exército';
+    if (!s.players[t.o] || !s.players[t.o].alive) return 'território de jogador eliminado';
+  }
+  for (let i = 0; i < s.players.length; i++) if (s.players[i].alive !== s.terr.some((t) => t.o === i)) return 'jogador vivo sem território (ou o contrário)';
+  const cards = s.deck.length + s.discard.length + s.players.reduce((k, q) => k + q.cards.length, 0);
+  if (cards !== NT + 2 || new Set([...s.deck, ...s.discard, ...s.players.flatMap((q) => q.cards)]).size !== NT + 2) return 'cartas duplicadas ou perdidas';
+  if (s.pool.free < 0 || Object.values(s.pool.cont).some((v) => v < 0)) return 'reforço negativo';
+  if (s.phase === 'play') {
+    if (!s.players[s.turn] || !s.players[s.turn].alive) return 'vez de jogador eliminado';
+    if (alive < 2) return 'partida deveria ter terminado';
+    if (s.round === 0 && (s.step !== 'reinforce' || s.occupy || s.roll)) return 'ataque ou movimento na primeira rodada';
+    if (s.step !== 'reinforce' && poolTotal(s) > 0) return 'saiu do reforço com exércitos por colocar';
+    if (s.occupy && (s.step !== 'attack' || s.terr[s.occupy.from].o !== s.turn || s.terr[s.occupy.to].o !== s.turn || s.terr[s.occupy.from].a - s.occupy.max < 1)) return 'ocupação inconsistente';
+  }
+  return null;
+}
+
 // Aplica a ação do jogador p. Retorna null se ok, ou mensagem de erro.
+// É transacional: uma jogada recusada, ou que deixaria o jogo num estado que quebra as regras,
+// não muda nada no estado.
 export function apply(s, p, a, rng = Math.random) {
+  const snap = JSON.stringify(s);
+  let err;
+  try { err = applyAction(s, p, a || {}, rng) || invariant(s); } catch (e) { err = 'Jogada inválida.'; }
+  if (err) { for (const k of Object.keys(s)) delete s[k]; Object.assign(s, JSON.parse(snap)); }
+  return err || null;
+}
+function applyAction(s, p, a, rng) {
   if (s.phase !== 'play') return 'A partida não está em andamento.';
   if (p !== s.turn) return 'Não é a sua vez.';
   const pl = s.players[p];
@@ -197,14 +229,14 @@ export function apply(s, p, a, rng = Math.random) {
   switch (a.t) {
     case 'trade': {
       if (s.step !== 'reinforce') return 'Trocas só no início do turno.';
-      if (!validTrade(a.cards) || !a.cards.every((c) => pl.cards.includes(c))) return 'Troca inválida.';
+      if (!Array.isArray(a.cards) || !validTrade(a.cards) || !a.cards.every((c) => pl.cards.includes(c))) return 'Troca inválida.';
       doTrade(s, p, a.cards, false);
       return null;
     }
     case 'place': {
       if (s.step !== 'reinforce') return 'Fora da fase de reforço.';
       if (mustTrade(s)) return 'Com 5 cartas é obrigatório trocar antes.';
-      const t = T[a.t0];
+      const t = Number.isInteger(a.t0) ? T[a.t0] : null;
       if (!t || t.o !== p) return 'Território inválido.';
       let n = Math.max(1, a.n | 0);
       const c = TERR[a.t0].c;
@@ -224,7 +256,9 @@ export function apply(s, p, a, rng = Math.random) {
       return null;
     }
     case 'attack': {
+      if (s.round === 0) return 'Na primeira rodada não há ataques: só distribuição de exércitos.';
       if (s.step !== 'attack' || s.occupy) return 'Não é possível atacar agora.';
+      if (!Number.isInteger(a.from) || !Number.isInteger(a.to)) return 'Ataque inválido.';
       const f = T[a.from], d = T[a.to];
       if (!f || !d || f.o !== p || d.o === p || !TERR[a.from].adj.includes(a.to)) return 'Ataque inválido.';
       if (f.a < 2) return 'É preciso ter ao menos 2 exércitos para atacar.';
@@ -277,6 +311,7 @@ export function apply(s, p, a, rng = Math.random) {
     }
     case 'move': {
       if (s.step !== 'move') return 'Fora da fase de remanejamento.';
+      if (!Number.isInteger(a.from) || !Number.isInteger(a.to)) return 'Movimento inválido.';
       const f = T[a.from], d = T[a.to];
       if (!f || !d || f.o !== p || d.o !== p || !TERR[a.from].adj.includes(a.to)) return 'Movimento inválido.';
       const n = Math.min(Math.max(1, a.n | 0), s.movable[a.from] || 0, f.a - 1);
