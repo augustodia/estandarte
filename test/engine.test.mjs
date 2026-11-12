@@ -35,3 +35,19 @@ for (let seed = 1; seed <= 300; seed++) {
   if (s.phase === 'play' && n > 1) assert.equal(v.players[1].obj, null);
 }
 console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal / finished).toFixed(1)} rodadas; ${TERR.length} territórios, ${OBJECTIVES.length} objetivos, ${COLORS.length} cores, ${SEA.length} rotas marítimas`);
+
+// troca automática: quem começa o turno com 5 cartas tem a troca feita pelo jogo
+{
+  const rng = rngFrom(7);
+  const s = newGame([0, 1, 2].map((i) => ({ name: 'P' + i, color: i, ctrl: 'local' })), rng);
+  const next = (s.turn + 1) % 3;
+  s.players[next].cards = s.deck.splice(0, 5);
+  const before = s.trades;
+  while (s.turn !== next) assert.equal(apply(s, s.turn, botAction(s), rng), null);
+  const ev = s.ev.find((e) => e.t === 'trade');
+  assert(ev && ev.auto && ev.p === next, 'troca automática não aconteceu');
+  assert.equal(s.players[next].cards.length, 2);
+  assert.equal(s.trades, before + 1);
+  assert.equal(s.deck.length + s.discard.length + s.players.reduce((k, q) => k + q.cards.length, 0), TERR.length + 2);
+  console.log('ok — troca automática com 5 cartas');
+}
