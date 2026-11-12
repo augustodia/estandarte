@@ -27,7 +27,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '7'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '8'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -356,7 +356,7 @@ const el = (tag, attrs, parent) => {
 const PAD = 30;
 const nodes = [];
 (function buildMap() {
-  const defs = el('defs', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), rims = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
+  const aura = el('g', {}, svg), routes = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), labels = el('g', {}, svg), hits = el('g', {}, svg);
   SEA.forEach(([a, b, wrap]) => {
     const A = TERR[a], B = TERR[b];
     if (wrap) { // rota que dá a volta no mapa: um trecho até cada borda
@@ -378,11 +378,11 @@ const nodes = [];
   });
   CONTINENTS.forEach((c, ci) => {
     el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
-    // contorno externo do continente: o traço é recortado pela própria forma e só aparece do lado de dentro,
-    // então na divisa entre dois continentes cada um mostra a sua cor
-    el('path', { id: 'k' + ci, d: c.d }, defs);
-    el('use', { href: '#k' + ci }, el('clipPath', { id: 'kc' + ci }, defs));
-    el('path', { class: 'rim', d: c.d, stroke: c.color, 'clip-path': `url(#kc${ci})` }, rims);
+    // Continente como "ilha": por baixo da terra, uma faixa na cor do continente que aparece só no mar;
+    // por cima, um canal escuro no contorno externo, que separa a terra da faixa e um continente do outro.
+    el('path', { class: 'aura', d: c.d, stroke: c.color }, aura);
+    el('path', { class: 'auracut', d: c.d }, aura);
+    el('path', { class: 'moat', d: c.d }, moat);
   });
 })();
 let markK = 0;
@@ -875,6 +875,9 @@ document.addEventListener('click', (e) => {
 /* ---------- inicialização ---------- */
 $('#name').value = store.get('name') || '';
 $('#ver').textContent = 'versão ' + VERSION;
+// estilos alternativos do destaque de continente, para comparar: ?estilo=2 ou ?estilo=3
+const estilo = new URLSearchParams(location.search).get('estilo');
+if (estilo === '2' || estilo === '3') svg.classList.add('st' + estilo);
 if (store.get('cfg')) Object.assign(app.cfg, store.get('cfg'));
 $('#name').addEventListener('input', () => store.set('name', $('#name').value));
 function refreshHome() {
