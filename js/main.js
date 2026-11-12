@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '18'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '19'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -317,7 +317,7 @@ const guestHandlers = {
       if (app.view && msg.n != null && msg.n !== app.view.n) link.send({ t: 'sync' });
       return;
     }
-    if (msg.t === 'lobby') { app.lobby = msg; app.view = null; show('lobby'); renderLobby(); }
+    if (msg.t === 'lobby') { app.lobby = msg; app.view = null; app.winShown = false; $('#win').hidden = true; show('lobby'); renderLobby(); }
     else if (msg.t === 'state') {
       app.view = msg.s; app.me = msg.you;
       app.tEnd = msg.left == null ? null : Date.now() + msg.left; app.tLimit = (msg.limit || 0) * 1000;
@@ -628,7 +628,7 @@ function processEvents(v) {
     } else if (e.t === 'card') { if (mine(e.p)) { flash('Carta recebida', col(e.p), 'Toque no ícone de cartas para ver'); play('card'); } }
     else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); play('dead'); }
     else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p), !mine(e.p)); play('timeout'); }
-    else if (e.t === 'win') { play('win'); flash(`${nm(e.p)} venceu!`, col(e.p), '', 2500, true); buzz([150, 80, 150, 80, 300]); }
+    else if (e.t === 'win') { play('win'); buzz([150, 80, 150, 80, 300, 80, 400]); }
   }
 }
 
@@ -764,6 +764,9 @@ function renderGame() {
   if (v.step === 'attack' && app.sel != null && T[app.sel].a < 2) app.sel = app.target = null;
 
   processEvents(v);
+  // fim de jogo: tela de vitória (uma vez por partida) e, no mapa, só o domínio do vencedor aceso
+  if (v.phase !== 'over') { app.winShown = false; $('#win').hidden = true; }
+  else if (!app.winShown) { app.winShown = true; showWin(v); }
   // quem só assiste vê o que o jogador da vez está mirando
   const okT = (x) => Number.isInteger(x) && x >= 0 && x < TERR.length;
   const pk = !can && app.peek && app.peek.n === v.n && okT(app.peek.sel) ? app.peek : null;
@@ -786,7 +789,7 @@ function renderGame() {
     // quem joga: esmaece o que não é origem nem alvo possível; quem assiste: esmaece tudo menos
     // o que o jogador da vez selecionou (ou, sem seleção, os territórios da última jogada)
     const dim = can ? (app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0))
-      : pk ? i !== pk.sel && i !== pk.target : spot ? !spot.has(i) : false;
+      : v.phase === 'over' ? T[i].o !== v.winner : pk ? i !== pk.sel && i !== pk.target : spot ? !spot.has(i) : false;
     const ps = pk ? (i === pk.sel ? ' sel' : i === pk.target ? ' tgt' : '') : spot && spot.has(i) ? ' lit' : '';
     nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + ps);
     if (i === app.sel || hl || ps) front.push(nd.poly);
@@ -820,8 +823,8 @@ function renderGame() {
     <button class="icon" data-do="cards" aria-label="Cartas">${ICON.cards}<span>${handSize(meP)}</span></button>
     <button class="icon" data-do="menu" aria-label="Menu">${ICON.menu}</button>`;
 
-  // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir do topo);
-  // a de quem joga agora é a primeira e a mais grossa; o tamanho de cada fatia segue o número de territórios
+  // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir da seta no topo,
+  // onde começa a de quem joga agora); todas com a mesma espessura, e o comprimento segue o número de territórios
   const seq = [];
   for (let k = 0; k < v.players.length; k++) { const i = (v.turn + k) % v.players.length; if (v.players[i].alive) seq.push(i); }
   const ring = $('#ring');
@@ -831,15 +834,14 @@ function renderGame() {
     let lens = counts.map((c) => Math.max(8, (c / TERR.length) * C));
     const sum = lens.reduce((x, y) => x + y, 0);
     lens = lens.map((l) => (l * C) / sum);
-    let off = 0, segs = '', dot = '';
+    let off = 0, segs = '';
     seq.forEach((i, k) => {
       const L = lens[k];
-      segs += `<circle class="seg${k ? '' : ' cur'}" r="31" stroke="${COLORS[v.players[i].color].c}" stroke-dasharray="${(L - gap).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
-      if (i === vw) { const ang = ((off + (L - gap) / 2) / C) * 2 * Math.PI; dot = `<circle class="medot" cx="${(31 * Math.cos(ang)).toFixed(1)}" cy="${(31 * Math.sin(ang)).toFixed(1)}" r="3.2"/>`; }
+      segs += `<circle class="seg" r="31" stroke="${COLORS[v.players[i].color].c}" stroke-dasharray="${(L - gap).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
       off += L;
     });
     ring.setAttribute('aria-label', 'Ordem de jogada: ' + seq.map((i, k) => `${v.players[i].name}${k ? '' : ' (jogando)'}, ${counts[k]} territórios`).join('; '));
-    ring.innerHTML = `<svg viewBox="-50 -50 100 100"><circle class="disc" r="50"/><g transform="rotate(-90)"><circle class="track" r="45"/><circle class="time" r="45"/>${segs}${dot}</g><text class="rt" y="2"></text><text class="rs" y="14"></text></svg>`;
+    ring.innerHTML = `<svg viewBox="-50 -50 100 100"><circle class="disc" r="50"/><g transform="rotate(-90)"><circle class="track" r="45"/><circle class="time" r="45"/>${segs}</g><path class="start" d="M-3.5 -41.5h7l-3.5 5z"/><text class="rt" y="2"></text><text class="rs" y="14"></text></svg>`;
     updateRing();
   }
 
@@ -910,6 +912,26 @@ function renderGame() {
   $('#bar').innerHTML = `<div class="msg">${msg}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
 }
 
+// Tela de vitória: ocupa a tela toda, na cor do vencedor, com o objetivo cumprido e a classificação final.
+function showWin(v) {
+  const w = v.players[v.winner], col = COLORS[w.color].c;
+  const mine = app.role === 'guest' ? v.winner === app.me : w.ctrl === 'local';
+  const rank = v.players.map((p, i) => ({ p, i, n: owned(v, i) })).sort((a, b) => (b.i === v.winner) - (a.i === v.winner) || b.n - a.n);
+  const pieces = Array.from({ length: 70 }, (_, k) => {
+    const c = [col, '#e2b04a', '#f1e6cf', col][k % 4], x = (k * 37) % 100, d = 2.4 + ((k * 13) % 20) / 10, dl = -((k * 29) % 40) / 10, sz = 6 + (k % 4) * 2;
+    return `<i style="left:${x}%;width:${sz}px;height:${sz * 1.6}px;background:${c};animation-duration:${d}s;animation-delay:${dl}s"></i>`;
+  }).join('');
+  $('#win').innerHTML = `<div class="confetti" aria-hidden="true">${pieces}</div>
+    <div class="wincard" style="--c:${col}">
+      <svg class="cup" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10h24v14a12 12 0 0 1-24 0z"/><path d="M20 14h-8v4a8 8 0 0 0 8 8M44 14h8v4a8 8 0 0 1-8 8M32 36v10M22 54h20M26 46h12v8H26z"/></svg>
+      <p class="wl">${mine ? 'Você venceu!' : 'Vitória de'}</p>
+      <h2>${esc(w.name)}</h2>
+      <p class="wobj"><b>${v.winBy === 'last' ? 'Último exército em jogo · o objetivo era' : 'Objetivo cumprido'}</b>${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj]).replace(/ Se for o seu.*$/, '')) : ''}</p>
+      <ol class="rank">${rank.map(({ p, i, n }) => `<li${i === v.winner ? ' class="first"' : ''}><span class="dot" style="background:${COLORS[p.color].c}"></span><span class="who">${esc(p.name)}</span><span>${p.alive ? n + ' territórios' : 'eliminado'}</span></li>`).join('')}</ol>
+      <div class="row"><button class="btn" data-do="winMap">Ver o mapa</button>${app.role === 'host' ? '<button class="btn primary" data-do="again">Nova partida</button>' : ''}</div>
+    </div>`;
+  $('#win').hidden = false;
+}
 function showObjective() {
   const v = app.view, me = v.players[app.role === 'guest' ? app.me : viewer()];
   modal(`<h3>Objetivo de ${esc(me.name)}</h3><p style="color:var(--ink);font-size:16px">${me.obj != null ? esc(objectiveText(OBJECTIVES[me.obj])) : '—'}</p>
@@ -973,6 +995,7 @@ function leave() {
   if (app.role === 'host') app.seats.forEach((s) => s.link && s.link.close());
   if (app.link) { const l = app.link; app.link = null; l.close(); }
   if (app.role === 'guest') store.del('guest');
+  app.winShown = false; $('#win').hidden = true;
   Object.assign(app, { role: null, seats: [], game: null, view: null, me: null, lobby: null, sel: null, target: null, info: null, lastViewer: null });
   refreshHome();
   closeModal(); show('home');
@@ -1007,8 +1030,9 @@ const actions = {
     modal(`<h3>Sair da partida?</h3><p>${app.role === 'host' ? 'A partida fica salva neste aparelho e pode ser retomada na tela inicial.' : 'Você poderá voltar lendo um novo QR do anfitrião.'}</p>
       <div class="row"><button class="btn primary" data-do="leave">Sair</button><button class="btn" data-m="close">Ficar</button></div>`);
   },
-  again() { store.del('save3'); app.game = null; app.view = null; show('lobby'); sync(); },
+  again() { store.del('save3'); app.game = null; app.view = null; app.winShown = false; $('#win').hidden = true; show('lobby'); sync(); },
   objective: showObjective,
+  winMap() { $('#win').hidden = true; },
   sound() { setSound(!soundOn()); store.set('sound', soundOn()); if (soundOn()) { unlock(); play('turn'); } showMenu(); },
   cards: showCards,
   autoTrade() { const v = app.view, me = v.players[v.turn]; const tr = Array.isArray(me.cards) && bestTrade(me.cards, v.terr, v.turn); if (tr) act({ t: 'trade', cards: tr }); },

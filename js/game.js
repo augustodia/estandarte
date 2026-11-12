@@ -125,6 +125,7 @@ function checkWin(s, p) {
   if (alive.length === 1) p = s.players.indexOf(alive[0]);
   else if (!objectiveMet(s, p)) return false;
   s.phase = 'over'; s.winner = p;
+  s.winBy = objectiveMet(s, p) ? 'goal' : 'last'; // cumpriu o objetivo, ou só sobrou ele
   s.ev.push({ t: 'win', p });
   log(s, `${pname(s, p)} venceu a partida!`);
   return true;
