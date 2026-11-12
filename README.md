@@ -56,7 +56,7 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 ## O que cada um vê durante a partida
 
 - **Alertas no centro da tela** (somem em 1 s) só para o que é seu: "Sua vez!", "Ataque!", "Remanejamento", "Conquistou!". O que os outros fazem aparece num aviso pequeno no topo, sem cobrir o mapa.
-- **Anel de jogada:** no canto inferior esquerdo do mapa. Cada fatia é um jogador, na ordem em que jogam (sentido horário a partir da seta no topo, onde começa a de quem joga agora). Todas têm a mesma espessura; o comprimento de cada uma segue o número de territórios. O aro de fora é o relógio do turno, com o tempo no centro. Tocar no anel abre a lista de jogadores.
+- **Anel de jogada:** no canto inferior esquerdo do mapa. Cada fatia é um jogador, na ordem em que jogam (sentido horário a partir do topo; uma seta aponta para o meio da fatia de quem joga agora). Todas têm a mesma espessura; o comprimento de cada uma segue o número de territórios. O aro de fora é o relógio do turno, com o tempo no centro. Tocar no anel abre a lista de jogadores.
 - **Vitória:** uma tela cheia na cor do vencedor, com confete, o nome dele, o objetivo que cumpriu e a classificação final; ao fechar, o mapa mostra só o domínio do vencedor aceso.
 - **Destaque da jogada alheia:** o território que o jogador da vez selecionou (ou onde um bot acabou de agir) fica aceso e o resto do mapa esmaece.
 - **Ações ao vivo:** quem espera vê o território que o jogador da vez selecionou e o alvo que ele está mirando, além de reforços (+N), setas de ataque e de movimento, perdas (−N) e os dados.

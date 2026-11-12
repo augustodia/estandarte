@@ -28,7 +28,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '20'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '21'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -823,8 +823,8 @@ function renderGame() {
     <button class="icon" data-do="cards" aria-label="Cartas">${ICON.cards}<span>${handSize(meP)}</span></button>
     <button class="icon" data-do="menu" aria-label="Menu">${ICON.menu}</button>`;
 
-  // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir da seta no topo,
-  // onde começa a de quem joga agora); todas com a mesma espessura, e o comprimento segue o número de territórios
+  // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir do topo,
+  // onde começa a de quem joga agora, marcada por uma seta no meio dela); todas com a mesma espessura, e o comprimento segue o número de territórios
   const seq = [];
   for (let k = 0; k < v.players.length; k++) { const i = (v.turn + k) % v.players.length; if (v.players[i].alive) seq.push(i); }
   const ring = $('#ring');
@@ -841,7 +841,7 @@ function renderGame() {
       off += L;
     });
     ring.setAttribute('aria-label', 'Ordem de jogada: ' + seq.map((i, k) => `${v.players[i].name}${k ? '' : ' (jogando)'}, ${counts[k]} territórios`).join('; '));
-    ring.innerHTML = `<svg viewBox="-50 -50 100 100"><circle class="disc" r="50"/><g transform="rotate(-90)"><circle class="track" r="45"/><circle class="time" r="45"/>${segs}</g><path class="start" d="M-3.5 -41.5h7l-3.5 5z"/><text class="rt" y="2"></text><text class="rs" y="14"></text></svg>`;
+    ring.innerHTML = `<svg viewBox="-50 -50 100 100"><circle class="disc" r="50"/><g transform="rotate(-90)"><circle class="track" r="45"/><circle class="time" r="45"/>${segs}</g><path class="start" transform="rotate(${(((lens[0] - gap) / 2 / C) * 360).toFixed(1)})" d="M-4 -42h8l-4 6z"/><text class="rt" y="2"></text><text class="rs" y="14"></text></svg>`;
     updateRing();
   }
 
