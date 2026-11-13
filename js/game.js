@@ -65,19 +65,20 @@ export function attackBlock(s, from, to) {
   if (s.fog && s.fog.t === to) return fogText(s);
   return null;
 }
-const fogText = (s) => `Névoa nuclear: ${TERR[s.fog.t].n} não pode ser atacado até a névoa se dissipar.`;
+const fogText = (s) => `Névoa nuclear: ${TERR[s.fog.t].n} está radioativo e não pode ser atacado até a névoa se dissipar.`;
 // Motivo pelo qual não dá para mover tropas de from para to agora; null se pode.
 export function moveBlock(s, from, to) {
   if (s.event && s.event.k === 'sea' && isSea(from, to)) return 'Mar revolto: as ligações por mar estão fechadas nesta rodada.';
   return null;
 }
 // ---- regra opcional: ogiva nuclear ----
-// Lançada no lugar de uma troca de cartas: o jogador entrega a trinca, recebe só metade dos exércitos dela e não ataca no turno.
-// O alvo perde o dobro do que a troca valeria, limitado à metade dos exércitos que tem, e fica sob névoa até a vez voltar
-// a quem lançou: ninguém pode atacá-lo, mas o dono joga normalmente. Uma névoa por vez no mapa.
-export const NUKE_MULT = 2;
-export const nukeDamage = (s, to) => { const d = NUKE_MULT * tradeValue(s.trades); return to == null ? d : Math.min(d, Math.floor(s.terr[to].a / 2)); };
-export const nukeRefund = (s) => Math.floor(tradeValue(s.trades) / 2);
+// Lançada no lugar de uma troca de cartas: o jogador entrega a trinca, recebe 75% dos exércitos dela e segue o turno normalmente.
+// O alvo perde o dobro do que a troca valeria (sobra ao menos 1) e fica radioativo, sob névoa, até a vez voltar a quem lançou:
+// ninguém pode atacá-lo, nem quem lançou; o dono joga normalmente. Uma névoa por vez no mapa.
+// Regras escolhidas em laboratório (cerca de 480 mil partidas simuladas, 46 variações): ver README.
+export const NUKE_MULT = 2, NUKE_REFUND = 0.75;
+export const nukeDamage = (s, to) => { const d = NUKE_MULT * tradeValue(s.trades); return to == null ? d : Math.min(d, s.terr[to].a - 1); };
+export const nukeRefund = (s) => Math.floor(tradeValue(s.trades) * NUKE_REFUND);
 // Motivo pelo qual p não pode lançar agora (em to, se informado); null se pode.
 export function nukeBlock(s, p, to) {
   if (!s.opts || !s.opts.nukes) return 'Esta partida não tem ogiva.';
@@ -524,7 +525,7 @@ function applyAction(s, p, a, rng) {
       s.trades++; // ocupa um degrau da escada de trocas
       d.a -= lost;
       s.pool.free += back;
-      pl.lastTrade = 'nuke'; s.noAttack = true;
+      pl.lastTrade = 'nuke';
       s.fog = { t: a.to, by: p };
       s.ev.push({ t: 'nuke', p, to: a.to, def, lost, v, back });
       log(s, `${pl.name} lançou a ogiva sobre ${TERR[a.to].n} (${pname(s, def)}): ${lost} exército${lost === 1 ? '' : 's'} destruído${lost === 1 ? '' : 's'}.`);
@@ -658,8 +659,8 @@ export function botAction(s, o = {}) {
   }
   if (s.step === 'reinforce') {
     const tr = bestTrade(pl.cards, T, p);
-    if (tr && !o.noNuke && !nukeBlock(s, p)) { // ogiva quando o que destrói vale mais do que a metade da troca de que abre mão e o ataque do turno:
-      // mira a pilha que mais o ameaça (vizinha) ou a maior do adversário mais forte
+    if (tr && !o.noNuke && !nukeBlock(s, p)) { // ogiva quando o que destrói cobre com folga a parte da troca de que abre mão
+      // (mesma regra de decisão usada no laboratório): pesa mais a pilha vizinha que o ameaça e a do adversário mais forte
       let tg = null, top = 0;
       T.forEach((t, i) => {
         if (t.o === p || nukeBlock(s, p, i)) return;
@@ -667,8 +668,7 @@ export function botAction(s, o = {}) {
         const sc = nukeDamage(s, i) * (near ? 1.3 : t.o === V.leader ? 1 : 0.6);
         if (sc > top) { top = sc; tg = i; }
       });
-      const giveUp = tradeValue(s.trades) - nukeRefund(s);
-      if (tg != null && top >= giveUp * 1.3 + 3) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
+      if (tg != null && top >= 1.6 * (tradeValue(s.trades) - nukeRefund(s))) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
     }
     if (tr && (pl.cards.length >= 5 || poolTotal(s) > 0)) return { t: 'trade', cards: tr };
     // pacto: de vez em quando, com o vizinho que mais ameaça e que não é o alvo nem o líder

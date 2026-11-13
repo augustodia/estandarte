@@ -58,15 +58,16 @@ Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes
 - **Eventos de rodada:** da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar. Depois de um evento vem sempre ao menos uma rodada calma; em rodada calma a chance de sair um novo é de 45%, nunca passam mais de 3 calmas seguidas e o mesmo evento não sai duas vezes seguidas. Os eventos: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado; nenhum dos dois cai num continente inteiro de um só jogador), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
 - **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 2 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Cada jogador só pode ter um pacto por vez, e os mesmos dois esperam 2 rodadas depois do fim para fazer outro. Romper antes só no início do próprio turno, antes de reforçar, ao custo de metade do reforço daquele turno (no mínimo 3), e todos são avisados. Com dois jogadores em jogo os pactos acabam.
 - **Ogiva nuclear:** no reforço, em vez de trocar 3 cartas por exércitos, o jogador pode lançar a ogiva em qualquer território inimigo.
-  - O alvo perde o dobro do que a troca valeria (troca de 8 destrói até 16), mas nunca mais que a metade dos exércitos que tem, e não muda de dono. Não há sorteio.
-  - Quem lança entrega as 3 cartas, recebe metade dos exércitos da troca e não ataca naquele turno (reforço e remanejamento continuam).
-  - O território atingido fica sob névoa até a vez voltar a quem lançou: ninguém pode atacá-lo. O dono joga normalmente (reforça, ataca a partir dele, recebe o bônus do continente). Quando a névoa some, quem lançou é o primeiro a poder atacar ali.
+  - O alvo perde o dobro do que a troca valeria (troca de 8 destrói 16), sempre sobrando 1 exército, e não muda de dono. Não há sorteio.
+  - Quem lança entrega as 3 cartas, recebe 75% dos exércitos da troca e joga o resto do turno normalmente (reforça, ataca em outros lugares, remaneja).
+  - O território atingido fica radioativo, sob névoa, até a vez voltar a quem lançou: ninguém pode atacá-lo, nem quem lançou. O dono joga normalmente (reforça, ataca a partir dele, recebe o bônus do continente). Quando a névoa some, quem lançou é o primeiro a poder atacar ali.
   - Só existe uma névoa no mapa por vez.
   - A primeira troca de cada jogador é sempre normal e, depois de uma ogiva, a troca seguinte dele também.
   - O lançamento ocupa um degrau da escada de trocas (4, 6, 8, 10, 12, 15, +5…): a próxima troca de qualquer jogador vale o degrau seguinte.
   - O pacto de quem lança acaba na hora; não se lança contra parceiro de pacto nem em continente sob Cessar-fogo.
   - Com 5 cartas e direito à ogiva, a troca continua obrigatória, mas o jogo deixa escolher em vez de trocar sozinho. Se o tempo acabar, faz a troca normal.
-  - Bots lançam quando o que destroem vale mais do que a metade da troca de que abrem mão, de preferência contra a pilha vizinha que mais os ameaça.
+  - Bots lançam quando o que destroem cobre com folga a parte da troca de que abrem mão, de preferência contra a pilha vizinha que mais os ameaça.
+  - Essas regras saíram de um laboratório com cerca de 480 mil partidas simuladas e 46 variações. Duas conclusões guiaram a escolha: proibir quem lança de atacar no turno torna a ogiva um mau negócio em qualquer configuração (ficar um turno sem atacar custa mais do que a troca), e limitar o dano a uma fração do alvo também. Na versão adotada, quem tem a ogiva vence de 3% a 9% mais do que quem não tem, e ela aparece cerca de 2 vezes por partida.
 
 ## Controles
 

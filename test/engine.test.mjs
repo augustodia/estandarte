@@ -167,18 +167,17 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
         if (e.t === 'trade') hist[e.p].push('normal');
         if (e.t === 'nuke') hist[e.p].push('nuke');
         if (fog0 && s.fog && e.t === 'attack') assert.notEqual(e.to, fog0.t, 'ataque a território sob névoa');
-        if (e.t === 'attack') assert.notEqual(key0, nukedThisTurn, 'atacou no turno em que lançou a ogiva');
         if (e.t === 'turn' && s.fog) { fogTurns++; assert.notEqual(s.fog.by, e.p, 'névoa não se dissipou na volta de quem lançou'); }
       }
       if (a.t === 'nuke') {
         launched++; nukedThisTurn = key0;
         assert.equal(fog0, null, 'ogiva com névoa já no mapa');
-        const lost = Math.min(2 * before.v, Math.floor(before.a / 2));
-        assert.equal(s.terr[a.to].a, before.a - lost, 'dano errado'); assert(s.terr[a.to].a >= Math.ceil(before.a / 2), 'perdeu mais da metade'); assert.equal(s.terr[a.to].o, before.o, 'ogiva mudou o dono');
+        const lost = Math.min(2 * before.v, before.a - 1);
+        assert.equal(s.terr[a.to].a, before.a - lost, 'dano errado'); assert(s.terr[a.to].a >= 1); assert.equal(s.terr[a.to].o, before.o, 'ogiva mudou o dono');
         const auto = s.ev.filter((e) => e.t === 'trade');
         assert.equal(s.trades, trades0 + 1 + auto.length, 'ogiva não ocupou degrau da escada');
-        assert.equal(G.poolTotal(s) - auto.reduce((k, e) => k + e.v, 0), pool0 + Math.floor(before.v / 2), 'quem lança recebe metade da troca');
-        assert.deepEqual(s.fog, { t: a.to, by: p }); assert(s.noAttack); assert.equal(s.turn, p, 'o turno continua');
+        assert.equal(G.poolTotal(s) - auto.reduce((k, e) => k + e.v, 0), pool0 + Math.floor(before.v * 0.75), 'quem lança recebe 75% da troca');
+        assert.deepEqual(s.fog, { t: a.to, by: p }); assert(!s.noAttack); assert.equal(s.turn, p, 'o turno continua');
         assert(!s.pacts.some((x) => x.a === p || x.b === p), 'pactos de quem lançou continuaram');
       }
     }
@@ -196,18 +195,18 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
     s.players[p].lastTrade = 'normal';
     assert.match(apply(s, p, { t: 'nuke', cards: tri, to: mine }, rng), /inimigo/);
     assert.match(apply(s, p, { t: 'nuke', cards: [tri[0], tri[0], tri[1]], to: tg }, rng), /trinca/);
-    // teto: metade do alvo
-    { const c = JSON.parse(JSON.stringify(s)); c.terr[tg].a = 7; assert.equal(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), null); assert.equal(c.terr[tg].a, 4, 'com 7 exércitos o alvo perde 3'); }
+    // sempre sobra 1
+    { const c = JSON.parse(JSON.stringify(s)); c.terr[tg].a = 7; assert.equal(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), null); assert.equal(c.terr[tg].a, 1, 'com 7 exércitos e dano 8 o alvo fica com 1'); }
     { const c = JSON.parse(JSON.stringify(s)); c.terr[tg].a = 1; assert.equal(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), null); assert.equal(c.terr[tg].a, 1); }
     s.terr[tg].a = 30; const v = G.tradeValue(s.trades), free = s.pool.free;
     assert.equal(apply(s, p, { t: 'place', t0: mine, n: 1 }, rng), null); // pode reforçar antes de lançar
     assert.equal(apply(s, p, { t: 'nuke', cards: tri, to: tg }, rng), null);
-    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(s.pool.free, free - 1 + Math.floor(v / 2)); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
+    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(s.pool.free, free - 1 + Math.floor(v * 0.75)); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
     const owner = s.terr[tg].o;
     while (s.step === 'reinforce') apply(s, p, botAction(s, { noNuke: true }), rng);
-    assert.equal(s.step, 'move', 'depois da ogiva o turno pula o ataque');
-    assert.match(apply(s, p, { t: 'attack', from: mine, to: tg }, rng) || '', /atacar|ogiva/);
-    apply(s, p, { t: 'endTurn' }, rng);
+    assert.equal(s.step, 'attack', 'quem lança segue para o ataque normalmente');
+    { const fr = TERR[tg].adj.find((j) => s.terr[j].o === p); if (fr != null) { s.terr[fr].a = Math.max(s.terr[fr].a, 5); assert.match(apply(s, p, { t: 'attack', from: fr, to: tg }, rng), /radioativo/, 'nem quem lançou pode atacar o território'); } }
+    apply(s, p, { t: 'endAttack' }, rng); apply(s, p, { t: 'endTurn' }, rng);
     while (s.turn !== owner && s.phase === 'play') { while (s.step === 'reinforce') apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (s.step === 'attack') apply(s, s.turn, { t: 'endAttack' }, rng); apply(s, s.turn, { t: 'endTurn' }, rng); }
     // o dono joga normalmente: reforça lá e pode atacar a partir de lá; ninguém pode atacá-lo
     assert.equal(apply(s, owner, { t: 'place', t0: tg, n: 1 }, rng), null, 'o dono deveria poder reforçar o território atingido');

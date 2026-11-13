@@ -31,7 +31,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '30'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '31'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -459,7 +459,7 @@ function guestScan() {
 const EXTRAS = [
   ['events', 'Eventos de rodada', 'De vez em quando, um evento surpresa muda as regras para todos por uma rodada.'],
   ['pacts', 'Pactos', 'Dois jogadores combinam não se atacar por 2 rodadas. Romper antes custa metade do reforço.'],
-  ['nukes', 'Ogiva nuclear', 'No lugar de uma troca de cartas, destrói até metade das tropas de um território inimigo.'],
+  ['nukes', 'Ogiva nuclear', 'No lugar de uma troca de cartas, arrasa um território inimigo, que fica radioativo: ninguém o ataca por uma rodada.'],
 ];
 document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('extras')) app.extrasOpen = e.target.open; }, true);
 function renderLobby() {
@@ -740,7 +740,7 @@ function confirmNuke(t) {
   const mine = v.pacts.filter((x) => x.a === me || x.b === me).length;
   modal(`<h3 class="rad">Lançar a ogiva?</h3>
     <p style="color:var(--ink);font-size:16px">Alvo: <b>${TERR[t].n}</b>, de <b style="color:${COLORS[own.color].c}">${esc(own.name)}</b>. Perde <b>${lost}</b> de ${d.a} exércitos.</p>
-    <ul><li>Você entrega 3 cartas e recebe <b>${nukeRefund(v)}</b> exércitos, metade dos ${tradeValue(v.trades)} da troca.</li><li>Você não ataca neste turno (reforço e remanejamento continuam).</li><li>Ninguém pode atacar ${TERR[t].n} até a sua vez voltar. O dono joga normalmente.</li>${mine ? `<li>Seu pacto acaba.</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
+    <ul><li>Você entrega 3 cartas e recebe <b>${nukeRefund(v)}</b> exércitos em vez dos ${tradeValue(v.trades)} da troca.</li><li>${TERR[t].n} fica radioativo: ninguém pode atacá-lo até a sua vez voltar, <b>nem você</b>. O dono joga normalmente.</li><li>O resto do seu turno segue normal: você reforça, ataca em outros lugares e remaneja.</li>${mine ? `<li>Seu pacto acaba.</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
     <div class="row"><button class="btn rad" data-m="fire">Lançar</button><button class="btn" data-m="close">Cancelar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     if (e.target.dataset.m !== 'fire') return;
@@ -1093,7 +1093,7 @@ function renderGame() {
   }
 
   // rodapé
-  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.${v.fog && v.fog.t === app.info ? ' · <b class="rad">sob névoa: não pode ser atacado</b>' : ''}`
+  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.${v.fog && v.fog.t === app.info ? ' · <b class="rad">radioativo: não pode ser atacado</b>' : ''}`
     : v.event && v.phase === 'play' ? `<b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}` : esc(v.log[v.log.length - 1] || '');
   let msg = '', btns = '', warn = '';
   if (v.phase === 'over') {
@@ -1111,7 +1111,7 @@ function renderGame() {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     const left = `<b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}`;
     const tri = Array.isArray(meP.cards) && !nukeBlock(v, v.turn) ? nukeTrade(meP.cards, T, v.turn) : null; // pode pagar uma ogiva com as cartas?
-    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói até <b>${nukeDamage(v)}</b> exércitos (no máximo metade do que o alvo tem). Você recebe ${nukeRefund(v)} em vez dos ${tradeValue(v.trades)} da troca e não ataca neste turno.`
+    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói <b>${nukeDamage(v)}</b> exércitos dele (sempre sobra 1) e ninguém, nem você, poderá atacá-lo nesta rodada. Você recebe ${nukeRefund(v)} em vez dos ${tradeValue(v.trades)} da troca.`
       : mustTrade(v) ? (tri ? 'Você tem 5 ou mais cartas: troque ou lance a ogiva antes de reforçar.' : 'Você tem 5 ou mais cartas: troque antes de reforçar.') : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar (toque duplo coloca 1) · ${left}`;
     const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
     btns = (rng ? stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="place">Colocar</button>' : '')
@@ -1223,8 +1223,8 @@ function showExtras() {
   if (v.opts.nukes) {
     const why = myTurn ? nukeBlock(v, me) : null;
     h += `<h3>Ogiva nuclear</h3>${v.fog ? `<p style="color:var(--ink);font-size:16px"><b class="rad">Névoa sobre ${TERR[v.fog.t].n}</b>, lançada por ${tag(v.fog.by)}. Dissipa quando a vez voltar para quem lançou.</p>` : ''}
-      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói <b>${nukeDamage(v)}</b> exércitos, o dobro do valor da troca, mas nunca mais que a metade do que o alvo tem. Não há sorteio.</p>
-      <ul class="evlist"><li>Você recebe metade dos exércitos da troca (hoje ${nukeRefund(v)}) e não ataca no turno. Reforço e remanejamento continuam.</li><li>Até a sua vez voltar, ninguém pode atacar o território atingido. O dono joga normalmente: reforça, ataca a partir dele e recebe o bônus do continente.</li><li>Quando a névoa some, você é o primeiro a poder atacar ali.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>O pacto de quem lança acaba na hora.</li></ul>
+      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói <b>${nukeDamage(v)}</b> exércitos, o dobro do valor da troca, sempre sobrando 1 no alvo. Não há sorteio.</p>
+      <ul class="evlist"><li>Você recebe 75% dos exércitos da troca (hoje ${nukeRefund(v)}) e joga o resto do turno normalmente.</li><li>O território atingido fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você. O dono joga normalmente: reforça, ataca a partir dele e recebe o bônus do continente.</li><li>Quando a névoa some, você é o primeiro a poder atacar ali.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>O pacto de quem lança acaba na hora.</li></ul>
       ${why && v.step === 'reinforce' ? `<p>${esc(why)}</p>` : ''}`;
   }
   modal(h + '<button class="btn primary" data-m="close">Fechar</button>');
@@ -1311,7 +1311,7 @@ function showRules() {
   <h3>Regras extras (opcionais)</h3>
   <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
   <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Cada jogador só pode ter um pacto por vez. Para romper antes, só no início do seu turno, antes de reforçar, ao custo de metade do reforço (no mínimo ${PACT_PENALTY}). Com dois jogadores em jogo os pactos acabam.</li></ul>
-  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria, no máximo metade do que tem. Você recebe metade dos exércitos da troca e não ataca no turno. Até a sua vez voltar, ninguém pode atacar o território atingido, mas o dono joga normalmente. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
+  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sempre sobra 1) e fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você, mas o dono joga normalmente. Você recebe 75% dos exércitos da troca e segue o turno normalmente, atacando em outros lugares. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
   <h3>Conexão</h3>
   <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>
   <button class="btn" data-m="close">Fechar</button>`);
