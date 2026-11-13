@@ -42,7 +42,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 
 /* partida */
 #game{padding:0}
-#hud{display:flex;align-items:center;gap:6px;padding:max(6px,env(safe-area-inset-top)) 10px 6px;background:var(--panel);border-bottom:1px solid var(--line)}
+#hud{display:flex;align-items:center;gap:6px;padding:max(6px,var(--st)) var(--sr) 6px var(--sl);background:var(--panel);border-bottom:1px solid var(--line)}
 #hud .turn{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
 #hud .turn>span:last-child{min-width:0;overflow:hidden}
 #hud .turn b{display:block;font-size:15px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -55,8 +55,8 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;stroke:none;overflow:visible}
 .depth{fill:#050a13;stroke:#050a13;stroke-width:1;stroke-linejoin:round;transform:translateY(var(--depth,4px))}
 .mapbtn{position:absolute;bottom:10px;height:34px;border-radius:17px;border:1px solid var(--line);background:#15263dd9;color:var(--ink);font:600 12px/1 system-ui,sans-serif;padding:0 12px;display:inline-flex;align-items:center;justify-content:center}
-#fit{right:10px;width:34px;padding:0}#fit svg{width:16px;height:16px}
-#bar{background:var(--panel);border-top:1px solid var(--line);padding:8px 10px max(8px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
+#fit{right:var(--sr);width:34px;padding:0}#fit svg{width:16px;height:16px}
+#bar{background:var(--panel);border-top:1px solid var(--line);padding:8px var(--sr) var(--sb) var(--sl);display:flex;flex-direction:column;gap:6px}
 #bar .msg{font-size:14px;line-height:1.3;min-height:18px;overflow-wrap:anywhere}
 #bar .actions{display:flex;gap:6px;align-items:center}
 #bar .actions .btn{flex:1 1 0}
@@ -107,7 +107,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 @keyframes shake2{10%{transform:translate(-9px,4px)}25%{transform:translate(9px,-5px)}40%{transform:translate(-8px,-4px)}55%{transform:translate(7px,5px)}70%{transform:translate(-5px,2px)}85%{transform:translate(4px,-2px)}}
 
 /* anel de jogada, no canto inferior esquerdo do mapa: fatias = jogadores na ordem, aro de fora = relógio */
-#ring{position:absolute;left:10px;bottom:10px;width:68px;height:68px;padding:0;border:0;background:none;border-radius:50%;z-index:2}
+#ring{position:absolute;left:var(--sl);bottom:10px;width:68px;height:68px;padding:0;border:0;background:none;border-radius:50%;z-index:2}
 #ring[hidden]{display:none}
 #ring svg{width:100%;height:100%;display:block;stroke:none;overflow:visible}
 #ring .disc{fill:#0a1422e6}
@@ -130,10 +130,10 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 #flash small{display:block;color:var(--ink);font-size:13px;line-height:1.3;margin-top:4px;overflow-wrap:anywhere}
 #flash small:empty{display:none}
 #flash.go{animation:flash 1s both}
-#flash.mini{top:calc(env(safe-area-inset-top) + 104px);padding:5px 14px;border-width:1px;border-radius:999px;box-shadow:0 4px 14px #0008}
+#flash.mini{top:calc(var(--st) + 104px);padding:5px 14px;border-width:1px;border-radius:999px;box-shadow:0 4px 14px #0008}
 #flash.mini b{font:600 14px/1.3 system-ui,-apple-system,sans-serif;letter-spacing:0}
 @keyframes flash{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}24%{transform:translate(-50%,-50%) scale(1)}82%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}
-#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 62px);transform:translateX(-50%);background:#000d;color:#fff;padding:8px 12px;border-radius:10px;font-size:13px;line-height:1.3;z-index:20;width:max-content;max-width:min(90vw,420px);text-align:center;overflow-wrap:anywhere}
+#toast{position:fixed;left:50%;top:calc(var(--st) + 62px);transform:translateX(-50%);background:#000d;color:#fff;padding:8px 12px;border-radius:10px;font-size:13px;line-height:1.3;z-index:20;width:max-content;max-width:min(90vw,420px);text-align:center;overflow-wrap:anywhere}
 #toast[hidden]{display:none}
 
 /* vitória */
@@ -159,7 +159,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 /* janelas */
 #modal{position:fixed;inset:0;background:#000a;display:flex;align-items:flex-end;justify-content:center;z-index:10}
 #modal[hidden]{display:none}
-.sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:92%;overflow:auto;padding:16px 14px max(16px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:92%;overflow:auto;padding:16px 14px max(16px,var(--sb));display:flex;flex-direction:column;gap:10px}
 .sheet h3{margin:0;font:700 19px Georgia,serif;letter-spacing:.04em}
 .sheet p{margin:0;color:var(--mute);font-size:14px;overflow-wrap:anywhere}.sheet ol,.sheet ul{margin:0;padding-left:20px;font-size:14px;color:var(--ink)}.sheet li{margin:4px 0}
 .qr{background:#fff;border-radius:12px;padding:6px;align-self:center;width:min(100%,300px)}.qr canvas{width:100%;height:auto;display:block;image-rendering:pixelated}
@@ -177,9 +177,9 @@ video{width:100%;border-radius:12px;background:#000;max-height:46vh;object-fit:c
 /* Layout deitado (classe .land, posta pelo JS): vale com o celular deitado de verdade ou com a tela girada à força. */
 body.land #game:not([hidden]){display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr auto}
 body.land #mapwrap{grid-column:1/3;grid-row:1}
-body.land #hud{grid-column:1;grid-row:2;border-bottom:0;border-top:1px solid var(--line);padding:6px 8px max(6px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));gap:4px;max-width:46vw}
+body.land #hud{grid-column:1;grid-row:2;border-bottom:0;border-top:1px solid var(--line);padding:6px 8px var(--sb) var(--sl);gap:4px;max-width:46vw}
 body.land #hud .turn{flex:0 1 auto;max-width:150px}
-body.land #bar{grid-column:2;grid-row:2;flex-direction:row;align-items:center;gap:8px;min-width:0;padding:6px max(10px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) 4px}
+body.land #bar{grid-column:2;grid-row:2;flex-direction:row;align-items:center;gap:8px;min-width:0;padding:6px var(--sr) var(--sb) 4px}
 body.land #bar .msg{flex:1 1 0;min-width:0;font-size:13px;line-height:1.25;max-height:2.5em;overflow:hidden}
 body.land #bar{flex-wrap:wrap}
 body.land #bar .actions{flex:none}
@@ -213,7 +213,7 @@ body.rot #hud{max-width:none}
 .row.wrap .btn{flex:1 1 auto}
 .row.wrap .btn .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
 @media (prefers-reduced-motion:reduce){.icon.call{animation:none}}
-#evchip{position:absolute;left:86px;bottom:16px;z-index:2;display:inline-flex;align-items:center;gap:5px;max-width:min(270px,calc(100% - 150px));height:28px;padding:0 10px 0 7px;border-radius:999px;border:1px solid #e2b04a99;background:#0a1422e6;color:#e2b04a;font:600 12px/1 system-ui,sans-serif}
+#evchip{position:absolute;left:calc(var(--sl) + 76px);bottom:16px;z-index:2;display:inline-flex;align-items:center;gap:5px;max-width:min(270px,calc(100% - 140px - var(--sl) - var(--sr)));height:28px;padding:0 10px 0 7px;border-radius:999px;border:1px solid #e2b04a99;background:#0a1422e6;color:#e2b04a;font:600 12px/1 system-ui,sans-serif}
 #evchip[hidden]{display:none}
 #evchip svg{width:14px;height:14px;flex:none;fill:currentColor;stroke:none}
 #evchip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -235,13 +235,30 @@ details.extras summary span{flex:1;min-width:0;text-align:right;color:var(--mute
 .btn.rad{border-color:#7dff4a99;color:#7dff4a;background:#12301a}
 .foglayer{pointer-events:none}
 .fog-glow{opacity:.6;animation:fogbreath 4.5s ease-in-out infinite}
-.fog-fill{fill:#123d18;opacity:.3;stroke:#9dff6a;stroke-width:1.5;stroke-dasharray:5 4;animation:fogdash 12s linear infinite}
-.fog-drift{transform-box:fill-box;transform-origin:center;animation:fogdrift 9s ease-in-out infinite alternate}
+.fog-fill{fill:none;stroke:#b4ff86;stroke-opacity:.8;stroke-width:1.5;stroke-dasharray:5 4;animation:fogdash 12s linear infinite}
+.smoke{animation:smoke linear infinite;will-change:transform}
+.smoke.wisp{mix-blend-mode:screen}
+@keyframes smoke{to{transform:translate(var(--dx),var(--dy))}}
+.fog-ember{fill:#e9ffc8;animation:ember ease-in infinite}
+@keyframes ember{0%{transform:translateY(8px);opacity:0}25%{opacity:.95}100%{transform:translateY(-34px);opacity:0}}
 @keyframes fogbreath{50%{opacity:1}}
 @keyframes fogdash{to{stroke-dashoffset:-90}}
-@keyframes fogdrift{0%{transform:translate(-9px,4px) scale(.9);opacity:.55}50%{opacity:1}100%{transform:translate(10px,-6px) scale(1.18);opacity:.6}}
 .fx-shock{fill:none;stroke:#b6ff7a;stroke-width:5;transform-box:fill-box;transform-origin:center;animation:shock 1.5s ease-out both}
 @keyframes shock{0%{transform:scale(.4);opacity:1}100%{transform:scale(16);opacity:0;stroke-width:1}}
 #mapwrap.boom::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle,#f4ffe8 0,#9dff6a 35%,#1d6a2600 80%);animation:boomflash 1.5s ease-out both}
 @keyframes boomflash{0%{opacity:0}8%{opacity:.95}30%{opacity:.5}100%{opacity:0}}
-@media (prefers-reduced-motion:reduce){.fog-glow,.fog-fill,.fog-drift,.fx-shock{animation:none}#mapwrap.boom::after{animation-duration:.4s}}
+@media (prefers-reduced-motion:reduce){.fog-glow,.fog-fill,.smoke,.fog-ember,.fx-shock{animation:none}#mapwrap.boom::after{animation-duration:.4s}}
+/* Zona segura: nada de botão colado nas bordas, nos cantos arredondados, no entalhe da câmera ou na barra de gestos.
+   Com a tela girada pelo jogo, os recuos do aparelho trocam de lado: o topo físico (entalhe) vira a esquerda do palco. */
+:root{--sl:max(10px,env(safe-area-inset-left));--sr:max(10px,env(safe-area-inset-right));--st:env(safe-area-inset-top);--sb:max(8px,env(safe-area-inset-bottom))}
+body.land{--sl:max(20px,env(safe-area-inset-left));--sr:max(20px,env(safe-area-inset-right));--sb:max(14px,env(safe-area-inset-bottom))}
+body.rot{--sl:max(20px,env(safe-area-inset-top));--sr:max(20px,env(safe-area-inset-bottom));--st:env(safe-area-inset-right);--sb:max(14px,env(safe-area-inset-left))}
+body.land .mapbtn,body.land #ring,body.land #evchip{bottom:12px}
+body.land #modal{padding:0 var(--sr) 0 var(--sl)}
+/* cabeçalho fixo das janelas longas, com fechar sempre à mão */
+.shead{position:sticky;top:-16px;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-16px -14px 0;padding:10px 8px 10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.shead .x{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--deep);color:var(--ink);font:600 18px/1 system-ui,sans-serif}
+/* botão armado, à espera do segundo toque */
+.btn.ask{background:#e2b04a;border-color:#e2b04a;color:#1c1408;animation:askpulse .8s ease-in-out infinite}
+@keyframes askpulse{50%{filter:brightness(1.18)}}
+@media (prefers-reduced-motion:reduce){.btn.ask{animation:none}}

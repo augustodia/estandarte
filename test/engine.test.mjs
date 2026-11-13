@@ -170,7 +170,7 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
         if (fog0 && e.t === 'move') assert(e.from !== fog0.t && e.to !== fog0.t, 'movimento envolvendo território sob névoa');
         if (fog0 && e.t === 'trade') assert(!e.bonus.includes(fog0.t), '+2 de carta em território sob névoa');
         if (e.t === 'attack') assert.notEqual(key0, nukedThisTurn, 'atacou no turno em que lançou a ogiva');
-        if (e.t === 'turn' && s.fog) { fogTurns++; assert.notEqual(s.fog.by, e.p, 'névoa não se dissipou na volta de quem lançou'); assert(!(TERR[s.fog.t].c in s.pool.cont), 'continente sob névoa pagou bônus'); }
+        if (e.t === 'turn' && s.fog && a.t !== 'nuke') { fogTurns++; assert.notEqual(s.fog.by, e.p, 'névoa não se dissipou na volta de quem lançou'); assert(!(TERR[s.fog.t].c in s.pool.cont), 'continente sob névoa pagou bônus'); }
       }
       if (a.t === 'nuke') {
         launched++; nukedThisTurn = key0;
@@ -178,8 +178,9 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
         const lost = Math.min(before.a - 1, 2 * before.v);
         assert.equal(s.terr[a.to].a, before.a - lost, 'dano errado'); assert.equal(s.terr[a.to].o, before.o, 'ogiva mudou o dono');
         assert.equal(s.trades, trades0 + 1 + s.ev.filter((e) => e.t === 'trade').length, 'ogiva não ocupou degrau da escada');
-        assert.equal(G.poolTotal(s) - s.ev.filter((e) => e.t === 'trade').reduce((k, e) => k + e.v, 0), pool0, 'ogiva deu exércitos');
-        assert.deepEqual(s.fog, { t: a.to, by: p }); assert(s.noAttack);
+        assert(s.phase !== 'play' || s.turn !== p || s.players.filter((q) => q.alive).length === 1, 'o turno de quem lançou não acabou');
+        assert(!s.ev.some((e) => ['place', 'attack', 'move'].includes(e.t) && e.p === p), 'quem lançou ainda jogou no turno');
+        assert.deepEqual(s.fog, { t: a.to, by: p });
         assert(!s.pacts.some((x) => x.a === p || x.b === p), 'pactos de quem lançou continuaram');
         assert(s.players[p].cards.length <= before.hand - 3);
       }
@@ -198,14 +199,12 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
     s.players[p].lastTrade = 'normal';
     assert.match(apply(s, p, { t: 'nuke', cards: tri, to: mine }, rng), /inimigo/);
     assert.match(apply(s, p, { t: 'nuke', cards: [tri[0], tri[0], tri[1]], to: tg }, rng), /trinca/);
-    s.terr[tg].a = 30; const v = G.tradeValue(s.trades), free = s.pool.free;
+    s.terr[tg].a = 30; const v = G.tradeValue(s.trades), armies = s.terr.reduce((k, t) => k + (t.o === p ? t.a : 0), 0);
+    { const c = JSON.parse(JSON.stringify(s)); assert.equal(apply(c, p, { t: 'place', t0: mine, n: 1 }, rng), null); assert.match(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), /antes de colocar/); } // depois de reforçar não dá mais
     assert.equal(apply(s, p, { t: 'nuke', cards: tri, to: tg }, rng), null);
-    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(s.pool.free, free); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
+    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
+    assert.notEqual(s.turn, p, 'lançar deveria encerrar o turno'); assert.equal(s.terr.reduce((k, t) => k + (t.o === p ? t.a : 0), 0), armies, 'quem lançou recebeu reforço');
     const owner = s.terr[tg].o, nb = TERR[tg].adj.find((j) => s.terr[j].o !== owner);
-    while (s.step === 'reinforce') apply(s, p, botAction(s), rng);
-    assert.equal(s.step, 'move', 'depois da ogiva o turno deveria pular o ataque');
-    assert.match(apply(s, p, { t: 'attack', from: mine, to: tg }, rng) || '', /atacar|Ataque|ogiva/);
-    apply(s, p, { t: 'endTurn' }, rng);
     while (s.turn !== owner && s.phase === 'play') { while (s.step === 'reinforce') apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (s.step === 'attack') apply(s, s.turn, { t: 'endAttack' }, rng); apply(s, s.turn, { t: 'endTurn' }, rng); }
     assert.match(apply(s, owner, { t: 'place', t0: tg, n: 1 }, rng), /Névoa/);
     assert.match(G.attackBlock(s, tg, nb ?? TERR[tg].adj[0]), /Névoa/); assert.match(G.moveBlock(s, tg, TERR[tg].adj[0]), /Névoa/);

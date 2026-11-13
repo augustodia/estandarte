@@ -50,7 +50,8 @@ export function moveBlock(s, from, to) {
   return null;
 }
 // ---- regra opcional: ogiva nuclear ----
-// Lançada no lugar de uma troca de cartas: o jogador entrega a trinca, não recebe os exércitos dela e não ataca no turno.
+// Lançada no lugar de uma troca de cartas, como primeira ação do turno: o jogador entrega a trinca e o turno dele acaba ali,
+// sem reforço, ataque nem remanejamento.
 // O alvo perde o dobro do que a troca valeria (sobra ao menos 1) e fica sob névoa até a vez voltar a quem lançou:
 // isolado (sem ataques, reforços ou movimentos) e com o bônus do continente suspenso. Uma névoa por vez no mapa.
 export const NUKE_MULT = 2;
@@ -59,6 +60,7 @@ export const nukeDamage = (s) => NUKE_MULT * tradeValue(s.trades);
 export function nukeBlock(s, p, to) {
   if (!s.opts || !s.opts.nukes) return 'Esta partida não tem ogiva.';
   if (s.phase !== 'play' || s.turn !== p || s.step !== 'reinforce') return 'A ogiva só pode ser lançada no início do seu turno, no lugar de uma troca de cartas.';
+  if (s.placed) return 'A ogiva custa o turno inteiro: só pode ser lançada antes de colocar qualquer reforço.';
   if (s.fog) return 'Já há uma névoa nuclear no mapa. Só depois que ela se dissipar.';
   const last = s.players[p].lastTrade;
   if (last !== 'normal') return last === 'nuke' ? 'Depois de uma ogiva, a sua próxima troca precisa ser normal.' : 'A sua primeira troca precisa ser normal.';
@@ -152,7 +154,7 @@ function startTurn(s) {
   s.step = 'reinforce';
   s.occupy = null; s.movable = null; s.roll = null;
   s.players[p].conquered = false;
-  s.noAttack = false;
+  s.noAttack = false; s.placed = false;
   // a névoa dura até a vez voltar a quem lançou (ou até ele sair do jogo)
   if (s.fog && (s.fog.by === p || !s.players[s.fog.by].alive)) { s.ev.push({ t: 'fogEnd', to: s.fog.t }); log(s, `A névoa sobre ${TERR[s.fog.t].n} se dissipou.`); s.fog = null; }
   let base = Math.max(3, Math.floor(owned(s, p) / 2));
@@ -384,7 +386,7 @@ function applyAction(s, p, a, rng) {
       const fromFree = Math.min(n, s.pool.free);
       s.pool.free -= fromFree; placed += fromFree;
       if (!placed) return 'Os exércitos restantes são bônus de outro continente.';
-      t.a += placed;
+      t.a += placed; s.placed = true;
       s.ev.push({ t: 'place', p, to: a.t0, k: placed });
       if (poolTotal(s) === 0) {
         if (s.round === 0) { log(s, `${pl.name} posicionou seus exércitos.`); nextTurn(s, rng); }
@@ -501,15 +503,15 @@ function applyAction(s, p, a, rng) {
       const d = T[a.to], def = d.o, v = tradeValue(s.trades), lost = Math.min(d.a - 1, NUKE_MULT * v);
       s.trades++; // ocupa um degrau da escada de trocas
       d.a -= lost;
-      pl.lastTrade = 'nuke'; s.noAttack = true;
+      pl.lastTrade = 'nuke';
       s.fog = { t: a.to, by: p };
       s.ev.push({ t: 'nuke', p, to: a.to, def, lost, v });
       log(s, `${pl.name} lançou a ogiva sobre ${TERR[a.to].n} (${pname(s, def)}): ${lost} exército${lost === 1 ? '' : 's'} destruído${lost === 1 ? '' : 's'}.`);
       for (const x of s.pacts.filter((q) => q.a === p || q.b === p)) { s.ev.push({ t: 'pactVoid', a: x.a, b: x.b }); log(s, `O pacto entre ${pname(s, x.a)} e ${pname(s, x.b)} acabou com o lançamento.`); }
       s.pacts = s.pacts.filter((q) => q.a !== p && q.b !== p);
-      if (s.offer && s.offer.from === p) s.offer = null;
-      // se ainda sobraram 5 cartas ou mais, a troca obrigatória acontece na hora
-      for (let tr; pl.cards.length >= 5 && (tr = bestTrade(pl.cards, T, p));) doTrade(s, p, tr, true);
+      // a ogiva custa o turno: o reforço que restava se perde e a vez passa (cartas que sobrarem ficam para a próxima vez)
+      s.pool = { free: 0, cont: {} };
+      nextTurn(s, rng);
       return null;
     }
     case 'endTurn': {
@@ -545,7 +547,7 @@ export function botAction(s, o = {}) {
     if (tr && !o.noNuke && !nukeBlock(s, p)) { // ogiva só quando compensa: a maior pilha do adversário mais forte, se perder bem mais do que a troca daria
       const lead = s.players.map((q, i) => i).filter((i) => i !== p && s.players[i].alive).sort((a, b) => owned(s, b) - owned(s, a))[0];
       const tg = T.map((t, i) => i).filter((i) => T[i].o === lead && !nukeBlock(s, p, i)).sort((a, b) => T[b].a - T[a].a)[0];
-      if (tg != null && owned(s, lead) >= owned(s, p) && Math.min(T[tg].a - 1, nukeDamage(s)) >= 1.5 * tradeValue(s.trades)) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
+      if (tg != null && owned(s, lead) >= owned(s, p) && Math.min(T[tg].a - 1, nukeDamage(s)) >= 1.5 * (tradeValue(s.trades) + poolTotal(s))) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
     }
     if (tr && (pl.cards.length >= 5 || poolTotal(s) > 0)) return { t: 'trade', cards: tr };
     const mine = T.map((t, i) => i).filter((i) => T[i].o === p && !(s.fog && s.fog.t === i));

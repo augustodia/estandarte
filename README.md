@@ -56,14 +56,14 @@ Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes
 - **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 3 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Romper antes só no início do próprio turno, ao custo de 3 exércitos do reforço, e todos são avisados. Com dois jogadores em jogo os pactos acabam.
 - **Ogiva nuclear:** no reforço, em vez de trocar 3 cartas por exércitos, o jogador pode lançar a ogiva em qualquer território inimigo.
   - O alvo perde o dobro do que a troca valeria (troca de 8 destrói até 16), sempre sobrando 1 exército, e não muda de dono.
-  - Quem lança entrega as 3 cartas, não recebe os exércitos da troca e não ataca naquele turno (o reforço normal e o remanejamento continuam).
+  - Lançar custa o turno inteiro: quem lança entrega as 3 cartas, não recebe os exércitos da troca nem o reforço do turno, não ataca e não remaneja. Por isso a ogiva só pode ser lançada antes de colocar qualquer reforço.
   - O alvo fica sob névoa até a vez voltar a quem lançou: não ataca, não é atacado, não recebe reforços nem movimentos, e o continente dele não paga bônus a ninguém.
   - Só existe uma névoa no mapa por vez.
   - A primeira troca de cada jogador é sempre normal e, depois de uma ogiva, a troca seguinte dele também.
   - O lançamento ocupa um degrau da escada de trocas (4, 6, 8, 10, 12, 15, +5…): a próxima troca de qualquer jogador vale o degrau seguinte.
   - Os pactos de quem lança acabam na hora; não se lança contra parceiro de pacto nem em continente sob Cessar-fogo.
   - Com 5 cartas e direito à ogiva, a troca continua obrigatória, mas o jogo deixa escolher em vez de trocar sozinho. Se o tempo acabar, faz a troca normal.
-  - Bots só lançam contra a maior pilha do adversário com mais territórios, e só quando o dano compensa.
+  - Bots só lançam contra a maior pilha do adversário com mais territórios, e só quando o dano compensa a troca e o reforço perdidos.
 
 ## Controles
 
@@ -71,6 +71,8 @@ Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes
 - **Ataque:** toque direto no inimigo (a origem passa a ser o seu vizinho com mais exércitos) ou toque antes na origem; linhas mostram os alvos possíveis. Escolha de 1 a 3 dados com − e + e toque em "Atacar", ou toque de novo no alvo. "Auto" repete o ataque com o máximo de dados até conquistar ou não poder mais.
 - **Conquista e remanejamento:** − e + definem quantos exércitos mover.
 - **Sempre deitado:** durante a partida a tela fica deitada mesmo com o celular em pé (ela gira 90° e você vira o aparelho); o mapa ocupa a tela e os controles ficam numa faixa no rodapé. Dá para voltar ao modo automático no menu ☰.
+
+Encerrar os ataques e encerrar o turno pedem dois toques: o primeiro arma o botão ("Confirmar?"), o segundo executa. Toques colados não contam, e o botão desarma sozinho em 4 segundos.
 
 ## O que cada um vê durante a partida
 

@@ -31,7 +31,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '25'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '26'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -500,8 +500,6 @@ let aimLayer = null, fogLayer = null;
   const defs = el('defs', {}, svg);
   const halo = el('radialGradient', { id: 'foghalo' }, defs);
   el('stop', { offset: '.45', 'stop-color': '#58ff3c', 'stop-opacity': '.5' }, halo); el('stop', { offset: '1', 'stop-color': '#58ff3c', 'stop-opacity': '0' }, halo);
-  const gr = el('radialGradient', { id: 'fogpuff' }, defs);
-  el('stop', { offset: '0', 'stop-color': '#b6ff7a', 'stop-opacity': '.55' }, gr); el('stop', { offset: '.55', 'stop-color': '#4be04a', 'stop-opacity': '.28' }, gr); el('stop', { offset: '1', 'stop-color': '#2fae3a', 'stop-opacity': '0' }, gr);
   // ligações por mar: um traço de costa a costa, por cima da terra, para ficar sempre visível
   const link = (x1, y1, x2, y2) => { el('line', { class: 'sea-case', x1, y1, x2, y2 }, routes); el('line', { class: 'sea-route', x1, y1, x2, y2 }, routes); };
   SEA.forEach(([, , x1, y1, x2, y2, wrap]) => {
@@ -685,28 +683,64 @@ function boom(t) {
   setTimeout(() => w.classList.remove('boom'), 1600);
   for (let k = 0; k < 3; k++) later(el('circle', { class: 'fx-shock', cx: TERR[t].x, cy: TERR[t].y, r: 10, style: `animation-delay:${k * 0.18}s` }, fx), 2200);
 }
-// Névoa nuclear sobre o território isolado: um halo verde no formato dele e nuvens que derivam devagar.
+// Névoa nuclear sobre o território isolado: fumaça de verdade, feita de duas texturas de ruído fractal geradas uma vez
+// e ladrilhadas em três camadas que deslizam em direções e velocidades diferentes, recortadas por uma máscara de borda
+// esfumada no formato do território (a fumaça vaza um pouco para os vizinhos e para o mar).
+let smokeTex = null;
+function smokeTextures() {
+  if (smokeTex) return smokeTex;
+  const make = (seed, lo, hi, c0, c1, alpha) => {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const g = cv.getContext('2d'), img = g.createImageData(N, N), sm = (t) => t * t * (3 - 2 * t);
+    let a = seed; const rnd = () => { a = (Math.imul(a, 1664525) + 1013904223) >>> 0; return a / 4294967296; };
+    const octs = [4, 8, 16, 32, 64].map((P) => ({ P, v: Float32Array.from({ length: P * P }, rnd) })); // períodos que dividem N: a textura emenda nas bordas
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let n = 0, amp = 0.5, tot = 0;
+      for (const { P, v } of octs) {
+        const fx = (x / N) * P, fy = (y / N) * P, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = sm(fx - x0), ty = sm(fy - y0), x1 = (x0 + 1) % P, y1 = (y0 + 1) % P;
+        n += ((v[y0 * P + x0] * (1 - tx) + v[y0 * P + x1] * tx) * (1 - ty) + (v[y1 * P + x0] * (1 - tx) + v[y1 * P + x1] * tx) * ty) * amp;
+        tot += amp; amp *= 0.5;
+      }
+      const k = sm(Math.min(1, Math.max(0, (n / tot - lo) / (hi - lo)))), o = (y * N + x) * 4;
+      for (let q = 0; q < 3; q++) img.data[o + q] = c0[q] + (c1[q] - c0[q]) * k;
+      img.data[o + 3] = 255 * alpha * k;
+    }
+    g.putImageData(img, 0, 0);
+    return cv.toDataURL();
+  };
+  smokeTex = { dense: make(7, 0.36, 0.66, [22, 70, 30], [118, 214, 84], 0.92), wisp: make(91, 0.5, 0.74, [130, 235, 105], [232, 255, 200], 0.9) };
+  return smokeTex;
+}
 function drawFog(v) {
   const key = v.fog && v.phase === 'play' ? v.fog.t : null;
   if (key === app.fogKey) return;
   app.fogKey = key;
   fogLayer.replaceChildren();
   if (key == null) return;
-  const t = TERR[key], b = nodes[key].poly.getBBox(), R = Math.max(b.width, b.height) / 2;
-  el('ellipse', { class: 'fog-glow', cx: b.x + b.width / 2, cy: b.y + b.height / 2, rx: b.width * 0.78 + 14, ry: b.height * 0.78 + 14, fill: 'url(#foghalo)' }, fogLayer);
+  const t = TERR[key], b = nodes[key].poly.getBBox(), M = 46, tex = smokeTextures();
+  const x0 = b.x - M, y0 = b.y - M, w = b.width + 2 * M, h = b.height + 2 * M, cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+  const mask = el('mask', { id: 'fogmask', maskUnits: 'userSpaceOnUse', x: x0, y: y0, width: w, height: h }, fogLayer);
+  for (let sw = 72; sw >= 6; sw -= 6) el('path', { d: t.d, fill: 'none', stroke: '#fff', 'stroke-opacity': 0.1, 'stroke-width': sw, 'stroke-linejoin': 'round' }, mask);
+  el('path', { d: t.d, fill: '#fff', 'fill-rule': 'evenodd' }, mask);
+  el('ellipse', { class: 'fog-glow', cx, cy, rx: b.width * 0.78 + 18, ry: b.height * 0.78 + 18, fill: 'url(#foghalo)' }, fogLayer);
+  const body = el('g', { mask: 'url(#fogmask)' }, fogLayer);
+  el('rect', { x: x0, y: y0, width: w, height: h, fill: '#0c2a12', opacity: 0.38 }, body);
+  const layer = (href, tile, dx, dy, secs, op, cls = '') => { // ladrilhos cobrindo a área, deslocando exatamente um ladrilho por ciclo (emenda perfeita)
+    const g = el('g', { class: 'smoke ' + cls, opacity: op, style: `--dx:${dx * tile}px;--dy:${dy * tile}px;animation-duration:${secs}s` }, body);
+    for (let yy = y0 - tile; yy < y0 + h + tile; yy += tile) for (let xx = x0 - tile; xx < x0 + w + tile; xx += tile) el('image', { href, x: xx, y: yy, width: tile + 0.5, height: tile + 0.5, preserveAspectRatio: 'none' }, g);
+  };
+  layer(tex.dense, 300, 0, -1, 70, 0.75);
+  layer(tex.dense, 140, 1, -1, 26, 0.9);
+  layer(tex.wisp, 210, -1, 0, 34, 0.85, 'wisp');
+  for (let k = 0; k < 7; k++) el('circle', { class: 'fog-ember', cx: (cx + (((k * 53) % 100) / 100 - 0.5) * b.width * 0.7).toFixed(1), cy: (cy + (((k * 29) % 100) / 100 - 0.3) * b.height * 0.6).toFixed(1), r: 1.6, style: `animation-duration:${3.5 + (k % 3) * 1.2}s;animation-delay:${-k * 0.9}s` }, body);
   el('path', { class: 'fog-fill', d: t.d, 'fill-rule': 'evenodd' }, fogLayer);
-  for (let k = 0; k < 8; k++) {
-    const ang = k * 2.4, rr = R * (0.15 + 0.5 * ((k * 37) % 10) / 10);
-    const g = el('g', { class: 'fog-drift', style: `animation-duration:${7 + (k % 4) * 2.3}s;animation-delay:${-k * 1.7}s` }, fogLayer);
-    el('circle', { class: 'fog-puff', cx: (b.x + b.width / 2 + Math.cos(ang) * rr).toFixed(1), cy: (b.y + b.height / 2 + Math.sin(ang) * rr * 0.7).toFixed(1), r: (R * (0.45 + (k % 3) * 0.14)).toFixed(1), fill: 'url(#fogpuff)' }, g);
-  }
 }
 function confirmNuke(t) {
   const v = app.view, me = v.turn, d = v.terr[t], lost = Math.min(d.a - 1, nukeDamage(v)), own = v.players[d.o];
   const mine = v.pacts.filter((x) => x.a === me || x.b === me).length;
   modal(`<h3 class="rad">Lançar a ogiva?</h3>
     <p style="color:var(--ink);font-size:16px">Alvo: <b>${TERR[t].n}</b>, de <b style="color:${COLORS[own.color].c}">${esc(own.name)}</b>. Perde <b>${lost}</b> de ${d.a} exércitos e fica isolado por uma rodada.</p>
-    <ul><li>Você entrega 3 cartas e não recebe os ${tradeValue(v.trades)} exércitos da troca.</li><li>Você não ataca neste turno.</li><li>${CONTINENTS[TERR[t].c].n} não paga bônus a ninguém enquanto durar a névoa.</li>${mine ? `<li>Seus pactos acabam (${mine}).</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
+    <ul><li><b>Seu turno acaba aqui:</b> você perde o reforço deste turno (${poolTotal(v)}), não ataca e não remaneja.</li><li>Você entrega 3 cartas e não recebe os ${tradeValue(v.trades)} exércitos da troca.</li><li>${CONTINENTS[TERR[t].c].n} não paga bônus a ninguém enquanto durar a névoa.</li>${mine ? `<li>Seus pactos acabam (${mine}).</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
     <div class="row"><button class="btn rad" data-m="fire">Lançar</button><button class="btn" data-m="close">Cancelar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     if (e.target.dataset.m !== 'fire') return;
@@ -1069,7 +1103,7 @@ function renderGame() {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     const left = `<b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}`;
     const tri = Array.isArray(meP.cards) && !nukeBlock(v, v.turn) ? nukeTrade(meP.cards, T, v.turn) : null; // pode pagar uma ogiva com as cartas?
-    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói até <b>${nukeDamage(v)}</b> exércitos e você abre mão dos ${tradeValue(v.trades)} da troca.`
+    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói até <b>${nukeDamage(v)}</b> exércitos e custa o seu turno inteiro.`
       : mustTrade(v) ? (tri ? 'Você tem 5 ou mais cartas: troque ou lance a ogiva antes de reforçar.' : 'Você tem 5 ou mais cartas: troque antes de reforçar.') : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar · ${left}`;
     const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
     btns = (rng ? stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="place">Colocar</button>' : '')
@@ -1110,6 +1144,12 @@ function renderGame() {
   }
   const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span><span>Você: ${esc(meP.name)}</span></span>`;
   $('#bar').innerHTML = `<div class="msg">${msg}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
+  if (app.confirm && (app.confirm.n !== v.n || !can)) app.confirm = null;
+  const ask = app.confirm && $(`#bar [data-do=${app.confirm.k}]`);
+  if (ask) {
+    ask.textContent = 'Confirmar?'; ask.classList.add('ask'); ask.classList.remove('ghost');
+    $('#bar .msg').textContent = app.confirm.k === 'endAttack' ? 'Encerrar os ataques deste turno? Toque de novo para confirmar.' : 'Encerrar o seu turno? Toque de novo para confirmar.';
+  }
 }
 
 // Tela de vitória: ocupa a tela toda, na cor do vencedor, com o objetivo cumprido e a classificação final.
@@ -1152,7 +1192,7 @@ function showExtras() {
   const v = app.view, me = app.role === 'guest' ? app.me : viewer();
   const myTurn = canAct() && v.turn === me, alive = v.players.filter((p) => p.alive).length;
   const tag = (i) => `<b style="color:${COLORS[v.players[i].color].c}">${esc(v.players[i].name)}</b>`;
-  let h = '';
+  let h = '<div class="shead"><h3>Regras extras</h3><button class="x" data-m="close" aria-label="Fechar">✕</button></div>';
   if (v.opts.events) {
     h += `<h3>Evento da rodada</h3>${v.event ? `<p style="color:var(--ink);font-size:16px"><b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}</p>` : '<p>Rodada calma: nenhum evento em vigor.</p>'}
       <p>Os eventos aparecem de surpresa, a partir da rodada 2: valem para todos por uma rodada e depois vem ao menos uma rodada calma.</p>
@@ -1178,10 +1218,10 @@ function showExtras() {
     const why = myTurn ? nukeBlock(v, me) : null;
     h += `<h3>Ogiva nuclear</h3>${v.fog ? `<p style="color:var(--ink);font-size:16px"><b class="rad">Névoa sobre ${TERR[v.fog.t].n}</b>, lançada por ${tag(v.fog.by)}. Dissipa quando a vez voltar para quem lançou.</p>` : ''}
       <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói até <b>${nukeDamage(v)}</b> exércitos (o dobro do valor da troca), sempre sobrando 1.</p>
-      <ul class="evlist"><li>Você não recebe os exércitos da troca e não ataca no turno.</li><li>O alvo fica isolado até a sua vez voltar: não ataca, não é atacado, não recebe reforços nem movimentos. O continente dele não paga bônus.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>Os pactos de quem lança acabam na hora.</li></ul>
+      <ul class="evlist"><li>Custa o turno inteiro: você não recebe os exércitos da troca nem o reforço, não ataca e não remaneja. Por isso só pode ser lançada antes de colocar qualquer reforço.</li><li>O alvo fica isolado até a sua vez voltar: não ataca, não é atacado, não recebe reforços nem movimentos. O continente dele não paga bônus.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>Os pactos de quem lança acabam na hora.</li></ul>
       ${why && v.step === 'reinforce' ? `<p>${esc(why)}</p>` : ''}`;
   }
-  modal(h + '<button class="btn" data-m="close">Fechar</button>');
+  modal(h + '<button class="btn primary" data-m="close">Fechar</button>');
   $('#modal .sheet').onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -1195,6 +1235,21 @@ function showExtras() {
       $('#modal .sheet').onclick = (ev) => { if (ev.target.dataset.m === 'sure') { closeModal(); act({ t: 'pactBreak', with: w }); } };
     }
   };
+}
+// Encerrar ataques ou o turno pede dois toques: o primeiro arma o botão ("Confirmar?"), o segundo executa.
+// Toques colados (menos de 0,35 s) não contam, para um toque duplo sem querer não confirmar.
+let confirmTimer = null;
+function confirmEnd(k, run) {
+  const c = app.confirm, now = Date.now();
+  if (c && c.k === k && c.n === app.view.n) {
+    if (now - c.at < 350) return;
+    app.confirm = null; clearTimeout(confirmTimer);
+    return run();
+  }
+  app.confirm = { k, n: app.view.n, at: now };
+  clearTimeout(confirmTimer);
+  confirmTimer = setTimeout(() => { app.confirm = null; if (app.view) renderGame(); }, 4000);
+  renderGame();
 }
 function showObjective() {
   const v = app.view, me = v.players[app.role === 'guest' ? app.me : viewer()];
@@ -1241,7 +1296,7 @@ function showMenu() {
   };
 }
 function showRules() {
-  modal(`<h3>Como jogar</h3>
+  modal(`<div class="shead"><h3>Como jogar</h3><button class="x" data-m="close" aria-label="Fechar">✕</button></div>
   <ul><li><b>Objetivo:</b> cada jogador recebe um objetivo secreto (🎯). Quem cumprir primeiro vence.</li>
   <li><b>Reforço:</b> no início do turno você recebe metade dos seus territórios em exércitos (mínimo 3), mais o bônus de cada continente inteiro que dominar (o bônus só pode ser colocado no próprio continente).</li>
   <li><b>Ataque:</b> a partir da 2ª rodada, ataque vizinhos com até 3 dados (precisa deixar 1 exército para trás); use − e + para escolher quantos. A defesa rola até 3. Compare do maior para o menor; empate é da defesa. “Auto” repete o ataque com o máximo de dados até conquistar ou não poder mais.</li>
@@ -1252,7 +1307,7 @@ function showRules() {
   <h3>Regras extras (opcionais)</h3>
   <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
   <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Para romper antes, só no início do seu turno e ao custo de ${PACT_PENALTY} exércitos do reforço. Com dois jogadores em jogo os pactos acabam.</li></ul>
-  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sobra ao menos 1) e fica isolado sob névoa até a sua vez voltar: sem ataques, reforços ou movimentos, e o continente dele não paga bônus. Você não ataca no turno. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
+  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sobra ao menos 1) e fica isolado sob névoa até a sua vez voltar: sem ataques, reforços ou movimentos, e o continente dele não paga bônus. Lançar custa o seu turno inteiro (sem reforço, ataque ou remanejamento), então tem de ser a primeira ação dele. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
   <h3>Conexão</h3>
   <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>
   <button class="btn" data-m="close">Fechar</button>`);
@@ -1318,8 +1373,8 @@ const actions = {
   occupyOk: () => act({ t: 'occupy', n: app.n }),
   moveOk() { const m = { t: 'move', from: app.sel, to: app.target, n: app.n }; app.target = null; act(m); },
   blitz: () => act({ t: 'attack', from: app.sel, to: app.target, blitz: true }),
-  endAttack: () => { app.sel = app.target = null; act({ t: 'endAttack' }); },
-  endTurn: () => { app.sel = app.target = null; act({ t: 'endTurn' }); },
+  endAttack: () => confirmEnd('endAttack', () => { app.sel = app.target = null; act({ t: 'endAttack' }); }),
+  endTurn: () => confirmEnd('endTurn', () => { app.sel = app.target = null; act({ t: 'endTurn' }); }),
 };
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
