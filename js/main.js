@@ -2,7 +2,8 @@ import { TERR, CONTINENTS, SEA, MAP_W, MAP_H } from './map.js';
 import {
   COLORS, SYMBOLS, OBJECTIVES, objectiveText, newGame, apply, viewFor, botAction, owned,
   poolTotal, validTrade, bestTrade, tradeValue, cardSymbol, cardName, mustTrade, handSize,
-  EVENTS, eventText, attackBlock, isSea, pactOf, botPactReply, PACT_ROUNDS, PACT_PENALTY,
+  EVENTS, eventText, attackBlock, moveBlock, pactOf, botPactReply, PACT_ROUNDS, PACT_PENALTY,
+  nukeBlock, nukeDamage, nukeTrade,
 } from './game.js';
 import { createInvite, joinInvite, initCert, myFingerprint, armSpare, useSpare } from './net.js';
 import { play, unlock, soundOn, setSound } from './sound.js';
@@ -25,12 +26,12 @@ const app = {
   lobby: null,     // convidado: lista de assentos recebida
   sel: null, target: null, n: 1, nKey: '', info: null, // n: quantidade no seletor − / +
   lastRoll: 0, lastViewer: null, botTimer: null,
-  cfg: { secs: 120, events: false, pacts: false }, // tempo por turno em segundos (0 = livre) e regras opcionais
-  spare: null, autoOn: false, offerKey: null, offerOpen: false, // convidado: conexão reserva; proposta de pacto em aberto
+  cfg: { secs: 120, events: false, pacts: false, nukes: false }, // tempo por turno em segundos (0 = livre) e regras opcionais
+  spare: null, autoOn: false, offerKey: null, offerOpen: false, nukeMode: false, fogKey: null, extrasOpen: false, // convidado: conexão reserva; proposta de pacto em aberto
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '24'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '25'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -40,12 +41,12 @@ function toast(msg, ms = 2600) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), ms);
 }
-let modalCleanup = null;
+let modalCleanup = null, modalAt = 0;
 function modal(html, onClose) {
   closeModal();
   $('#modal .sheet').onclick = null;
   $('#modal .sheet').innerHTML = html;
-  $('#modal').hidden = false;
+  $('#modal').hidden = false; modalAt = Date.now();
   modalCleanup = onClose || null;
 }
 function closeModal() {
@@ -270,7 +271,7 @@ async function hostInvite(targetSeat = null) {
 }
 
 function hostBegin() {
-  app.game = newGame(app.seats.map((s) => ({ name: s.name, color: s.color, ctrl: s.ctrl })), undefined, { events: !!app.cfg.events, pacts: !!app.cfg.pacts });
+  app.game = newGame(app.seats.map((s) => ({ name: s.name, color: s.color, ctrl: s.ctrl })), undefined, { events: !!app.cfg.events, pacts: !!app.cfg.pacts, nukes: !!app.cfg.nukes });
   app.game.limit = app.cfg.secs;
   app.sel = app.target = null; app.lastViewer = null; app.turnKey = null; app.evN = null;
   show('game'); sync();
@@ -291,7 +292,7 @@ function sync() {
   app.seats.forEach((s, si) => {
     if (!s.link) return;
     if (g) { const pi = playerOfSeat(si); s.link.send({ t: 'state', s: viewFor(g, pi), you: pi, left, limit: g.limit || 0 }); }
-    else s.link.send({ t: 'lobby', seats: pub, you: si, secs: app.cfg.secs, events: !!app.cfg.events, pacts: !!app.cfg.pacts });
+    else s.link.send({ t: 'lobby', seats: pub, you: si, secs: app.cfg.secs, events: !!app.cfg.events, pacts: !!app.cfg.pacts, nukes: !!app.cfg.nukes });
   });
   if (g) {
     store.set('save3', { seats: app.seats.map(({ link, seen, lag, spare, spareAt, arming, ...s }) => s), game: g });
@@ -454,6 +455,13 @@ function guestScan() {
 }
 
 /* ---------- sala ---------- */
+// Regras opcionais, ligadas pelo anfitrião numa seção recolhível da sala.
+const EXTRAS = [
+  ['events', 'Eventos de rodada', 'De vez em quando, um evento surpresa muda as regras para todos por uma rodada.'],
+  ['pacts', 'Pactos', 'Dois jogadores combinam não se atacar por 3 rodadas. Romper antes custa exércitos.'],
+  ['nukes', 'Ogiva nuclear', 'No lugar de uma troca de cartas, destrói tropas de um território inimigo e o isola por uma rodada.'],
+];
+document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('extras')) app.extrasOpen = e.target.open; }, true);
 function renderLobby() {
   const host = app.role === 'host';
   const seats = host ? app.seats.map((s) => ({ ...s, on: s.ctrl !== 'remote' || !!s.link })) : app.lobby.seats;
@@ -465,12 +473,13 @@ function renderLobby() {
   const full = seats.length >= 6;
   $('#lobbyActions').innerHTML = host
     ? `<div class="setting">Tempo por turno<span class="chips">${[[0, 'Livre'], [60, '1 min'], [120, '2 min'], [180, '3 min']].map(([v, l]) => `<button class="chip${app.cfg.secs === v ? ' on' : ''}" data-secs="${v}">${l}</button>`).join('')}</span></div>
-       <div class="setting">Regras extras<span class="chips"><button class="chip${app.cfg.events ? ' on' : ''}" data-opt="events" aria-pressed="${!!app.cfg.events}">Eventos de rodada</button><button class="chip${app.cfg.pacts ? ' on' : ''}" data-opt="pacts" aria-pressed="${!!app.cfg.pacts}">Pactos</button></span></div>
+       <details class="extras"${app.extrasOpen ? ' open' : ''}><summary>Regras extras<span>${EXTRAS.filter(([k]) => app.cfg[k]).map(([, n]) => n).join(', ') || 'nenhuma ligada'}</span></summary>
+         ${EXTRAS.map(([k, n, d]) => `<button class="opt${app.cfg[k] ? ' on' : ''}" data-opt="${k}" aria-pressed="${!!app.cfg[k]}"><span class="sw"></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</details>
        <div class="row"><button class="btn" data-do="invite" ${full ? 'disabled' : ''}>Convidar por QR</button></div>
        <div class="row"><button class="btn small" data-do="addLocal" ${full ? 'disabled' : ''}>+ Jogador neste aparelho</button><button class="btn small" data-do="addBot" ${full ? 'disabled' : ''}>+ Bot</button></div>
        <button class="btn primary" data-do="begin" ${seats.length < 2 ? 'disabled' : ''}>Iniciar partida (${seats.length} jogadores)</button>
        <button class="btn ghost" data-do="leave">Sair</button>`
-    : `<p class="tag">Tempo por turno: ${app.lobby.secs ? app.lobby.secs / 60 + ' min' : 'livre'}.${app.lobby.events || app.lobby.pacts ? ` Regras extras: ${[app.lobby.events && 'eventos de rodada', app.lobby.pacts && 'pactos'].filter(Boolean).join(' e ')}.` : ''} Aguardando o anfitrião iniciar…</p><button class="btn ghost" data-do="leave">Sair</button>`;
+    : `<p class="tag">Tempo por turno: ${app.lobby.secs ? app.lobby.secs / 60 + ' min' : 'livre'}.${EXTRAS.some(([k]) => app.lobby[k]) ? ` Regras extras: ${EXTRAS.filter(([k]) => app.lobby[k]).map(([, n]) => n.toLowerCase()).join(', ')}.` : ''} Aguardando o anfitrião iniciar…</p><button class="btn ghost" data-do="leave">Sair</button>`;
 }
 
 /* ---------- mapa ---------- */
@@ -484,10 +493,15 @@ const el = (tag, attrs, parent) => {
 };
 const PAD = 30;
 const nodes = [];
-let aimLayer = null;
+let aimLayer = null, fogLayer = null;
 (function buildMap() {
-  const aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), routes = el('g', {}, svg), labels = el('g', {}, svg), aim = el('g', { class: 'aimlayer' }, svg), hits = el('g', {}, svg);
-  aimLayer = aim;
+  const aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), routes = el('g', {}, svg), fogs = el('g', { class: 'foglayer' }, svg), labels = el('g', {}, svg), aim = el('g', { class: 'aimlayer' }, svg), hits = el('g', {}, svg);
+  aimLayer = aim; fogLayer = fogs;
+  const defs = el('defs', {}, svg);
+  const halo = el('radialGradient', { id: 'foghalo' }, defs);
+  el('stop', { offset: '.45', 'stop-color': '#58ff3c', 'stop-opacity': '.5' }, halo); el('stop', { offset: '1', 'stop-color': '#58ff3c', 'stop-opacity': '0' }, halo);
+  const gr = el('radialGradient', { id: 'fogpuff' }, defs);
+  el('stop', { offset: '0', 'stop-color': '#b6ff7a', 'stop-opacity': '.55' }, gr); el('stop', { offset: '.55', 'stop-color': '#4be04a', 'stop-opacity': '.28' }, gr); el('stop', { offset: '1', 'stop-color': '#2fae3a', 'stop-opacity': '0' }, gr);
   // ligações por mar: um traço de costa a costa, por cima da terra, para ficar sempre visível
   const link = (x1, y1, x2, y2) => { el('line', { class: 'sea-case', x1, y1, x2, y2 }, routes); el('line', { class: 'sea-route', x1, y1, x2, y2 }, routes); };
   SEA.forEach(([, , x1, y1, x2, y2, wrap]) => {
@@ -665,6 +679,42 @@ function spotlight(ids, ms = 1000) {
   clearTimeout(app.spotTimer);
   app.spotTimer = setTimeout(() => { app.spot = null; renderGame(); }, ms + 30);
 }
+// Explosão da ogiva: clarão na tela inteira e onda de choque saindo do alvo.
+function boom(t) {
+  const w = $('#mapwrap'); w.classList.remove('boom'); void w.offsetWidth; w.classList.add('boom');
+  setTimeout(() => w.classList.remove('boom'), 1600);
+  for (let k = 0; k < 3; k++) later(el('circle', { class: 'fx-shock', cx: TERR[t].x, cy: TERR[t].y, r: 10, style: `animation-delay:${k * 0.18}s` }, fx), 2200);
+}
+// Névoa nuclear sobre o território isolado: um halo verde no formato dele e nuvens que derivam devagar.
+function drawFog(v) {
+  const key = v.fog && v.phase === 'play' ? v.fog.t : null;
+  if (key === app.fogKey) return;
+  app.fogKey = key;
+  fogLayer.replaceChildren();
+  if (key == null) return;
+  const t = TERR[key], b = nodes[key].poly.getBBox(), R = Math.max(b.width, b.height) / 2;
+  el('ellipse', { class: 'fog-glow', cx: b.x + b.width / 2, cy: b.y + b.height / 2, rx: b.width * 0.78 + 14, ry: b.height * 0.78 + 14, fill: 'url(#foghalo)' }, fogLayer);
+  el('path', { class: 'fog-fill', d: t.d, 'fill-rule': 'evenodd' }, fogLayer);
+  for (let k = 0; k < 8; k++) {
+    const ang = k * 2.4, rr = R * (0.15 + 0.5 * ((k * 37) % 10) / 10);
+    const g = el('g', { class: 'fog-drift', style: `animation-duration:${7 + (k % 4) * 2.3}s;animation-delay:${-k * 1.7}s` }, fogLayer);
+    el('circle', { class: 'fog-puff', cx: (b.x + b.width / 2 + Math.cos(ang) * rr).toFixed(1), cy: (b.y + b.height / 2 + Math.sin(ang) * rr * 0.7).toFixed(1), r: (R * (0.45 + (k % 3) * 0.14)).toFixed(1), fill: 'url(#fogpuff)' }, g);
+  }
+}
+function confirmNuke(t) {
+  const v = app.view, me = v.turn, d = v.terr[t], lost = Math.min(d.a - 1, nukeDamage(v)), own = v.players[d.o];
+  const mine = v.pacts.filter((x) => x.a === me || x.b === me).length;
+  modal(`<h3 class="rad">Lançar a ogiva?</h3>
+    <p style="color:var(--ink);font-size:16px">Alvo: <b>${TERR[t].n}</b>, de <b style="color:${COLORS[own.color].c}">${esc(own.name)}</b>. Perde <b>${lost}</b> de ${d.a} exércitos e fica isolado por uma rodada.</p>
+    <ul><li>Você entrega 3 cartas e não recebe os ${tradeValue(v.trades)} exércitos da troca.</li><li>Você não ataca neste turno.</li><li>${CONTINENTS[TERR[t].c].n} não paga bônus a ninguém enquanto durar a névoa.</li>${mine ? `<li>Seus pactos acabam (${mine}).</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
+    <div class="row"><button class="btn rad" data-m="fire">Lançar</button><button class="btn" data-m="close">Cancelar</button></div>`);
+  $('#modal .sheet').onclick = (e) => {
+    if (e.target.dataset.m !== 'fire') return;
+    const cards = nukeTrade(app.view.players[me].cards, app.view.terr, me);
+    closeModal(); app.nukeMode = false;
+    if (cards) act({ t: 'nuke', cards, to: t });
+  };
+}
 function shake(big) { svg.classList.remove('shake', 'shake2'); void svg.getBoundingClientRect(); svg.classList.add(big ? 'shake2' : 'shake'); }
 
 const PHASE_ALERT = {
@@ -716,6 +766,11 @@ function processEvents(v) {
     else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); play('dead'); }
     else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p), !mine(e.p)); play('timeout'); }
     else if (e.t === 'win') { play('win'); buzz([150, 80, 150, 80, 300, 80, 400]); }
+    else if (e.t === 'nuke') {
+      boom(e.to); shake(true); spotlight([e.to], 2600); play('nuke'); buzz([300, 80, 500]);
+      flash('Ogiva nuclear!', '#7dff4a', `${nm(e.p)} atingiu ${TERR[e.to].n} (${nm(e.def)}): −${e.lost}`, 2600, true);
+    } else if (e.t === 'fogEnd') flash(`A névoa sobre ${TERR[e.to].n} se dissipou`, '#7dff4a', '', 1100, false, true);
+    else if (e.t === 'pactVoid') { if (mine(e.a) || mine(e.b)) flash('Pacto encerrado', '#e2b04a', `${nm(e.a)} e ${nm(e.b)} · acabou com a ogiva`, 1500, false, true); }
     else if (e.t === 'eventEnd') flash(`${EVENTS[e.k].n} terminou`, '#e2b04a', '', 1000, false, true);
     else if (e.t === 'event') { flash(EVENTS[e.k].n, '#e2b04a', eventText(e), 2400, true); play('phase'); }
     else if (e.t === 'pactAsk') { if (!mine(e.b)) flash(mine(e.a) ? `Proposta enviada a ${nm(e.b)}` : `${nm(e.a)} propôs um pacto a ${nm(e.b)}`, col(e.a), '', 1100, false, true); }
@@ -736,7 +791,7 @@ function processEvents(v) {
 function forceEnd() {
   const g = app.game, p = g.turn, key = g.round + ':' + g.turn;
   const same = () => g.phase === 'play' && g.round + ':' + g.turn === key;
-  for (let i = 0; i < 80 && same() && g.step === 'reinforce'; i++) if (apply(g, g.turn, botAction(g))) break;
+  for (let i = 0; i < 80 && same() && g.step === 'reinforce'; i++) if (apply(g, g.turn, botAction(g, { noNuke: true }))) break; // o tempo acabou: reforça e troca, mas nunca lança a ogiva pelo jogador
   if (same() && g.occupy) apply(g, g.turn, { t: 'occupy', n: 0 });
   if (same() && g.step === 'attack') apply(g, g.turn, { t: 'endAttack' });
   if (same() && g.step === 'move') apply(g, g.turn, { t: 'endTurn' });
@@ -799,15 +854,20 @@ function actAs(p, a) {
   if (err) toast(err);
   sync();
 }
-const seaShut = (v, a, b) => !!(v.event && v.event.k === 'sea' && isSea(a, b));
 function tapTerritory(t) {
   const v = app.view;
   if (!v) return;
   app.info = t;
   const me = v.turn, T = v.terr, mine = T[t].o === me, adj = (a, b) => TERR[a].adj.includes(b);
   if (canAct() && !v.occupy) {
+    if (app.nukeMode) { // escolhendo o alvo da ogiva
+      const why = nukeBlock(v, me, t);
+      if (why) toast(why, 3800); else confirmNuke(t);
+      return renderGame();
+    }
     if (v.step === 'reinforce') {
       if (!mine) app.sel = null;
+      else if (v.fog && v.fog.t === t) { app.sel = null; toast(`Névoa nuclear: ${TERR[t].n} não recebe reforços até ela se dissipar.`, 3600); }
       else if (mustTrade(v)) toast('Com 5 cartas é obrigatório trocar antes.');
       else if (v.pool.free + (v.pool.cont[TERR[t].c] || 0) < 1) { app.sel = null; toast('Os exércitos restantes são bônus de outro continente.'); }
       else if (app.sel === t) app.n++; // tocar de novo no mesmo território soma 1
@@ -829,7 +889,7 @@ function tapTerritory(t) {
         else { app.sel = from; app.target = t; }
       }
     } else if (v.step === 'move') {
-      if (mine && app.sel != null && t !== app.sel && adj(app.sel, t) && seaShut(v, app.sel, t)) { app.target = null; toast('Mar revolto: as ligações por mar estão fechadas nesta rodada.', 3600); }
+      if (mine && app.sel != null && t !== app.sel && adj(app.sel, t) && moveBlock(v, app.sel, t)) { app.target = null; toast(moveBlock(v, app.sel, t), 3600); }
       else if (mine && app.sel != null && t !== app.sel && adj(app.sel, t)) app.target = t;
       else if (!mine || t === app.sel) app.sel = app.target = null;
       else if (v.movable[t] > 0) { app.sel = t; app.target = null; }
@@ -880,7 +940,11 @@ function renderGame() {
   if (v.step === 'attack' && app.sel != null && T[app.sel].a < 2) app.sel = app.target = null;
   if (v.step === 'attack' && app.sel != null && app.target != null && attackBlock(v, app.sel, app.target)) app.target = null;
 
+  if (app.nukeMode && (!can || nukeBlock(v, v.turn))) app.nukeMode = false;
+  if (app.nukeMode) app.sel = app.target = null;
+
   processEvents(v);
+  drawFog(v);
   // proposta de pacto para um jogador deste aparelho: pergunta na hora; some se a proposta vencer
   const of = v.phase === 'play' ? v.offer || null : null;
   const ofKey = of ? `${v.round}:${v.turn}:${of.from}:${of.to}` : null;
@@ -901,7 +965,7 @@ function renderGame() {
   if (can && app.sel != null) {
     TERR[app.sel].adj.forEach((j) => {
       if (v.step === 'attack' && T[j].o !== v.turn && !attackBlock(v, app.sel, j)) targets.add(j);
-      if (v.step === 'move' && T[j].o === v.turn && v.movable[app.sel] > 0 && !seaShut(v, app.sel, j)) targets.add(j);
+      if (v.step === 'move' && T[j].o === v.turn && v.movable[app.sel] > 0 && !moveBlock(v, app.sel, j)) targets.add(j);
     });
   }
   // no reforço, quando só restam bônus de continente, apaga onde não dá para colocar
@@ -913,7 +977,7 @@ function renderGame() {
     const hl = app.target != null ? i === app.target : targets.has(i);
     // quem joga: esmaece o que não é origem nem alvo possível; quem assiste: esmaece tudo menos
     // o que o jogador da vez selecionou (ou, sem seleção, os territórios da última jogada)
-    const dim = can ? (app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0))
+    const dim = can ? app.nukeMode ? !!nukeBlock(v, v.turn, i) : (app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0))
       : v.phase === 'over' ? T[i].o !== v.winner : pk ? i !== pk.sel && i !== pk.target : spot ? !spot.has(i) : false;
     const ps = pk ? (i === pk.sel ? ' sel' : i === pk.target ? ' tgt' : '') : spot && spot.has(i) ? ' lit' : '';
     nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + ps);
@@ -941,12 +1005,12 @@ function renderGame() {
   const stepper = (unit) => `<div class="step"><button data-step="-1" aria-label="Menos"${app.n <= rng[0] ? ' disabled' : ''}>−</button><b>${app.n}${unit ? `<small>${unit}</small>` : ''}</b><button data-step="1" aria-label="Mais"${app.n >= rng[1] ? ' disabled' : ''}>+</button></div>`;
 
   // topo
-  const meP = v.players[vw], extras = !!(v.opts && (v.opts.events || v.opts.pacts));
+  const meP = v.players[vw], extras = !!(v.opts && (v.opts.events || v.opts.pacts || v.opts.nukes));
   $('#hud').innerHTML = `<div class="turn"><span class="dot" style="background:${COLORS[cur.color].c}"></span>
     <span><b>${esc(cur.name)}</b><span class="phase">${v.phase === 'over' ? 'Fim de jogo' : `${STEP[v.step]} · rodada ${v.round + 1}`}</span></span></div>
     <button class="icon" data-do="objective" aria-label="Objetivo">${ICON.goal}</button>
     <button class="icon" data-do="cards" aria-label="Cartas">${ICON.cards}<span>${handSize(meP)}</span></button>
-    ${extras ? `<button class="icon${of && offerIsMine(v) ? ' call' : ''}" data-do="extras" aria-label="${[v.opts.events && 'Evento da rodada', v.opts.pacts && 'Pactos'].filter(Boolean).join(' e ')}">${ICON.extras}${v.opts.pacts && v.pacts.length ? `<span>${v.pacts.length}</span>` : ''}</button>` : ''}
+    ${extras ? `<button class="icon${of && offerIsMine(v) ? ' call' : ''}" data-do="extras" aria-label="Regras extras">${ICON.extras}${v.opts.pacts && v.pacts.length ? `<span>${v.pacts.length}</span>` : ''}</button>` : ''}
     <button class="icon" data-do="menu" aria-label="Menu">${ICON.menu}</button>`;
 
   // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir do topo,
@@ -987,7 +1051,7 @@ function renderGame() {
   }
 
   // rodapé
-  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.`
+  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.${v.fog && v.fog.t === app.info ? ' · <b class="rad">sob névoa nuclear</b>' : ''}`
     : v.event && v.phase === 'play' ? `<b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}` : esc(v.log[v.log.length - 1] || '');
   let msg = '', btns = '', warn = '';
   if (v.phase === 'over') {
@@ -1004,10 +1068,14 @@ function renderGame() {
   } else if (v.step === 'reinforce') {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     const left = `<b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}`;
-    msg = mustTrade(v) ? 'Você tem 5 ou mais cartas: troque antes de reforçar.' : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar · ${left}`;
+    const tri = Array.isArray(meP.cards) && !nukeBlock(v, v.turn) ? nukeTrade(meP.cards, T, v.turn) : null; // pode pagar uma ogiva com as cartas?
+    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói até <b>${nukeDamage(v)}</b> exércitos e você abre mão dos ${tradeValue(v.trades)} da troca.`
+      : mustTrade(v) ? (tri ? 'Você tem 5 ou mais cartas: troque ou lance a ogiva antes de reforçar.' : 'Você tem 5 ou mais cartas: troque antes de reforçar.') : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar · ${left}`;
     const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
     btns = (rng ? stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="place">Colocar</button>' : '')
-      + (tr ? `<button class="btn small${rng ? '' : ' primary'}" data-do="autoTrade">Trocar +${tradeValue(v.trades)}</button>` : '');
+      + (tr ? `<button class="btn small${rng ? '' : ' primary'}" data-do="autoTrade">Trocar +${tradeValue(v.trades)}</button>` : '')
+      + (tri ? '<button class="btn small rad" data-do="nukeAim">Ogiva</button>' : '');
+    if (app.nukeMode) btns = '<button class="btn small" data-do="nukeCancel">Cancelar</button>';
   } else if (v.occupy) {
     msg = `Conquistou <b>${TERR[v.occupy.to].n}</b>! Um exército já entrou; levar mais quantos?`;
     btns = stepper() + '<button class="btn small primary" data-do="occupyOk">Mover</button>';
@@ -1106,6 +1174,13 @@ function showExtras() {
         : `<div class="row wrap">${cand.map((i) => `<button class="btn small" data-offer="${i}"${v.offer ? ' disabled' : ''}><span class="dot" style="background:${COLORS[v.players[i].color].c}"></span>Propor a ${esc(v.players[i].name)}</button>`).join('')}</div>`;
     } else h += '<p>Você propõe ou rompe pactos na sua vez.</p>';
   }
+  if (v.opts.nukes) {
+    const why = myTurn ? nukeBlock(v, me) : null;
+    h += `<h3>Ogiva nuclear</h3>${v.fog ? `<p style="color:var(--ink);font-size:16px"><b class="rad">Névoa sobre ${TERR[v.fog.t].n}</b>, lançada por ${tag(v.fog.by)}. Dissipa quando a vez voltar para quem lançou.</p>` : ''}
+      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói até <b>${nukeDamage(v)}</b> exércitos (o dobro do valor da troca), sempre sobrando 1.</p>
+      <ul class="evlist"><li>Você não recebe os exércitos da troca e não ataca no turno.</li><li>O alvo fica isolado até a sua vez voltar: não ataca, não é atacado, não recebe reforços nem movimentos. O continente dele não paga bônus.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>Os pactos de quem lança acabam na hora.</li></ul>
+      ${why && v.step === 'reinforce' ? `<p>${esc(why)}</p>` : ''}`;
+  }
   modal(h + '<button class="btn" data-m="close">Fechar</button>');
   $('#modal .sheet').onclick = (e) => {
     const b = e.target.closest('button');
@@ -1177,6 +1252,7 @@ function showRules() {
   <h3>Regras extras (opcionais)</h3>
   <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
   <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Para romper antes, só no início do seu turno e ao custo de ${PACT_PENALTY} exércitos do reforço. Com dois jogadores em jogo os pactos acabam.</li></ul>
+  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sobra ao menos 1) e fica isolado sob névoa até a sua vez voltar: sem ataques, reforços ou movimentos, e o continente dele não paga bônus. Você não ataca no turno. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
   <h3>Conexão</h3>
   <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>
   <button class="btn" data-m="close">Fechar</button>`);
@@ -1227,6 +1303,8 @@ const actions = {
   },
   again() { store.del('save3'); app.game = null; app.view = null; app.winShown = false; $('#win').hidden = true; show('lobby'); sync(); },
   objective: showObjective,
+  nukeAim() { app.nukeMode = true; app.sel = app.target = null; renderGame(); },
+  nukeCancel() { app.nukeMode = false; renderGame(); },
   extras: showExtras,
   land() { store.set('forceLand', store.get('forceLand') === false); applyLayout(); applyCam(); showMenu(); },
   winMap() { $('#win').hidden = true; },
@@ -1245,13 +1323,13 @@ const actions = {
 };
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
-  if (!b) { if (e.target.id === 'modal') closeModal(); return; }
+  if (!b) { if (e.target.id === 'modal' && Date.now() - modalAt > 400) closeModal(); return; } // o toque que abriu a janela não a fecha
   const d = b.dataset;
   if (d.m === 'close') return closeModal();
   if (d.do && actions[d.do]) return actions[d.do]();
   if (d.step) { const r = stepRange(app.view); if (r) { app.n = Math.max(r[0], Math.min(r[1], app.n + +d.step)); renderGame(); } return; }
   if (d.secs != null) { app.cfg.secs = +d.secs; store.set('cfg', app.cfg); return sync(); }
-  if (d.opt === 'events' || d.opt === 'pacts') { if (app.role !== 'host' || app.game) return; app.cfg[d.opt] = !app.cfg[d.opt]; store.set('cfg', app.cfg); return sync(); }
+  if (EXTRAS.some(([k]) => k === d.opt)) { if (app.role !== 'host' || app.game) return; app.cfg[d.opt] = !app.cfg[d.opt]; store.set('cfg', app.cfg); return sync(); }
   if (d.kick != null) { const s = app.seats.splice(+d.kick, 1)[0]; dropSpare(s); s.link && s.link.close(); return sync(); }
   if (d.color != null) {
     const s = app.seats[+d.color];

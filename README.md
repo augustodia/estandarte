@@ -50,10 +50,20 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 
 ## Regras extras (opcionais)
 
-Ligadas pelo anfitrião na sala, antes de começar. Desligadas, a partida é a clássica.
+Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes de começar. Desligadas, a partida é a clássica.
 
 - **Eventos de rodada:** da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar. Depois de um evento vem sempre ao menos uma rodada calma; em rodada calma a chance de sair um novo é de 45%, nunca passam mais de 3 calmas seguidas e o mesmo evento não sai duas vezes seguidas. Os eventos: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
 - **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 3 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Romper antes só no início do próprio turno, ao custo de 3 exércitos do reforço, e todos são avisados. Com dois jogadores em jogo os pactos acabam.
+- **Ogiva nuclear:** no reforço, em vez de trocar 3 cartas por exércitos, o jogador pode lançar a ogiva em qualquer território inimigo.
+  - O alvo perde o dobro do que a troca valeria (troca de 8 destrói até 16), sempre sobrando 1 exército, e não muda de dono.
+  - Quem lança entrega as 3 cartas, não recebe os exércitos da troca e não ataca naquele turno (o reforço normal e o remanejamento continuam).
+  - O alvo fica sob névoa até a vez voltar a quem lançou: não ataca, não é atacado, não recebe reforços nem movimentos, e o continente dele não paga bônus a ninguém.
+  - Só existe uma névoa no mapa por vez.
+  - A primeira troca de cada jogador é sempre normal e, depois de uma ogiva, a troca seguinte dele também.
+  - O lançamento ocupa um degrau da escada de trocas (4, 6, 8, 10, 12, 15, +5…): a próxima troca de qualquer jogador vale o degrau seguinte.
+  - Os pactos de quem lança acabam na hora; não se lança contra parceiro de pacto nem em continente sob Cessar-fogo.
+  - Com 5 cartas e direito à ogiva, a troca continua obrigatória, mas o jogo deixa escolher em vez de trocar sozinho. Se o tempo acabar, faz a troca normal.
+  - Bots só lançam contra a maior pilha do adversário com mais territórios, e só quando o dano compensa.
 
 ## Controles
 

@@ -43,6 +43,7 @@ const SOUNDS = {
   warn: () => { tone(1000, 0, 0.09, { type: 'square', vol: 0.08 }); tone(1000, 0.16, 0.09, { type: 'square', vol: 0.08 }); },
   tick: () => tone(1000, 0, 0.04, { type: 'square', vol: 0.06 }),
   timeout: () => tone(300, 0, 0.4, { to: 150, type: 'sawtooth', vol: 0.12 }),
+  nuke: () => { tone(900, 0, 0.5, { to: 140, type: 'sawtooth', vol: 0.1 }); noise(0.5, 1.6, { vol: 0.5, freq: 320 }); tone(70, 0.5, 1.5, { to: 28, vol: 0.4 }); noise(0.55, 0.5, { vol: 0.3, freq: 1800 }); },
   dead: () => tone(220, 0, 0.6, { to: 70, type: 'sawtooth', vol: 0.14 }),
   win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.13, i === 4 ? 0.6 : 0.18, { type: 'triangle', vol: 0.22 })),
 };

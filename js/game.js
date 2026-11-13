@@ -39,6 +39,34 @@ export function attackBlock(s, from, to) {
   if (e && e.k === 'ceasefire' && TERR[to].c === e.c) return `Cessar-fogo: ${CONTINENTS[e.c].n} não pode ser atacada nesta rodada.`;
   const pact = pactOf(s, s.terr[from].o, def);
   if (pact) return `Você tem um pacto com ${s.players[def].name} até o fim da rodada ${pact.until + 1}. Para atacar, rompa o pacto no início do seu turno.`;
+  if (s.fog && (s.fog.t === from || s.fog.t === to)) return fogText(s);
+  return null;
+}
+const fogText = (s) => `Névoa nuclear: ${TERR[s.fog.t].n} está isolado até a névoa se dissipar.`;
+// Motivo pelo qual não dá para mover tropas de from para to agora; null se pode.
+export function moveBlock(s, from, to) {
+  if (s.event && s.event.k === 'sea' && isSea(from, to)) return 'Mar revolto: as ligações por mar estão fechadas nesta rodada.';
+  if (s.fog && (s.fog.t === from || s.fog.t === to)) return fogText(s);
+  return null;
+}
+// ---- regra opcional: ogiva nuclear ----
+// Lançada no lugar de uma troca de cartas: o jogador entrega a trinca, não recebe os exércitos dela e não ataca no turno.
+// O alvo perde o dobro do que a troca valeria (sobra ao menos 1) e fica sob névoa até a vez voltar a quem lançou:
+// isolado (sem ataques, reforços ou movimentos) e com o bônus do continente suspenso. Uma névoa por vez no mapa.
+export const NUKE_MULT = 2;
+export const nukeDamage = (s) => NUKE_MULT * tradeValue(s.trades);
+// Motivo pelo qual p não pode lançar agora (em to, se informado); null se pode.
+export function nukeBlock(s, p, to) {
+  if (!s.opts || !s.opts.nukes) return 'Esta partida não tem ogiva.';
+  if (s.phase !== 'play' || s.turn !== p || s.step !== 'reinforce') return 'A ogiva só pode ser lançada no início do seu turno, no lugar de uma troca de cartas.';
+  if (s.fog) return 'Já há uma névoa nuclear no mapa. Só depois que ela se dissipar.';
+  const last = s.players[p].lastTrade;
+  if (last !== 'normal') return last === 'nuke' ? 'Depois de uma ogiva, a sua próxima troca precisa ser normal.' : 'A sua primeira troca precisa ser normal.';
+  if (to == null) return null;
+  const d = Number.isInteger(to) ? s.terr[to] : null;
+  if (!d || d.o === p) return 'Escolha um território inimigo como alvo.';
+  if (pactOf(s, p, d.o)) return `Você tem um pacto com ${s.players[d.o].name}. Rompa o pacto antes de lançar contra ele.`;
+  if (s.event && s.event.k === 'ceasefire' && TERR[to].c === s.event.c) return `Cessar-fogo: ${CONTINENTS[s.event.c].n} não pode ser atacada nesta rodada.`;
   return null;
 }
 export const tradeValue = (n) => (n < TRADE_TABLE.length ? TRADE_TABLE[n] : 15 + 5 * (n - 5));
@@ -88,7 +116,7 @@ const log = (s, msg) => {
 const pname = (s, i) => s.players[i].name;
 
 // seats: [{name, color, ctrl}]
-// opts: { events, pacts } ligam as regras opcionais; sem elas o jogo é o clássico.
+// opts: { events, pacts, nukes } ligam as regras opcionais; sem elas o jogo é o clássico.
 export function newGame(seats, rng = Math.random, opts = {}) {
   const n = seats.length;
   const pool = OBJECTIVES.map((_, i) => i).filter((i) => {
@@ -109,7 +137,7 @@ export function newGame(seats, rng = Math.random, opts = {}) {
     pool: { free: 0, cont: {} }, deck: shuffle([...TERR.map((_, i) => i), ...WILD], rng),
     discard: [], trades: 0, occupy: null, movable: null, roll: null, log: [], winner: null, n: 0,
     ev: [], // eventos da última ação, para animações e alertas em todos os aparelhos
-    opts: { events: !!opts.events, pacts: !!opts.pacts }, event: null, pacts: [], offer: null,
+    opts: { events: !!opts.events, pacts: !!opts.pacts, nukes: !!opts.nukes }, event: null, pacts: [], offer: null, fog: null, noAttack: false,
   };
   startTurn(s);
   return s;
@@ -124,14 +152,23 @@ function startTurn(s) {
   s.step = 'reinforce';
   s.occupy = null; s.movable = null; s.roll = null;
   s.players[p].conquered = false;
+  s.noAttack = false;
+  // a névoa dura até a vez voltar a quem lançou (ou até ele sair do jogo)
+  if (s.fog && (s.fog.by === p || !s.players[s.fog.by].alive)) { s.ev.push({ t: 'fogEnd', to: s.fog.t }); log(s, `A névoa sobre ${TERR[s.fog.t].n} se dissipou.`); s.fog = null; }
   let base = Math.max(3, Math.floor(owned(s, p) / 2));
   if (s.event && s.event.k === 'recruit') base += 2;
   if (s.event && s.event.k === 'shortage') base = Math.max(3, base - 2);
   s.pool = { free: base, cont: {} };
-  CONTINENTS.forEach((c, i) => { if (ownsContinent(s, p, i)) s.pool.cont[i] = c.bonus; });
+  CONTINENTS.forEach((c, i) => { if (ownsContinent(s, p, i) && !(s.fog && TERR[s.fog.t].c === i)) s.pool.cont[i] = c.bonus; }); // continente sob névoa não paga bônus
   s.ev.push({ t: 'turn', p });
-  // com 5 cartas ou mais a troca é obrigatória: o jogo faz sozinho, com a melhor trinca
-  for (let tr; s.players[p].cards.length >= 5 && (tr = bestTrade(s.players[p].cards, s.terr, p));) doTrade(s, p, tr, true);
+  if (s.fog && s.terr[s.fog.t].o === p && owned(s, p) === 1) { // o único território do jogador está isolado: não há onde reforçar
+    s.pool = { free: 0, cont: {} }; s.step = 'attack';
+    log(s, `Vez de ${pname(s, p)}: sob a névoa, sem reforços neste turno.`);
+    return;
+  }
+  // com 5 cartas ou mais a troca é obrigatória: o jogo faz sozinho, com a melhor trinca.
+  // Quem pode lançar a ogiva escolhe antes: a troca fica obrigatória, mas não automática.
+  if (nukeBlock(s, p)) for (let tr; s.players[p].cards.length >= 5 && (tr = bestTrade(s.players[p].cards, s.terr, p));) doTrade(s, p, tr, true);
   log(s, `Vez de ${pname(s, p)}: ${poolTotal(s)} exércitos a distribuir.`);
   checkWin(s, p);
 }
@@ -194,10 +231,33 @@ function doTrade(s, p, cards, auto) {
   s.discard.push(...cards);
   const v = tradeValue(s.trades++);
   s.pool.free += v;
-  let bonus = 0;
-  cards.forEach((c) => { if (c < NT && T[c].o === p) { T[c].a += 2; bonus++; } });
-  s.ev.push({ t: 'trade', p, v, auto: !!auto, bonus: cards.filter((c) => c < NT && T[c].o === p) });
+  pl.lastTrade = 'normal';
+  const gets = cards.filter((c) => c < NT && T[c].o === p && !(s.fog && s.fog.t === c)); // território sob névoa não recebe o +2
+  const bonus = gets.length;
+  gets.forEach((c) => { T[c].a += 2; });
+  s.ev.push({ t: 'trade', p, v, auto: !!auto, bonus: gets });
   log(s, `${pl.name} trocou cartas por ${v} exércitos${auto ? ' (troca automática)' : ''}${bonus ? ` e +2 em ${bonus} território${bonus > 1 ? 's' : ''}` : ''}.`);
+}
+// Trinca para pagar a ogiva: o contrário da melhor troca, poupa cartas de territórios do jogador e coringas.
+export function nukeTrade(hand, terr, p) {
+  let best = null, top = -1;
+  for (let a = 0; a < hand.length; a++)
+    for (let b = a + 1; b < hand.length; b++)
+      for (let c = b + 1; c < hand.length; c++) {
+        const tr = [hand[a], hand[b], hand[c]];
+        if (!validTrade(tr)) continue;
+        const sc = tr.reduce((k, x) => k + (x >= NT ? 0 : terr[x].o === p ? 1 : 10), 0);
+        if (sc > top) { top = sc; best = tr; }
+      }
+  return best;
+}
+// Fim do reforço: segue para o ataque, ou direto para o remanejamento se o jogador lançou a ogiva neste turno.
+function endReinforce(s, p) {
+  if (!s.noAttack) { s.step = 'attack'; s.ev.push({ t: 'phase', p, step: 'attack' }); return; }
+  s.step = 'move'; s.roll = null; s.occupy = null;
+  s.ev.push({ t: 'phase', p, step: 'move' });
+  s.movable = {};
+  s.terr.forEach((t, i) => { if (t.o === p && t.a > 1) s.movable[i] = t.a - 1; });
 }
 export const mustTrade = (s) => s.step === 'reinforce' && s.players[s.turn].cards.length >= 5;
 
@@ -267,6 +327,8 @@ export function invariant(s) {
     if (s.step !== 'reinforce' && poolTotal(s) > 0) return 'saiu do reforço com exércitos por colocar';
     if ((s.pacts || []).some((x) => x.a === x.b || !s.players[x.a].alive || !s.players[x.b].alive) || (!s.opts.pacts && (s.pacts.length || s.offer))) return 'pacto inválido';
     if (!s.opts.events && s.event) return 'evento em partida sem eventos';
+    if (s.fog && (!s.opts.nukes || !s.terr[s.fog.t] || !s.players[s.fog.by])) return 'névoa inválida';
+    if (s.noAttack && (s.step === 'attack' || s.occupy)) return 'ataque em turno de ogiva';
     if (s.occupy && (s.step !== 'attack' || s.terr[s.occupy.from].o !== s.turn || s.terr[s.occupy.to].o !== s.turn || s.terr[s.occupy.from].a - s.occupy.max < 1)) return 'ocupação inconsistente';
   }
   return null;
@@ -313,6 +375,7 @@ function applyAction(s, p, a, rng) {
       if (mustTrade(s)) return 'Com 5 cartas é obrigatório trocar antes.';
       const t = Number.isInteger(a.t0) ? T[a.t0] : null;
       if (!t || t.o !== p) return 'Território inválido.';
+      if (s.fog && s.fog.t === a.t0) return fogText(s);
       let n = Math.max(1, a.n | 0);
       const c = TERR[a.t0].c;
       let placed = 0;
@@ -325,7 +388,7 @@ function applyAction(s, p, a, rng) {
       s.ev.push({ t: 'place', p, to: a.t0, k: placed });
       if (poolTotal(s) === 0) {
         if (s.round === 0) { log(s, `${pl.name} posicionou seus exércitos.`); nextTurn(s, rng); }
-        else { s.step = 'attack'; s.ev.push({ t: 'phase', p, step: 'attack' }); }
+        else endReinforce(s, p);
       }
       checkWin(s, p);
       return null;
@@ -333,6 +396,7 @@ function applyAction(s, p, a, rng) {
     case 'attack': {
       if (s.round === 0) return 'Na primeira rodada não há ataques: só distribuição de exércitos.';
       if (s.step !== 'attack' || s.occupy) return 'Não é possível atacar agora.';
+      if (s.noAttack) return 'Você lançou a ogiva neste turno: sem ataques.';
       if (!Number.isInteger(a.from) || !Number.isInteger(a.to)) return 'Ataque inválido.';
       const f = T[a.from], d = T[a.to];
       if (!f || !d || f.o !== p || d.o === p || !TERR[a.from].adj.includes(a.to)) return 'Ataque inválido.';
@@ -394,7 +458,8 @@ function applyAction(s, p, a, rng) {
       if (!Number.isInteger(a.from) || !Number.isInteger(a.to)) return 'Movimento inválido.';
       const f = T[a.from], d = T[a.to];
       if (!f || !d || f.o !== p || d.o !== p || !TERR[a.from].adj.includes(a.to)) return 'Movimento inválido.';
-      if (s.event && s.event.k === 'sea' && isSea(a.from, a.to)) return 'Mar revolto: as ligações por mar estão fechadas nesta rodada.';
+      const mb = moveBlock(s, a.from, a.to);
+      if (mb) return mb;
       const n = Math.min(Math.max(1, a.n | 0), s.movable[a.from] || 0, f.a - 1);
       if (n < 1) return 'Sem exércitos disponíveis para mover daqui.';
       f.a -= n; d.a += n; s.movable[a.from] -= n;
@@ -424,7 +489,27 @@ function applyAction(s, p, a, rng) {
       s.pacts = s.pacts.filter((x) => x !== pact);
       s.ev.push({ t: 'pactBreak', a: p, b: a.with, lost });
       log(s, `${pl.name} rompeu o pacto com ${pname(s, a.with)} e perdeu ${lost} exército${lost === 1 ? '' : 's'} do reforço.`);
-      if (poolTotal(s) === 0) { s.step = 'attack'; s.ev.push({ t: 'phase', p, step: 'attack' }); }
+      if (poolTotal(s) === 0) endReinforce(s, p);
+      return null;
+    }
+    case 'nuke': {
+      const why = nukeBlock(s, p, a.to);
+      if (why) return why;
+      if (!Array.isArray(a.cards) || !validTrade(a.cards) || !a.cards.every((c) => pl.cards.includes(c))) return 'Para lançar é preciso entregar uma trinca de cartas válida.';
+      pl.cards = pl.cards.filter((c) => !a.cards.includes(c));
+      s.discard.push(...a.cards);
+      const d = T[a.to], def = d.o, v = tradeValue(s.trades), lost = Math.min(d.a - 1, NUKE_MULT * v);
+      s.trades++; // ocupa um degrau da escada de trocas
+      d.a -= lost;
+      pl.lastTrade = 'nuke'; s.noAttack = true;
+      s.fog = { t: a.to, by: p };
+      s.ev.push({ t: 'nuke', p, to: a.to, def, lost, v });
+      log(s, `${pl.name} lançou a ogiva sobre ${TERR[a.to].n} (${pname(s, def)}): ${lost} exército${lost === 1 ? '' : 's'} destruído${lost === 1 ? '' : 's'}.`);
+      for (const x of s.pacts.filter((q) => q.a === p || q.b === p)) { s.ev.push({ t: 'pactVoid', a: x.a, b: x.b }); log(s, `O pacto entre ${pname(s, x.a)} e ${pname(s, x.b)} acabou com o lançamento.`); }
+      s.pacts = s.pacts.filter((q) => q.a !== p && q.b !== p);
+      if (s.offer && s.offer.from === p) s.offer = null;
+      // se ainda sobraram 5 cartas ou mais, a troca obrigatória acontece na hora
+      for (let tr; pl.cards.length >= 5 && (tr = bestTrade(pl.cards, T, p));) doTrade(s, p, tr, true);
       return null;
     }
     case 'endTurn': {
@@ -450,14 +535,20 @@ export const handSize = (q) => (Array.isArray(q.cards) ? q.cards.length : q.card
 // Resposta de um bot a uma proposta de pacto: aceita se quem propõe tem mais territórios que ele.
 export const botPactReply = (s) => ({ t: 'pactReply', accept: owned(s, s.offer.from) >= owned(s, s.offer.to) });
 // Bot simples: concentra reforços onde tem mais vantagem, ataca com vantagem e leva tropas do interior para a fronteira.
-export function botAction(s) {
+// o.noNuke: nunca lança a ogiva (usado quando o jogo joga por um humano cujo tempo acabou).
+export function botAction(s, o = {}) {
   const p = s.turn, T = s.terr, pl = s.players[p];
   const enemies = (i) => TERR[i].adj.filter((j) => T[j].o !== p);
   if (s.occupy) return { t: 'occupy', n: s.occupy.max };
   if (s.step === 'reinforce') {
     const tr = bestTrade(pl.cards, T, p);
+    if (tr && !o.noNuke && !nukeBlock(s, p)) { // ogiva só quando compensa: a maior pilha do adversário mais forte, se perder bem mais do que a troca daria
+      const lead = s.players.map((q, i) => i).filter((i) => i !== p && s.players[i].alive).sort((a, b) => owned(s, b) - owned(s, a))[0];
+      const tg = T.map((t, i) => i).filter((i) => T[i].o === lead && !nukeBlock(s, p, i)).sort((a, b) => T[b].a - T[a].a)[0];
+      if (tg != null && owned(s, lead) >= owned(s, p) && Math.min(T[tg].a - 1, nukeDamage(s)) >= 1.5 * tradeValue(s.trades)) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
+    }
     if (tr && (pl.cards.length >= 5 || poolTotal(s) > 0)) return { t: 'trade', cards: tr };
-    const mine = T.map((t, i) => i).filter((i) => T[i].o === p);
+    const mine = T.map((t, i) => i).filter((i) => T[i].o === p && !(s.fog && s.fog.t === i));
     const contIds = Object.keys(s.pool.cont).map(Number);
     let cand = mine.filter((i) => s.pool.free > 0 || contIds.includes(TERR[i].c));
     const border = cand.filter((i) => enemies(i).length);
@@ -489,7 +580,7 @@ export function botAction(s) {
   for (const k of Object.keys(s.movable || {})) {
     const i = +k, n = Math.min(s.movable[i], T[i].a - 1);
     if (n < 1 || dist[i] === 0) continue;
-    const j = TERR[i].adj.find((x) => T[x].o === p && dist[x] < dist[i] && !(s.event && s.event.k === 'sea' && isSea(i, x)));
+    const j = TERR[i].adj.find((x) => T[x].o === p && dist[x] < dist[i] && !moveBlock(s, i, x));
     if (j !== undefined) return { t: 'move', from: i, to: j, n };
   }
   return { t: 'endTurn' };

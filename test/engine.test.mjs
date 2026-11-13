@@ -140,3 +140,90 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
         if (r0 === 0) assert(!s.ev.some((x) => x.t === 'attack'), 'ataque na primeira rodada'); } }
     console.log(`ok — eventos e pactos: efeitos conferidos e ${ok} jogadas ao acaso sem quebrar regras`); }
 }
+
+// Regra opcional: ogiva nuclear
+{
+  const G = await import('../js/game.js');
+  const seats = (n, ctrl = 'bot') => Array.from({ length: n }, (_, i) => ({ name: 'N' + i, color: i, ctrl }));
+  // sem a opção, não existe
+  { const rng = rngFrom(3), s = newGame(seats(3), rng); assert.match(apply(s, s.turn, { t: 'nuke', cards: [0, 1, 2], to: 0 }, rng), /não tem ogiva/); assert.equal(s.fog, null); }
+  // partidas inteiras entre bots com todas as opções, conferindo cada regra da ogiva a cada jogada
+  let launched = 0, games = 0, fogTurns = 0, choice = 0;
+  for (let seed = 1; seed <= 160; seed++) {
+    const rng = rngFrom(9000 + seed), n = 2 + (seed % 5);
+    const s = newGame(seats(n), rng, { events: seed % 2 === 0, pacts: seed % 3 === 0, nukes: true });
+    const hist = Array.from({ length: n }, () => []); // sequência de trocas de cada jogador: 'normal' | 'nuke'
+    let nukedThisTurn = null;
+    for (let step = 0; step < 60000 && s.phase === 'play'; step++) {
+      const p = s.turn, fog0 = s.fog ? { ...s.fog } : null, trades0 = s.trades, pool0 = G.poolTotal(s), key0 = s.round + ':' + s.turn;
+      const a = s.offer && s.players[s.offer.to].ctrl === 'bot' && rng() < 0.9 ? G.botPactReply(s) : botAction(s), who = a.t === 'pactReply' ? s.offer.to : p;
+      assert.notEqual(botAction(s, { noNuke: true }).t, 'nuke', 'bot lançou mesmo proibido');
+      if (s.step === 'reinforce' && s.players[p].cards.length >= 5) { choice++; assert.equal(G.nukeBlock(s, p), null, 'troca obrigatória pendente sem direito a ogiva'); assert.match(apply(s, p, { t: 'place', t0: s.terr.findIndex((t) => t.o === p), n: 1 }, rng) || '', /obrigatório trocar/); }
+      const before = a.t === 'nuke' ? { a: s.terr[a.to].a, o: s.terr[a.to].o, v: G.tradeValue(s.trades), hand: s.players[p].cards.length } : null;
+      assert.equal(apply(s, who, a, rng), null, `seed ${seed}: jogada de bot recusada ${JSON.stringify(a)}`);
+      assert.equal(G.invariant(s), null);
+      for (const e of s.ev) {
+        if (e.t === 'trade') hist[e.p].push('normal');
+        if (e.t === 'nuke') hist[e.p].push('nuke');
+        if (fog0 && s.fog && e.t === 'attack') assert(e.from !== fog0.t && e.to !== fog0.t, 'ataque envolvendo território sob névoa');
+        if (fog0 && e.t === 'place') assert.notEqual(e.to, fog0.t, 'reforço em território sob névoa');
+        if (fog0 && e.t === 'move') assert(e.from !== fog0.t && e.to !== fog0.t, 'movimento envolvendo território sob névoa');
+        if (fog0 && e.t === 'trade') assert(!e.bonus.includes(fog0.t), '+2 de carta em território sob névoa');
+        if (e.t === 'attack') assert.notEqual(key0, nukedThisTurn, 'atacou no turno em que lançou a ogiva');
+        if (e.t === 'turn' && s.fog) { fogTurns++; assert.notEqual(s.fog.by, e.p, 'névoa não se dissipou na volta de quem lançou'); assert(!(TERR[s.fog.t].c in s.pool.cont), 'continente sob névoa pagou bônus'); }
+      }
+      if (a.t === 'nuke') {
+        launched++; nukedThisTurn = key0;
+        assert.equal(fog0, null, 'ogiva com névoa já no mapa');
+        const lost = Math.min(before.a - 1, 2 * before.v);
+        assert.equal(s.terr[a.to].a, before.a - lost, 'dano errado'); assert.equal(s.terr[a.to].o, before.o, 'ogiva mudou o dono');
+        assert.equal(s.trades, trades0 + 1 + s.ev.filter((e) => e.t === 'trade').length, 'ogiva não ocupou degrau da escada');
+        assert.equal(G.poolTotal(s) - s.ev.filter((e) => e.t === 'trade').reduce((k, e) => k + e.v, 0), pool0, 'ogiva deu exércitos');
+        assert.deepEqual(s.fog, { t: a.to, by: p }); assert(s.noAttack);
+        assert(!s.pacts.some((x) => x.a === p || x.b === p), 'pactos de quem lançou continuaram');
+        assert(s.players[p].cards.length <= before.hand - 3);
+      }
+    }
+    for (const h of hist) h.forEach((x, i) => { if (x === 'nuke') assert(i > 0 && h[i - 1] === 'normal', 'ogiva na primeira troca ou em duas trocas seguidas: ' + h); });
+    if (s.phase === 'over') games++;
+  }
+  assert(games >= 150, 'partidas com ogiva não terminam: ' + games); assert(launched > 20, 'bots quase não lançam: ' + launched); assert(fogTurns > 20);
+  // efeito controlado: dano igual ao dobro do degrau, sobra 1, névoa bloqueia e some na volta
+  { const rng = rngFrom(11), s = newGame(seats(3, 'local'), rng, { nukes: true });
+    while (s.round === 0) apply(s, s.turn, botAction(s), rng);
+    const p = s.turn, hand = s.deck.filter((c) => c < TERR.length).slice(0, 9); const tri = G.findTrade(hand);
+    s.deck = s.deck.filter((c) => !tri.includes(c)); s.players[p].cards = tri.slice();
+    const tg = s.terr.findIndex((t) => t.o !== p), mine = s.terr.findIndex((t) => t.o === p);
+    assert.match(apply(s, p, { t: 'nuke', cards: tri, to: tg }, rng), /primeira troca/);
+    s.players[p].lastTrade = 'normal';
+    assert.match(apply(s, p, { t: 'nuke', cards: tri, to: mine }, rng), /inimigo/);
+    assert.match(apply(s, p, { t: 'nuke', cards: [tri[0], tri[0], tri[1]], to: tg }, rng), /trinca/);
+    s.terr[tg].a = 30; const v = G.tradeValue(s.trades), free = s.pool.free;
+    assert.equal(apply(s, p, { t: 'nuke', cards: tri, to: tg }, rng), null);
+    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(s.pool.free, free); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
+    const owner = s.terr[tg].o, nb = TERR[tg].adj.find((j) => s.terr[j].o !== owner);
+    while (s.step === 'reinforce') apply(s, p, botAction(s), rng);
+    assert.equal(s.step, 'move', 'depois da ogiva o turno deveria pular o ataque');
+    assert.match(apply(s, p, { t: 'attack', from: mine, to: tg }, rng) || '', /atacar|Ataque|ogiva/);
+    apply(s, p, { t: 'endTurn' }, rng);
+    while (s.turn !== owner && s.phase === 'play') { while (s.step === 'reinforce') apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (s.step === 'attack') apply(s, s.turn, { t: 'endAttack' }, rng); apply(s, s.turn, { t: 'endTurn' }, rng); }
+    assert.match(apply(s, owner, { t: 'place', t0: tg, n: 1 }, rng), /Névoa/);
+    assert.match(G.attackBlock(s, tg, nb ?? TERR[tg].adj[0]), /Névoa/); assert.match(G.moveBlock(s, tg, TERR[tg].adj[0]), /Névoa/);
+    for (let i = 0; i < 400 && s.fog && s.phase === 'play'; i++) { const before = s.fog.t; apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (!s.fog) assert.equal(s.turn, p, 'névoa sumiu fora da vez de quem lançou'); }
+    assert.equal(s.fog, null); }
+  // jogadas ao acaso com tudo ligado
+  { const kinds = ['place', 'attack', 'occupy', 'endAttack', 'move', 'endTurn', 'trade', 'nuke', 'nuke', 'pactOffer', 'pactReply', 'pactBreak'];
+    let ok = 0, nk = 0;
+    for (let seed = 1; seed <= 60; seed++) { const rng = rngFrom(12000 + seed), n = 3 + (seed % 4), R = (k) => Math.floor(rng() * k);
+      const s = newGame(seats(n), rng, { events: true, pacts: true, nukes: true });
+      for (let step = 0; step < 1500 && s.phase === 'play'; step++) { const smart = rng() < 0.6, p = smart || rng() < 0.7 ? s.turn : R(n);
+        const hand = s.players[s.turn].cards, tri = G.findTrade(hand);
+        const a = s.offer && rng() < 0.5 ? G.botPactReply(s) : smart ? botAction(s) : { t: kinds[R(kinds.length)], t0: R(44), from: R(44), to: R(44), with: R(n), n: R(30), accept: rng() < 0.5, cards: tri && rng() < 0.8 ? tri : [R(44), R(44), R(44)] };
+        const who = a.t === 'pactReply' && s.offer && rng() < 0.8 ? s.offer.to : p, before = JSON.stringify(s), fog0 = s.fog ? s.fog.t : null;
+        const err = apply(s, who, a, rng);
+        if (err) { assert.equal(JSON.stringify(s), before); continue; }
+        ok++; if (a.t === 'nuke') nk++;
+        assert.equal(G.invariant(s), null, `seed ${seed}: ${G.invariant(s)} após ${JSON.stringify(a)}`);
+        if (fog0 != null && s.fog) for (const e of s.ev) assert(!(['attack', 'move'].includes(e.t) && (e.from === fog0 || e.to === fog0)) && !(e.t === 'place' && e.to === fog0), 'território sob névoa foi usado'); } }
+    console.log(`ok — ogiva: ${games}/160 partidas terminadas, ${launched} lançamentos de bots, ${choice} trocas obrigatórias com escolha, e ${ok} jogadas ao acaso (${nk} ogivas) sem quebrar regras`); }
+}

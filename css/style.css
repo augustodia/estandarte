@@ -218,3 +218,30 @@ body.rot #hud{max-width:none}
 #evchip svg{width:14px;height:14px;flex:none;fill:currentColor;stroke:none}
 #evchip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .evlist{margin:0 0 8px;padding-left:18px;font-size:13px;color:var(--mute)}.evlist b{color:var(--ink)}
+/* sala: regras extras numa seção recolhível */
+details.extras{border:1px solid var(--line);border-radius:var(--r);background:var(--deep)}
+details.extras summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 12px;font-size:14px;color:var(--ink);cursor:pointer;list-style:none}
+details.extras summary::-webkit-details-marker{display:none}
+details.extras summary::before{content:"";flex:none;width:8px;height:8px;border-right:2px solid var(--mute);border-bottom:2px solid var(--mute);transform:rotate(-45deg);transition:transform .15s}
+details.extras[open] summary::before{transform:rotate(45deg)}
+details.extras summary span{flex:1;min-width:0;text-align:right;color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:8px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);text-align:left;font:inherit}
+.opt b{display:block;font-size:14px}.opt small{display:block;font-size:12px;line-height:1.35;color:var(--mute)}
+.opt .sw{flex:none;position:relative;width:38px;height:22px;border-radius:11px;background:#2b4466;transition:background .15s}
+.opt .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .15s}
+.opt.on .sw{background:#e2b04a}.opt.on .sw::after{transform:translateX(16px);background:#1c1408}
+/* ogiva nuclear */
+.rad{color:#7dff4a}
+.btn.rad{border-color:#7dff4a99;color:#7dff4a;background:#12301a}
+.foglayer{pointer-events:none}
+.fog-glow{opacity:.6;animation:fogbreath 4.5s ease-in-out infinite}
+.fog-fill{fill:#123d18;opacity:.3;stroke:#9dff6a;stroke-width:1.5;stroke-dasharray:5 4;animation:fogdash 12s linear infinite}
+.fog-drift{transform-box:fill-box;transform-origin:center;animation:fogdrift 9s ease-in-out infinite alternate}
+@keyframes fogbreath{50%{opacity:1}}
+@keyframes fogdash{to{stroke-dashoffset:-90}}
+@keyframes fogdrift{0%{transform:translate(-9px,4px) scale(.9);opacity:.55}50%{opacity:1}100%{transform:translate(10px,-6px) scale(1.18);opacity:.6}}
+.fx-shock{fill:none;stroke:#b6ff7a;stroke-width:5;transform-box:fill-box;transform-origin:center;animation:shock 1.5s ease-out both}
+@keyframes shock{0%{transform:scale(.4);opacity:1}100%{transform:scale(16);opacity:0;stroke-width:1}}
+#mapwrap.boom::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle,#f4ffe8 0,#9dff6a 35%,#1d6a2600 80%);animation:boomflash 1.5s ease-out both}
+@keyframes boomflash{0%{opacity:0}8%{opacity:.95}30%{opacity:.5}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.fog-glow,.fog-fill,.fog-drift,.fx-shock{animation:none}#mapwrap.boom::after{animation-duration:.4s}}
