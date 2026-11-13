@@ -93,9 +93,9 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
   // sem as opções, nada disso existe
   { const [s, rng] = mk(3, {}); toAttack(s, rng); assert.equal(s.event, null); assert.notEqual(apply(s, s.turn, { t: 'pactOffer', to: (s.turn + 1) % 3 }, rng), null); }
   // eventos: um por rodada a partir da 2ª, nunca repetido em seguida
-  { const [s, rng] = mk(3, { events: true }); assert.equal(s.event, null); let last = null, seen = new Set();
-    for (let i = 0; i < 4000 && s.phase === 'play'; i++) { const r = s.round; apply(s, s.turn, botAction(s), rng); if (s.round !== r) { assert(s.event && G.EVENTS[s.event.k], 'rodada sem evento'); assert.notEqual(s.event.k, last, 'evento repetido'); last = s.event.k; seen.add(last); } }
-    assert(seen.size >= 5, 'pouca variedade de eventos: ' + [...seen]); }
+  { const [s, rng] = mk(3, { events: true }); assert.equal(s.event, null); let last = null, seen = new Set(), rounds = 0, withEv = 0, calm = 0, prevHad = false;
+    for (let i = 0; i < 4000 && s.phase === 'play'; i++) { const r = s.round; apply(s, s.turn, botAction(s), rng); if (s.round !== r) { rounds++; if (s.event) { assert(G.EVENTS[s.event.k]); assert(!prevHad, 'dois eventos em rodadas seguidas'); assert.notEqual(s.event.k, last, 'evento repetido'); last = s.event.k; seen.add(last); withEv++; calm = 0; prevHad = true; } else { calm++; prevHad = false; assert(calm <= 3, 'mais de 3 rodadas calmas seguidas'); } } }
+    assert(seen.size >= 4, 'pouca variedade de eventos: ' + [...seen]); assert(withEv / rounds > 0.2 && withEv / rounds < 0.5, 'frequência de eventos fora do esperado: ' + withEv + '/' + rounds); }
   // cada efeito, forçando o evento
   { const [s, rng] = mk(3, { events: true }); toAttack(s, rng); const p = s.turn;
     const [a, b] = SEAS.find(([x, y, , , , , w]) => !w); s.terr[a] = { o: p, a: 5 }; s.terr[b] = { o: (p + 1) % 3, a: 1 };
@@ -105,8 +105,8 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
     let hi = 0; s.event = { k: 'charge' }; for (let i = 0; i < 60; i++) { s.terr[a].a = 9; s.terr[b] = { o: (p + 1) % 3, a: 9 }; s.occupy = null; apply(s, p, { t: 'attack', from: a, to: b }, rng); hi = Math.max(hi, ...s.roll.att, ...s.roll.def); assert(s.roll.att[0] >= 2, 'ofensiva não somou ao maior dado'); }
     assert(hi <= 6, 'dado passou de 6'); }
   { const [s] = mk(3, { events: true }); const base = Math.max(3, Math.floor(G.owned(s, 0) / 2)); const rng = rngFrom(9);
-    while (s.round === 0) apply(s, s.turn, botAction(s), rng); // chega à 2ª rodada com algum evento; confere a conta do reforço
-    const want = Math.max(3, Math.floor(G.owned(s, s.turn) / 2)), k = s.event.k;
+    while (s.round === 0) apply(s, s.turn, botAction(s), rng); // chega à 2ª rodada, com ou sem evento; confere a conta do reforço
+    const want = Math.max(3, Math.floor(G.owned(s, s.turn) / 2)), k = s.event ? s.event.k : null;
     assert.equal(s.pool.free, k === 'recruit' ? want + 2 : k === 'shortage' ? Math.max(3, want - 2) : want, 'reforço com evento ' + k); }
   // pactos: proposta, resposta fora da vez, bloqueio de ataque, rompimento com custo, prazo
   { const [s, rng] = mk(3, { pacts: true }); toAttack(s, rng); const p = s.turn, q = (p + 1) % 3, r = (p + 2) % 3;

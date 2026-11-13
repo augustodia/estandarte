@@ -30,7 +30,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '23'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '24'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -716,6 +716,7 @@ function processEvents(v) {
     else if (e.t === 'dead') { flash(`${nm(e.p)} eliminado`, col(e.by), `por ${nm(e.by)}`); if (mine(e.p)) buzz([200, 80, 200]); play('dead'); }
     else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p), !mine(e.p)); play('timeout'); }
     else if (e.t === 'win') { play('win'); buzz([150, 80, 150, 80, 300, 80, 400]); }
+    else if (e.t === 'eventEnd') flash(`${EVENTS[e.k].n} terminou`, '#e2b04a', '', 1000, false, true);
     else if (e.t === 'event') { flash(EVENTS[e.k].n, '#e2b04a', eventText(e), 2400, true); play('phase'); }
     else if (e.t === 'pactAsk') { if (!mine(e.b)) flash(mine(e.a) ? `Proposta enviada a ${nm(e.b)}` : `${nm(e.a)} propôs um pacto a ${nm(e.b)}`, col(e.a), '', 1100, false, true); }
     else if (e.t === 'pact') {
@@ -933,7 +934,7 @@ function renderGame() {
   // seletor − / +: valor inicial quando muda o que está sendo escolhido, sempre dentro da faixa
   const rng = can ? stepRange(v) : null, nKey = `${v.step}:${v.occupy ? 'o' + v.occupy.to : ''}:${app.sel}:${app.target}`;
   if (rng) {
-    if (nKey !== app.nKey) app.n = v.occupy || v.step === 'attack' ? rng[1] : 1;
+    if (nKey !== app.nKey) app.n = v.occupy ? rng[0] : v.step === 'attack' ? rng[1] : 1; // após conquistar o padrão é não levar mais ninguém
     app.n = Math.max(rng[0], Math.min(rng[1], app.n));
   }
   app.nKey = nKey;
@@ -1085,8 +1086,9 @@ function showExtras() {
   const tag = (i) => `<b style="color:${COLORS[v.players[i].color].c}">${esc(v.players[i].name)}</b>`;
   let h = '';
   if (v.opts.events) {
-    h += `<h3>Evento da rodada</h3>${v.event ? `<p style="color:var(--ink);font-size:16px"><b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}</p>` : '<p>Nenhum ainda. O primeiro é sorteado na rodada 2.</p>'}
-      <p>A cada rodada sai um evento novo, que vale para todos até a rodada acabar.</p>`;
+    h += `<h3>Evento da rodada</h3>${v.event ? `<p style="color:var(--ink);font-size:16px"><b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}</p>` : '<p>Rodada calma: nenhum evento em vigor.</p>'}
+      <p>Os eventos aparecem de surpresa, a partir da rodada 2: valem para todos por uma rodada e depois vem ao menos uma rodada calma.</p>
+      <ul class="evlist">${Object.values(EVENTS).map((x) => `<li><b>${x.n}:</b> ${esc(x.cont ? x.d(0).replace(CONTINENTS[0].n, 'um continente sorteado') : x.d())}</li>`).join('')}</ul>`;
   }
   if (v.opts.pacts) {
     h += `<h3>Pactos</h3><p>Dois jogadores combinam não se atacar por ${PACT_ROUNDS} rodadas. Proponha na sua vez (uma proposta por turno). Romper antes só no início do seu turno, e custa ${PACT_PENALTY} exércitos do reforço.</p>`;
@@ -1173,7 +1175,7 @@ function showRules() {
   <li><b>Remanejamento:</b> ao final, mova exércitos entre territórios vizinhos seus; cada exército anda uma vez por turno.</li>
   <li><b>Rotas marítimas:</b> linhas pontilhadas também são fronteiras. O Alasca liga com o Extremo Oriente pela borda do mapa.</li></ul>
   <h3>Regras extras (opcionais)</h3>
-  <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, cada rodada sorteia um evento que vale para todos: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
+  <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
   <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Para romper antes, só no início do seu turno e ao custo de ${PACT_PENALTY} exércitos do reforço. Com dois jogadores em jogo os pactos acabam.</li></ul>
   <h3>Conexão</h3>
   <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>

@@ -18,7 +18,7 @@ const TRADE_TABLE = [4, 6, 8, 10, 12, 15];
 // ---- regras opcionais: eventos de rodada e pactos ----
 const SEA_LINK = new Set(SEA.flatMap(([a, b]) => [a + '-' + b, b + '-' + a]));
 export const isSea = (a, b) => SEA_LINK.has(a + '-' + b);
-// Evento sorteado no início de cada rodada (a partir da 2ª), valendo para todos até a rodada acabar.
+// Eventos: sorteados de vez em quando no início de uma rodada (a partir da 2ª), valendo para todos até ela acabar.
 export const EVENTS = {
   storm: { n: 'Tempestade', d: (c) => `Quem ataca territórios de ${CONTINENTS[c].n} rola no máximo 2 dados.`, cont: true },
   ceasefire: { n: 'Cessar-fogo', d: (c) => `Nenhum território de ${CONTINENTS[c].n} pode ser atacado nesta rodada.`, cont: true },
@@ -30,6 +30,7 @@ export const EVENTS = {
 };
 export const eventText = (e) => (e ? EVENTS[e.k].d(e.c) : '');
 export const PACT_ROUNDS = 3, PACT_PENALTY = 3;
+export const EVENT_CHANCE = 0.45;
 export const pactOf = (s, a, b) => (s.pacts || []).find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a)) || null;
 // Motivo pelo qual from não pode atacar to agora por causa de evento ou pacto; null se pode.
 export function attackBlock(s, from, to) {
@@ -223,8 +224,17 @@ function newRound(s, rng) {
   for (const x of s.pacts.filter((q) => s.round > q.until)) { s.ev.push({ t: 'pactEnd', a: x.a, b: x.b }); log(s, `O pacto entre ${pname(s, x.a)} e ${pname(s, x.b)} terminou.`); }
   s.pacts = s.pacts.filter((q) => s.round <= q.until);
   if (!s.opts.events) return;
-  const keys = Object.keys(EVENTS).filter((k) => !s.event || k !== s.event.k); // nunca repete o da rodada anterior
+  // Eventos espaçados e imprevisíveis: depois de um evento vem sempre ao menos uma rodada calma;
+  // em rodada calma a chance de sair um é de 45%, e nunca passam mais de 3 calmas seguidas.
+  const calm = s.calm || 0;
+  if (s.event || (calm < 3 && rng() >= EVENT_CHANCE)) {
+    if (s.event) { s.ev.push({ t: 'eventEnd', k: s.event.k }); log(s, `O evento ${EVENTS[s.event.k].n} terminou.`); }
+    s.calm = s.event ? 1 : calm + 1; s.event = null;
+    return;
+  }
+  const keys = Object.keys(EVENTS).filter((k) => k !== s.lastEvent); // nunca repete o último que saiu
   const k = keys[Math.floor(rng() * keys.length)];
+  s.calm = 0; s.lastEvent = k;
   s.event = EVENTS[k].cont ? { k, c: Math.floor(rng() * CONTINENTS.length) } : { k };
   s.ev.push({ t: 'event', k, c: s.event.c });
   log(s, `Evento da rodada ${s.round + 1}: ${EVENTS[k].n}. ${eventText(s.event)}`);

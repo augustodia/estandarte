@@ -52,7 +52,7 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 
 Ligadas pelo anfitrião na sala, antes de começar. Desligadas, a partida é a clássica.
 
-- **Eventos de rodada:** da 2ª rodada em diante, cada rodada sorteia um evento que vale para todos até ela acabar: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
+- **Eventos de rodada:** da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar. Depois de um evento vem sempre ao menos uma rodada calma; em rodada calma a chance de sair um novo é de 45%, nunca passam mais de 3 calmas seguidas e o mesmo evento não sai duas vezes seguidas. Os eventos: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
 - **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 3 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Romper antes só no início do próprio turno, ao custo de 3 exércitos do reforço, e todos são avisados. Com dois jogadores em jogo os pactos acabam.
 
 ## Controles
