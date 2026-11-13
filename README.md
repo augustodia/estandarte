@@ -17,6 +17,8 @@ Quando o navegador pedir a câmera, permita. Além de ler os QR codes, a permiss
 
 Também dá para jogar várias pessoas no mesmo aparelho e completar a mesa com bots.
 
+Os bots leem o próprio objetivo e o tabuleiro: priorizam os continentes de que precisam, defendem as fronteiras dos que já têm, distribuem o reforço por várias frentes, calculam a chance real de cada ataque (tabela exata dos dados) e param antes de se esvaziar. Com pactos ligados, propõem e avaliam propostas.
+
 ### Reconexão
 
 **Volta automática, sem QR.** Enquanto um convidado está conectado, o anfitrião deixa pronta uma conexão reserva para ele: o convidado guarda um certificado fixo no aparelho e os dois combinam, pelo canal que já existe, as credenciais da próxima conexão. Se o convidado cair (tela bloqueada, página recarregada, Wi-Fi oscilou), ele abre essa reserva sozinho em poucos segundos e volta para o mesmo lugar. A cada volta uma nova reserva é combinada. Isso não funciona quando o anfitrião reinicia o jogo, quando a rede dele muda ou em navegadores que não aceitam a técnica; nesses casos vale o QR, como abaixo.

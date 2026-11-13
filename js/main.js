@@ -31,7 +31,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '28'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '29'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -334,7 +334,7 @@ function scheduleBot() {
     return;
   }
   if (g.players[g.turn].ctrl !== 'bot') return;
-  app.botTimer = setTimeout(() => { apply(g, g.turn, botAction(g)); sync(); }, g.step === 'attack' ? 1150 : 700); // devagar o bastante para dar tempo de ver cada jogada
+  app.botTimer = setTimeout(() => { apply(g, g.turn, botAction(g)); sync(); }, g.step === 'attack' ? 1150 : g.step === 'reinforce' ? 520 : 700); // devagar o bastante para dar tempo de ver cada jogada (o reforço vem em várias parcelas)
 }
 function viewer() {
   if (app.role === 'guest') return app.me;

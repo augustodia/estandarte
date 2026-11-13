@@ -416,7 +416,7 @@ function applyAction(s, p, a, rng) {
         for (let i = 0; i < Math.min(att.length, def.length); i++) att[i] > def[i] ? ld++ : la++;
         f.a -= la; d.a -= ld; tla += la; tld += ld;
         last = { from: a.from, to: a.to, att, def, la, ld, by: p, n: s.n };
-      } while (a.blitz && d.a > 0 && f.a > 1);
+      } while (a.blitz && d.a > 0 && f.a > Math.max(1, a.keep | 0)); // keep: o ataque em sequência para ao sobrar esse tanto na origem
       s.roll = last;
       const ev = { t: 'attack', p, from: a.from, to: a.to, la: tla, ld: tld, def: defender, won: d.a === 0 };
       s.ev.push(ev);
@@ -534,45 +534,174 @@ export function viewFor(s, p) {
 }
 export const handSize = (q) => (Array.isArray(q.cards) ? q.cards.length : q.cards);
 
-// Resposta de um bot a uma proposta de pacto: aceita se quem propõe tem mais territórios que ele.
-export const botPactReply = (s) => ({ t: 'pactReply', accept: owned(s, s.offer.from) >= owned(s, s.offer.to) });
-// Bot simples: concentra reforços onde tem mais vantagem, ataca com vantagem e leva tropas do interior para a fronteira.
-// o.noNuke: nunca lança a ogiva (usado quando o jogo joga por um humano cujo tempo acabou).
+// ---------------------------------------------------------------- bots
+// Chance de o atacante conquistar, com a exércitos na origem contra d na defesa (regras deste jogo: até 3 dados de cada
+// lado, empate é da defesa, 1 exército fica para trás). Tabela exata, calculada uma vez por programação dinâmica.
+let ODDS = null, WIN = null;
+function battleOdds() { // ODDS[nA][nD] = lista de [perdaAtaque, perdaDefesa, probabilidade]
+  ODDS = {};
+  const rolls = (n) => { let out = [[]]; for (let k = 0; k < n; k++) out = out.flatMap((r) => [1, 2, 3, 4, 5, 6].map((x) => [...r, x])); return out.map((r) => r.sort((a, b) => b - a)); };
+  for (let nA = 1; nA <= 3; nA++) { ODDS[nA] = {}; for (let nD = 1; nD <= 3; nD++) {
+    const acc = {}, A = rolls(nA), D = rolls(nD);
+    for (const x of A) for (const y of D) { let la = 0; const m = Math.min(nA, nD); for (let i = 0; i < m; i++) if (x[i] <= y[i]) la++; acc[la] = (acc[la] || 0) + 1; }
+    ODDS[nA][nD] = Object.entries(acc).map(([la, c]) => [+la, Math.min(nA, nD) - la, c / (A.length * D.length)]);
+  } }
+}
+const WMAX = 48;
+export function winChance(a, d) {
+  if (a < 2) return 0;
+  if (d < 1) return 1;
+  if (a > WMAX || d > WMAX) { const k = WMAX / Math.max(a, d); a = Math.max(2, Math.round(a * k)); d = Math.max(1, Math.round(d * k)); } // pilhas enormes: mesma proporção
+  if (!WIN) {
+    battleOdds();
+    WIN = Array.from({ length: WMAX + 1 }, () => new Float64Array(WMAX + 1));
+    for (let x = 0; x <= WMAX; x++) WIN[x][0] = 1;
+    for (let y = 1; y <= WMAX; y++) for (let x = 2; x <= WMAX; x++) {
+      let pr = 0;
+      for (const [la, ld, q] of ODDS[Math.min(3, x - 1)][Math.min(3, y)]) pr += q * (x - la < 2 ? 0 : WIN[x - la][y - ld]);
+      WIN[x][y] = pr;
+    }
+  }
+  return WIN[a][d];
+}
+const CSIZE = CONTINENTS.map((_, c) => TERR.filter((t) => t.c === c).length);
+
+// Leitura do tabuleiro do ponto de vista do jogador p: o que vale a pena conquistar e onde há perigo.
+function botView(s, p) {
+  const T = s.terr, pl = s.players[p], N = s.players.length;
+  const terrs = Array(N).fill(0), arm = Array(N).fill(0);
+  const mineIn = CONTINENTS.map(() => 0), owner = CONTINENTS.map(() => null); // owner[c]: dono único do continente, ou -1
+  T.forEach((t, i) => { terrs[t.o]++; arm[t.o] += t.a; const c = TERR[i].c; if (t.o === p) mineIn[c]++; owner[c] = owner[c] === null ? t.o : owner[c] === t.o ? t.o : -1; });
+  const alive = s.players.map((q, i) => i).filter((i) => s.players[i].alive);
+  const power = (q) => terrs[q] * 2 + arm[q];
+  const leader = alive.filter((q) => q !== p).sort((a, b) => power(b) - power(a))[0];
+  let obj = OBJECTIVES[pl.obj] || { k: 'count' }, killTarget = -1;
+  if (obj.k === 'kill') { // objetivo de eliminar alguém; se não dá mais, vira contagem de territórios (como na regra)
+    killTarget = s.players.findIndex((q, i) => i !== p && q.alive && q.color === obj.color);
+    if (killTarget < 0) obj = { k: 'count' };
+  }
+  // quanto cada continente interessa: os do objetivo acima de tudo; senão, os que já estão quase na mão e rendem mais por território
+  const focus = CONTINENTS.map((ct, c) => {
+    const share = mineIn[c] / CSIZE[c];
+    let f = share * share * 1.6 + (ct.bonus / CSIZE[c]) * 0.35;
+    if (obj.k === 'cont' && obj.c.includes(c)) f += 1.4;
+    return f;
+  });
+  const enemiesOf = (i) => TERR[i].adj.filter((j) => T[j].o !== p);
+  const threat = (i) => { let m = 0; for (const j of TERR[i].adj) if (T[j].o !== p && !pactOf(s, p, T[j].o) && T[j].a > 1) m = Math.max(m, T[j].a - 1); return m; };
+  // valor de tomar o território j
+  const value = (j) => {
+    const q = T[j].o, c = TERR[j].c, missing = CSIZE[c] - mineIn[c];
+    let v = 1 + focus[c] * 2;
+    if (missing <= 2) v += CONTINENTS[c].bonus * (missing === 1 ? 1.6 : 0.7); // fecha (ou quase) um continente
+    if (owner[c] === q) v += CONTINENTS[c].bonus * 1.2; // tira o bônus de quem tem o continente inteiro
+    if (q === killTarget) v += 3;
+    if (terrs[q] <= 2) v += 2.5 + 1.5 * (typeof s.players[q].cards === 'number' ? s.players[q].cards : s.players[q].cards.length); // eliminar rende as cartas dele
+    if (q === leader && power(q) > power(p) * 1.25) v += 1.2; // segura quem está disparando na frente
+    if (obj.k === 'count') v += 0.8;
+    if (!pl.conquered) v += 1.5; // a primeira conquista do turno vale uma carta
+    return v;
+  };
+  return { T, pl, terrs, arm, mineIn, owner, alive, power, leader, killTarget, focus, enemiesOf, threat, value, obj };
+}
+// Ajuste da chance de vitória pelos eventos da rodada.
+const eventOdds = (s, to, pw) => {
+  const e = s.event;
+  if (!e) return pw;
+  if (e.k === 'fort') return pw * 0.78;
+  if (e.k === 'charge') return Math.min(1, pw * 1.15 + 0.03);
+  if (e.k === 'storm' && TERR[to].c === e.c) return pw * 0.8;
+  return pw;
+};
+
+// Resposta de um bot a uma proposta de pacto: recusa quem está liderando com folga, quem é o alvo do seu objetivo e quem
+// ocupa o continente que ele precisa; aceita de quem é uma ameaça real na fronteira.
+export function botPactReply(s) {
+  const me = s.offer.to, q = s.offer.from, V = botView(s, me), T = s.terr;
+  let no = q === V.killTarget || (V.leader === q && V.power(q) > V.power(me) * 1.3);
+  if (!no && V.obj.k === 'cont') { let need = 0, his = 0; T.forEach((t, i) => { if (V.obj.c.includes(TERR[i].c) && t.o !== me) { need++; if (t.o === q) his++; } }); if (need && his / need > 0.5) no = true; }
+  let border = 0;
+  T.forEach((t, i) => { if (t.o === me && TERR[i].adj.some((j) => T[j].o === q)) border++; });
+  return { t: 'pactReply', accept: !no && border > 0 };
+}
+// Bot: lê o objetivo e o tabuleiro, defende os continentes que tem, distribui os reforços por frentes (em vez de uma pilha só),
+// ataca quando a chance compensa o que há a ganhar e para antes de se esvaziar.
+// o.noNuke: nunca lança a ogiva (usado quando o jogo joga por um humano cujo tempo acabou). o.noPact: não propõe pactos.
 export function botAction(s, o = {}) {
   const p = s.turn, T = s.terr, pl = s.players[p];
-  const enemies = (i) => TERR[i].adj.filter((j) => T[j].o !== p);
-  if (s.occupy) return { t: 'occupy', n: s.occupy.max };
+  const V = botView(s, p), { enemiesOf, threat, value } = V;
+  if (s.occupy) { // leva mais gente se a origem ficou sem inimigos por perto ou se o conquistado está mais exposto
+    const { from, to, max } = s.occupy;
+    const tf = threat(from), tt = threat(to);
+    return { t: 'occupy', n: !enemiesOf(from).length ? max : !enemiesOf(to).length ? 0 : tt >= tf || T[from].a - max > tf ? max : 0 };
+  }
   if (s.step === 'reinforce') {
     const tr = bestTrade(pl.cards, T, p);
-    if (tr && !o.noNuke && !nukeBlock(s, p)) { // ogiva só quando compensa: a maior pilha do adversário mais forte, se perder bem mais do que a troca daria
-      const lead = s.players.map((q, i) => i).filter((i) => i !== p && s.players[i].alive).sort((a, b) => owned(s, b) - owned(s, a))[0];
-      const tg = T.map((t, i) => i).filter((i) => T[i].o === lead && !nukeBlock(s, p, i)).sort((a, b) => T[b].a - T[a].a)[0];
-      if (tg != null && owned(s, lead) >= owned(s, p) && Math.min(T[tg].a - 1, nukeDamage(s)) >= 1.5 * (tradeValue(s.trades) + poolTotal(s))) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
+    if (tr && !o.noNuke && !nukeBlock(s, p)) { // ogiva só quando compensa: a maior pilha do adversário mais forte, se perder bem mais do que a troca e o reforço dariam
+      const tg = T.map((t, i) => i).filter((i) => T[i].o === V.leader && !nukeBlock(s, p, i)).sort((a, b) => T[b].a - T[a].a)[0];
+      if (tg != null && V.power(V.leader) >= V.power(p) && Math.min(T[tg].a - 1, nukeDamage(s)) >= 1.5 * (tradeValue(s.trades) + poolTotal(s))) return { t: 'nuke', cards: nukeTrade(pl.cards, T, p), to: tg };
     }
     if (tr && (pl.cards.length >= 5 || poolTotal(s) > 0)) return { t: 'trade', cards: tr };
+    // pacto: de vez em quando, com o vizinho que mais ameaça e que não é o alvo nem o líder
+    if (s.opts && s.opts.pacts && !o.noPact && !s.placed && !s.offer && s.round >= 1 && (s.round + p) % 3 === 0 && V.alive.length > 2
+      && pl.offered !== s.round + ':' + s.turn && !s.pacts.some((x) => x.a === p || x.b === p)) {
+      const press = {};
+      T.forEach((t, i) => { if (t.o === p) for (const j of TERR[i].adj) { const q = T[j].o; if (q !== p) press[q] = (press[q] || 0) + T[j].a; } });
+      const q = Object.keys(press).map(Number).filter((q) => q !== V.killTarget && q !== V.leader).sort((a, b) => press[b] - press[a])[0];
+      if (q != null && press[q] >= V.arm[p] * 0.25) return { t: 'pactOffer', to: q };
+    }
     const mine = T.map((t, i) => i).filter((i) => T[i].o === p && !(s.fog && s.fog.t === i));
-    const contIds = Object.keys(s.pool.cont).map(Number);
-    let cand = mine.filter((i) => s.pool.free > 0 || contIds.includes(TERR[i].c));
-    const border = cand.filter((i) => enemies(i).length);
-    if (border.length) cand = border;
-    const edge = (i) => (enemies(i).length ? T[i].a - Math.min(...enemies(i).map((j) => T[j].a)) : -1e9);
-    cand.sort((a, b) => edge(b) - edge(a));
-    return { t: 'place', t0: cand[0], n: poolTotal(s) };
+    const front = (list) => { const b = list.filter((i) => enemiesOf(i).length); return b.length ? b : list; };
+    // 1) bônus de continente: só pode ir no próprio continente; vai para a fronteira mais ameaçada dele
+    for (const k of Object.keys(s.pool.cont)) {
+      const c = +k, cand = front(mine.filter((i) => TERR[i].c === c)).sort((a, b) => threat(b) - T[b].a - (threat(a) - T[a].a));
+      if (cand.length) return { t: 'place', t0: cand[0], n: s.pool.cont[c] };
+    }
+    const free = s.pool.free, border = front(mine);
+    // 2) defesa: fronteira de um continente que já é dele e está fraca diante do vizinho mais forte recebe até metade do que resta
+    let worst = null;
+    for (const i of border) {
+      if (V.owner[TERR[i].c] !== p) continue;
+      const lack = Math.ceil(threat(i) * 0.55) - T[i].a;
+      if (lack > 0 && (!worst || lack > worst.lack)) worst = { i, lack };
+    }
+    if (worst && free >= 2) return { t: 'place', t0: worst.i, n: Math.min(worst.lack, Math.ceil(free / 2)) };
+    // 3) ataque: em parcelas, cada uma onde mais aumenta a chance de uma conquista que vale a pena (várias frentes, não uma pilha só)
+    const chunk = Math.min(free, Math.max(3, Math.ceil(free / 4)));
+    let best = null;
+    for (const i of border) {
+      let g = 0;
+      for (const j of enemiesOf(i)) {
+        if (s.round > 0 && attackBlock(s, i, j)) continue;
+        const gain = value(j) * (winChance(T[i].a + chunk, T[j].a) - winChance(T[i].a, T[j].a)) + value(j) * 0.02 * chunk;
+        if (gain > g) g = gain;
+      }
+      g += Math.max(0, threat(i) - T[i].a) * 0.01; // desempate: onde há mais perigo
+      if (!best || g > best.g) best = { i, g };
+    }
+    return { t: 'place', t0: best.i, n: chunk };
   }
   if (s.step === 'attack') {
     let best = null;
     T.forEach((t, i) => {
-      if (t.o !== p || t.a < 3) return;
-      enemies(i).forEach((j) => {
-        if (attackBlock(s, i, j)) return; // respeita eventos e pactos
-        const adv = t.a - T[j].a;
-        if (adv >= 1 && (!best || adv > best.adv)) best = { adv, from: i, to: j };
-      });
+      if (t.o !== p || t.a < 2) return;
+      for (const j of enemiesOf(i)) {
+        if (attackBlock(s, i, j)) continue; // respeita eventos, pactos e névoa
+        const pw = eventOdds(s, j, winChance(t.a, T[j].a)), q = T[j].o, c = TERR[j].c;
+        const decisive = V.terrs[q] === 1 || CSIZE[c] - V.mineIn[c] === 1 || (V.owner[c] === q && CONTINENTS[c].bonus >= 3);
+        const need = !pl.conquered && T[j].a <= 2 ? 0.5 : decisive ? 0.5 : 0.66; // sem carta ainda, ou jogada que muda o jogo: aceita mais risco
+        if (pw < need) continue;
+        // não abre a guarda de um continente próprio por pouco
+        const guard = V.owner[TERR[i].c] === p ? Math.ceil(threat(i) * 0.4) : 0;
+        if (t.a - T[j].a < guard && !decisive) continue;
+        const sc = value(j) * pw - T[j].a * 0.12;
+        if (!best || sc > best.sc) best = { sc, from: i, to: j, keep: Math.max(1, Math.min(t.a - 2, Math.max(guard, Math.floor(T[j].a * 0.7)))) };
+      }
     });
-    return best ? { t: 'attack', from: best.from, to: best.to, blitz: true } : { t: 'endAttack' };
+    return best ? { t: 'attack', from: best.from, to: best.to, blitz: true, keep: best.keep } : { t: 'endAttack' };
   }
-  // remanejamento: leva exércitos do interior em direção à fronteira mais próxima
-  const dist = T.map((t, i) => (t.o === p && enemies(i).length ? 0 : Infinity));
+  // remanejamento: leva exércitos do interior em direção à fronteira mais próxima (e, entre as próximas, à mais ameaçada)
+  const dist = T.map((t, i) => (t.o === p && enemiesOf(i).length ? 0 : Infinity));
   for (let d = 0, changed = true; changed; d++) {
     changed = false;
     T.forEach((t, i) => {
@@ -582,7 +711,7 @@ export function botAction(s, o = {}) {
   for (const k of Object.keys(s.movable || {})) {
     const i = +k, n = Math.min(s.movable[i], T[i].a - 1);
     if (n < 1 || dist[i] === 0) continue;
-    const j = TERR[i].adj.find((x) => T[x].o === p && dist[x] < dist[i] && !moveBlock(s, i, x));
+    const j = TERR[i].adj.filter((x) => T[x].o === p && dist[x] < dist[i] && !moveBlock(s, i, x)).sort((a, b) => dist[a] - dist[b] || threat(b) - T[b].a - (threat(a) - T[a].a))[0];
     if (j !== undefined) return { t: 'move', from: i, to: j, n };
   }
   return { t: 'endTurn' };
