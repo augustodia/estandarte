@@ -31,7 +31,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '26'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '27'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -900,11 +900,14 @@ function tapTerritory(t) {
       return renderGame();
     }
     if (v.step === 'reinforce') {
+      const dbl = app.tapT === t && Date.now() - (app.tapAt || 0) < 450;
+      app.tapT = t; app.tapAt = dbl ? 0 : Date.now();
       if (!mine) app.sel = null;
       else if (v.fog && v.fog.t === t) { app.sel = null; toast(`Névoa nuclear: ${TERR[t].n} não recebe reforços até ela se dissipar.`, 3600); }
       else if (mustTrade(v)) toast('Com 5 cartas é obrigatório trocar antes.');
       else if (v.pool.free + (v.pool.cont[TERR[t].c] || 0) < 1) { app.sel = null; toast('Os exércitos restantes são bônus de outro continente.'); }
-      else if (app.sel === t) app.n++; // tocar de novo no mesmo território soma 1
+      else if (dbl) { app.sel = t; app.n = 1; act({ t: 'place', t0: t, n: 1 }); return; } // toque duplo: coloca 1 exército na hora
+      else if (app.sel === t) app.n++; // tocar de novo (devagar) no mesmo território soma 1 no seletor
       else app.sel = t;
       app.target = null;
     } else if (v.step === 'attack') {
@@ -967,6 +970,9 @@ function renderGame() {
     app.lastViewer = v.turn;
     if (locals > 1 && !first) modal(`<h3>Passe o aparelho</h3><p>Agora é a vez de <b style="color:${COLORS[cur.color].c}">${esc(cur.name)}</b>.</p><button class="btn primary" data-m="close">Estou com o aparelho</button>`);
   }
+  // ao mudar de etapa (reforço → ataque → remanejamento) nada fica selecionado: o último território reforçado não vira origem de ataque
+  const stepKey = `${v.round}:${v.turn}:${v.step}`;
+  if (stepKey !== app.stepKey) { app.stepKey = stepKey; app.sel = app.target = null; }
   // valida seleção
   if (!can || (app.sel != null && T[app.sel].o !== v.turn)) app.sel = app.target = null;
   if (v.step === 'attack' && app.target != null && T[app.target].o === v.turn) app.sel = app.target = null;
@@ -1103,8 +1109,8 @@ function renderGame() {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     const left = `<b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}`;
     const tri = Array.isArray(meP.cards) && !nukeBlock(v, v.turn) ? nukeTrade(meP.cards, T, v.turn) : null; // pode pagar uma ogiva com as cartas?
-    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói até <b>${nukeDamage(v)}</b> exércitos e custa o seu turno inteiro.`
-      : mustTrade(v) ? (tri ? 'Você tem 5 ou mais cartas: troque ou lance a ogiva antes de reforçar.' : 'Você tem 5 ou mais cartas: troque antes de reforçar.') : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar · ${left}`;
+    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói <b>${nukeDamage(v)}</b> exércitos dele (sempre sobra 1) e custa o seu turno inteiro.`
+      : mustTrade(v) ? (tri ? 'Você tem 5 ou mais cartas: troque ou lance a ogiva antes de reforçar.' : 'Você tem 5 ou mais cartas: troque antes de reforçar.') : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar (toque duplo coloca 1) · ${left}`;
     const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
     btns = (rng ? stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="place">Colocar</button>' : '')
       + (tr ? `<button class="btn small${rng ? '' : ' primary'}" data-do="autoTrade">Trocar +${tradeValue(v.trades)}</button>` : '')
@@ -1217,7 +1223,7 @@ function showExtras() {
   if (v.opts.nukes) {
     const why = myTurn ? nukeBlock(v, me) : null;
     h += `<h3>Ogiva nuclear</h3>${v.fog ? `<p style="color:var(--ink);font-size:16px"><b class="rad">Névoa sobre ${TERR[v.fog.t].n}</b>, lançada por ${tag(v.fog.by)}. Dissipa quando a vez voltar para quem lançou.</p>` : ''}
-      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói até <b>${nukeDamage(v)}</b> exércitos (o dobro do valor da troca), sempre sobrando 1.</p>
+      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói <b>${nukeDamage(v)}</b> exércitos do alvo, o dobro do valor da troca. Não há sorteio: o número é fixo, e só é menor quando o alvo tem menos que isso, porque sempre sobra 1.</p>
       <ul class="evlist"><li>Custa o turno inteiro: você não recebe os exércitos da troca nem o reforço, não ataca e não remaneja. Por isso só pode ser lançada antes de colocar qualquer reforço.</li><li>O alvo fica isolado até a sua vez voltar: não ataca, não é atacado, não recebe reforços nem movimentos. O continente dele não paga bônus.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>Os pactos de quem lança acabam na hora.</li></ul>
       ${why && v.step === 'reinforce' ? `<p>${esc(why)}</p>` : ''}`;
   }
