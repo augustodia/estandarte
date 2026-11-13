@@ -47,6 +47,7 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - **Cartas:** conquistou no turno, ganha uma carta; 3 iguais ou 3 diferentes viram exércitos (4, 6, 8, 10, 12, 15, +5…). Com 5 cartas a troca é automática no início do turno; com menos, um botão troca a melhor trinca com um toque.
 - **Remanejamento:** ao fim do turno, cada exército pode andar uma vez para um território vizinho seu.
 - **Vitória:** cumprir o objetivo secreto (dominar continentes, somar territórios ou eliminar uma cor).
+- **Equilíbrio por número de jogadores:** a meta de "somar territórios" é 24 (ou 18 com 2 exércitos em cada) com 4 a 6 jogadores, 29 (ou 23) com 3 e 32 (ou 26) com 2. Na distribuição inicial, quem joga depois na ordem recebe exércitos a mais (10 por posição com 2 jogadores, 4 com 3, 1 com 4 a 6), para compensar a vantagem de atacar primeiro. Valores ajustados em milhares de partidas simuladas.
 
 O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ásia e da Oceania são ampliadas, arquipélagos viram blocos únicos e ilhotas e baías pequenas somem, para tudo ficar fácil de ver e tocar. No celular, o mapa fica melhor com o aparelho deitado; use pinça para dar zoom e arraste para mover. Cada território fica na cor de quem o domina; cada continente é contornado por uma linha na sua cor, afastada da costa, e separado dos vizinhos por um canal escuro.
 
@@ -54,18 +55,18 @@ O mapa é simplificado de propósito: Europa, América Central e as ilhas da Ás
 
 Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes de começar. Desligadas, a partida é a clássica.
 
-- **Eventos de rodada:** da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar. Depois de um evento vem sempre ao menos uma rodada calma; em rodada calma a chance de sair um novo é de 45%, nunca passam mais de 3 calmas seguidas e o mesmo evento não sai duas vezes seguidas. Os eventos: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
-- **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 3 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Romper antes só no início do próprio turno, ao custo de 3 exércitos do reforço, e todos são avisados. Com dois jogadores em jogo os pactos acabam.
+- **Eventos de rodada:** da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar. Depois de um evento vem sempre ao menos uma rodada calma; em rodada calma a chance de sair um novo é de 45%, nunca passam mais de 3 calmas seguidas e o mesmo evento não sai duas vezes seguidas. Os eventos: Tempestade (no máximo 2 dados contra um continente), Cessar-fogo (um continente não pode ser atacado; nenhum dos dois cai num continente inteiro de um só jogador), Mar revolto (rotas marítimas fechadas), Recrutamento (+2 no reforço), Escassez (−2 no reforço, mínimo 3), Trincheiras (+1 no maior dado da defesa) e Ofensiva (+1 no maior dado do ataque). O evento em vigor fica ao lado do anel de jogada.
+- **Pactos:** na sua vez, proponha a outro jogador um pacto de não agressão de 2 rodadas (uma proposta por turno). O outro responde na hora, mesmo fora da vez. Enquanto o pacto vale, o jogo recusa ataques entre os dois. Cada jogador só pode ter um pacto por vez, e os mesmos dois esperam 2 rodadas depois do fim para fazer outro. Romper antes só no início do próprio turno, antes de reforçar, ao custo de metade do reforço daquele turno (no mínimo 3), e todos são avisados. Com dois jogadores em jogo os pactos acabam.
 - **Ogiva nuclear:** no reforço, em vez de trocar 3 cartas por exércitos, o jogador pode lançar a ogiva em qualquer território inimigo.
-  - O alvo perde o dobro do que a troca valeria (troca de 8 destrói até 16), sempre sobrando 1 exército, e não muda de dono.
-  - Lançar custa o turno inteiro: quem lança entrega as 3 cartas, não recebe os exércitos da troca nem o reforço do turno, não ataca e não remaneja. Por isso a ogiva só pode ser lançada antes de colocar qualquer reforço.
-  - O alvo fica sob névoa até a vez voltar a quem lançou: não ataca, não é atacado, não recebe reforços nem movimentos, e o continente dele não paga bônus a ninguém.
+  - O alvo perde o dobro do que a troca valeria (troca de 8 destrói até 16), mas nunca mais que a metade dos exércitos que tem, e não muda de dono. Não há sorteio.
+  - Quem lança entrega as 3 cartas, recebe metade dos exércitos da troca e não ataca naquele turno (reforço e remanejamento continuam).
+  - O território atingido fica sob névoa até a vez voltar a quem lançou: ninguém pode atacá-lo. O dono joga normalmente (reforça, ataca a partir dele, recebe o bônus do continente). Quando a névoa some, quem lançou é o primeiro a poder atacar ali.
   - Só existe uma névoa no mapa por vez.
   - A primeira troca de cada jogador é sempre normal e, depois de uma ogiva, a troca seguinte dele também.
   - O lançamento ocupa um degrau da escada de trocas (4, 6, 8, 10, 12, 15, +5…): a próxima troca de qualquer jogador vale o degrau seguinte.
-  - Os pactos de quem lança acabam na hora; não se lança contra parceiro de pacto nem em continente sob Cessar-fogo.
+  - O pacto de quem lança acaba na hora; não se lança contra parceiro de pacto nem em continente sob Cessar-fogo.
   - Com 5 cartas e direito à ogiva, a troca continua obrigatória, mas o jogo deixa escolher em vez de trocar sozinho. Se o tempo acabar, faz a troca normal.
-  - Bots só lançam contra a maior pilha do adversário com mais territórios, e só quando o dano compensa a troca e o reforço perdidos.
+  - Bots lançam quando o que destroem vale mais do que a metade da troca de que abrem mão, de preferência contra a pilha vizinha que mais os ameaça.
 
 ## Controles
 

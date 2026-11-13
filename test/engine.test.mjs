@@ -93,9 +93,11 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
   // sem as opções, nada disso existe
   { const [s, rng] = mk(3, {}); toAttack(s, rng); assert.equal(s.event, null); assert.notEqual(apply(s, s.turn, { t: 'pactOffer', to: (s.turn + 1) % 3 }, rng), null); }
   // eventos: um por rodada a partir da 2ª, nunca repetido em seguida
-  { const [s, rng] = mk(3, { events: true }); assert.equal(s.event, null); let last = null, seen = new Set(), rounds = 0, withEv = 0, calm = 0, prevHad = false;
+  { const seen = new Set(); let rounds = 0, withEv = 0;
+    for (let g = 0; g < 20; g++) { const [s, rng] = mk(3 + (g % 4), { events: true }, 50 + g); assert.equal(s.event, null); let last = null, calm = 0, prevHad = false;
     for (let i = 0; i < 4000 && s.phase === 'play'; i++) { const r = s.round; apply(s, s.turn, botAction(s), rng); if (s.round !== r) { rounds++; if (s.event) { assert(G.EVENTS[s.event.k]); assert(!prevHad, 'dois eventos em rodadas seguidas'); assert.notEqual(s.event.k, last, 'evento repetido'); last = s.event.k; seen.add(last); withEv++; calm = 0; prevHad = true; } else { calm++; prevHad = false; assert(calm <= 3, 'mais de 3 rodadas calmas seguidas'); } } }
-    assert(seen.size >= 4, 'pouca variedade de eventos: ' + [...seen]); assert(withEv / rounds > 0.2 && withEv / rounds < 0.5, 'frequência de eventos fora do esperado: ' + withEv + '/' + rounds); }
+    }
+    assert(seen.size >= 6, 'pouca variedade de eventos: ' + [...seen]); assert(withEv / rounds > 0.2 && withEv / rounds < 0.5, 'frequência de eventos fora do esperado: ' + withEv + '/' + rounds); }
   // cada efeito, forçando o evento
   { const [s, rng] = mk(3, { events: true }); toAttack(s, rng); const p = s.turn;
     const [a, b] = SEAS.find(([x, y, , , , , w]) => !w); s.terr[a] = { o: p, a: 5 }; s.terr[b] = { o: (p + 1) % 3, a: 1 };
@@ -145,18 +147,17 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
 {
   const G = await import('../js/game.js');
   const seats = (n, ctrl = 'bot') => Array.from({ length: n }, (_, i) => ({ name: 'N' + i, color: i, ctrl }));
-  // sem a opção, não existe
   { const rng = rngFrom(3), s = newGame(seats(3), rng); assert.match(apply(s, s.turn, { t: 'nuke', cards: [0, 1, 2], to: 0 }, rng), /não tem ogiva/); assert.equal(s.fog, null); }
   // partidas inteiras entre bots com todas as opções, conferindo cada regra da ogiva a cada jogada
   let launched = 0, games = 0, fogTurns = 0, choice = 0;
-  for (let seed = 1; seed <= 160; seed++) {
+  for (let seed = 1; seed <= 200; seed++) {
     const rng = rngFrom(9000 + seed), n = 2 + (seed % 5);
     const s = newGame(seats(n), rng, { events: seed % 2 === 0, pacts: seed % 3 === 0, nukes: true });
-    const hist = Array.from({ length: n }, () => []); // sequência de trocas de cada jogador: 'normal' | 'nuke'
+    const hist = Array.from({ length: n }, () => []);
     let nukedThisTurn = null;
     for (let step = 0; step < 60000 && s.phase === 'play'; step++) {
       const p = s.turn, fog0 = s.fog ? { ...s.fog } : null, trades0 = s.trades, pool0 = G.poolTotal(s), key0 = s.round + ':' + s.turn;
-      const a = s.offer && s.players[s.offer.to].ctrl === 'bot' && rng() < 0.9 ? G.botPactReply(s) : botAction(s), who = a.t === 'pactReply' ? s.offer.to : p;
+      const a = s.offer && rng() < 0.9 ? G.botPactReply(s) : botAction(s), who = a.t === 'pactReply' ? s.offer.to : p;
       assert.notEqual(botAction(s, { noNuke: true }).t, 'nuke', 'bot lançou mesmo proibido');
       if (s.step === 'reinforce' && s.players[p].cards.length >= 5) { choice++; assert.equal(G.nukeBlock(s, p), null, 'troca obrigatória pendente sem direito a ogiva'); assert.match(apply(s, p, { t: 'place', t0: s.terr.findIndex((t) => t.o === p), n: 1 }, rng) || '', /obrigatório trocar/); }
       const before = a.t === 'nuke' ? { a: s.terr[a.to].a, o: s.terr[a.to].o, v: G.tradeValue(s.trades), hand: s.players[p].cards.length } : null;
@@ -165,31 +166,27 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
       for (const e of s.ev) {
         if (e.t === 'trade') hist[e.p].push('normal');
         if (e.t === 'nuke') hist[e.p].push('nuke');
-        if (fog0 && s.fog && e.t === 'attack') assert(e.from !== fog0.t && e.to !== fog0.t, 'ataque envolvendo território sob névoa');
-        if (fog0 && e.t === 'place') assert.notEqual(e.to, fog0.t, 'reforço em território sob névoa');
-        if (fog0 && e.t === 'move') assert(e.from !== fog0.t && e.to !== fog0.t, 'movimento envolvendo território sob névoa');
-        if (fog0 && e.t === 'trade') assert(!e.bonus.includes(fog0.t), '+2 de carta em território sob névoa');
+        if (fog0 && s.fog && e.t === 'attack') assert.notEqual(e.to, fog0.t, 'ataque a território sob névoa');
         if (e.t === 'attack') assert.notEqual(key0, nukedThisTurn, 'atacou no turno em que lançou a ogiva');
-        if (e.t === 'turn' && s.fog && a.t !== 'nuke') { fogTurns++; assert.notEqual(s.fog.by, e.p, 'névoa não se dissipou na volta de quem lançou'); assert(!(TERR[s.fog.t].c in s.pool.cont), 'continente sob névoa pagou bônus'); }
+        if (e.t === 'turn' && s.fog) { fogTurns++; assert.notEqual(s.fog.by, e.p, 'névoa não se dissipou na volta de quem lançou'); }
       }
       if (a.t === 'nuke') {
         launched++; nukedThisTurn = key0;
         assert.equal(fog0, null, 'ogiva com névoa já no mapa');
-        const lost = Math.min(before.a - 1, 2 * before.v);
-        assert.equal(s.terr[a.to].a, before.a - lost, 'dano errado'); assert.equal(s.terr[a.to].o, before.o, 'ogiva mudou o dono');
-        assert.equal(s.trades, trades0 + 1 + s.ev.filter((e) => e.t === 'trade').length, 'ogiva não ocupou degrau da escada');
-        assert(s.phase !== 'play' || s.turn !== p || s.players.filter((q) => q.alive).length === 1, 'o turno de quem lançou não acabou');
-        assert(!s.ev.some((e) => ['place', 'attack', 'move'].includes(e.t) && e.p === p), 'quem lançou ainda jogou no turno');
-        assert.deepEqual(s.fog, { t: a.to, by: p });
+        const lost = Math.min(2 * before.v, Math.floor(before.a / 2));
+        assert.equal(s.terr[a.to].a, before.a - lost, 'dano errado'); assert(s.terr[a.to].a >= Math.ceil(before.a / 2), 'perdeu mais da metade'); assert.equal(s.terr[a.to].o, before.o, 'ogiva mudou o dono');
+        const auto = s.ev.filter((e) => e.t === 'trade');
+        assert.equal(s.trades, trades0 + 1 + auto.length, 'ogiva não ocupou degrau da escada');
+        assert.equal(G.poolTotal(s) - auto.reduce((k, e) => k + e.v, 0), pool0 + Math.floor(before.v / 2), 'quem lança recebe metade da troca');
+        assert.deepEqual(s.fog, { t: a.to, by: p }); assert(s.noAttack); assert.equal(s.turn, p, 'o turno continua');
         assert(!s.pacts.some((x) => x.a === p || x.b === p), 'pactos de quem lançou continuaram');
-        assert(s.players[p].cards.length <= before.hand - 3);
       }
     }
     for (const h of hist) h.forEach((x, i) => { if (x === 'nuke') assert(i > 0 && h[i - 1] === 'normal', 'ogiva na primeira troca ou em duas trocas seguidas: ' + h); });
     if (s.phase === 'over') games++;
   }
-  assert(games >= 150, 'partidas com ogiva não terminam: ' + games); assert(launched > 0, 'bots nunca lançam'); assert(fogTurns > 0);
-  // efeito controlado: dano igual ao dobro do degrau, sobra 1, névoa bloqueia e some na volta
+  assert(games >= 190, 'partidas com ogiva não terminam: ' + games); assert(launched > 0, 'bots nunca lançam'); assert(fogTurns > 0);
+  // efeito controlado
   { const rng = rngFrom(11), s = newGame(seats(3, 'local'), rng, { nukes: true });
     while (s.round === 0) apply(s, s.turn, botAction(s), rng);
     const p = s.turn, hand = s.deck.filter((c) => c < TERR.length).slice(0, 9); const tri = G.findTrade(hand);
@@ -199,17 +196,26 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
     s.players[p].lastTrade = 'normal';
     assert.match(apply(s, p, { t: 'nuke', cards: tri, to: mine }, rng), /inimigo/);
     assert.match(apply(s, p, { t: 'nuke', cards: [tri[0], tri[0], tri[1]], to: tg }, rng), /trinca/);
-    s.terr[tg].a = 30; const v = G.tradeValue(s.trades), armies = s.terr.reduce((k, t) => k + (t.o === p ? t.a : 0), 0);
-    { const c = JSON.parse(JSON.stringify(s)); assert.equal(apply(c, p, { t: 'place', t0: mine, n: 1 }, rng), null); assert.match(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), /antes de colocar/); } // depois de reforçar não dá mais
+    // teto: metade do alvo
+    { const c = JSON.parse(JSON.stringify(s)); c.terr[tg].a = 7; assert.equal(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), null); assert.equal(c.terr[tg].a, 4, 'com 7 exércitos o alvo perde 3'); }
+    { const c = JSON.parse(JSON.stringify(s)); c.terr[tg].a = 1; assert.equal(apply(c, p, { t: 'nuke', cards: tri, to: tg }, rng), null); assert.equal(c.terr[tg].a, 1); }
+    s.terr[tg].a = 30; const v = G.tradeValue(s.trades), free = s.pool.free;
+    assert.equal(apply(s, p, { t: 'place', t0: mine, n: 1 }, rng), null); // pode reforçar antes de lançar
     assert.equal(apply(s, p, { t: 'nuke', cards: tri, to: tg }, rng), null);
-    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
-    assert.notEqual(s.turn, p, 'lançar deveria encerrar o turno'); assert.equal(s.terr.reduce((k, t) => k + (t.o === p ? t.a : 0), 0), armies, 'quem lançou recebeu reforço');
-    const owner = s.terr[tg].o, nb = TERR[tg].adj.find((j) => s.terr[j].o !== owner);
+    assert.equal(s.terr[tg].a, 30 - 2 * v); assert.equal(s.pool.free, free - 1 + Math.floor(v / 2)); assert.equal(G.tradeValue(s.trades), G.tradeValue(1));
+    const owner = s.terr[tg].o;
+    while (s.step === 'reinforce') apply(s, p, botAction(s, { noNuke: true }), rng);
+    assert.equal(s.step, 'move', 'depois da ogiva o turno pula o ataque');
+    assert.match(apply(s, p, { t: 'attack', from: mine, to: tg }, rng) || '', /atacar|ogiva/);
+    apply(s, p, { t: 'endTurn' }, rng);
     while (s.turn !== owner && s.phase === 'play') { while (s.step === 'reinforce') apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (s.step === 'attack') apply(s, s.turn, { t: 'endAttack' }, rng); apply(s, s.turn, { t: 'endTurn' }, rng); }
-    assert.match(apply(s, owner, { t: 'place', t0: tg, n: 1 }, rng), /Névoa/);
-    assert.match(G.attackBlock(s, tg, nb ?? TERR[tg].adj[0]), /Névoa/); assert.match(G.moveBlock(s, tg, TERR[tg].adj[0]), /Névoa/);
-    for (let i = 0; i < 400 && s.fog && s.phase === 'play'; i++) { const before = s.fog.t; apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (!s.fog) assert.equal(s.turn, p, 'névoa sumiu fora da vez de quem lançou'); }
-    assert.equal(s.fog, null); }
+    // o dono joga normalmente: reforça lá e pode atacar a partir de lá; ninguém pode atacá-lo
+    assert.equal(apply(s, owner, { t: 'place', t0: tg, n: 1 }, rng), null, 'o dono deveria poder reforçar o território atingido');
+    const en = TERR[tg].adj.find((j) => s.terr[j].o !== owner);
+    if (en != null) { assert.equal(G.attackBlock(s, tg, en), null, 'o dono deveria poder atacar a partir dele'); assert.match(G.attackBlock(s, en, tg), /Névoa/); }
+    assert.equal(G.moveBlock(s, tg, TERR[tg].adj[0]), null);
+    for (let i = 0; i < 600 && s.fog && s.phase === 'play'; i++) { apply(s, s.turn, botAction(s, { noNuke: true }), rng); if (!s.fog && s.phase === 'play') assert.equal(s.turn, p, 'névoa sumiu fora da vez de quem lançou'); }
+    assert(s.phase !== 'play' || s.fog === null); }
   // jogadas ao acaso com tudo ligado
   { const kinds = ['place', 'attack', 'occupy', 'endAttack', 'move', 'endTurn', 'trade', 'nuke', 'nuke', 'pactOffer', 'pactReply', 'pactBreak'];
     let ok = 0, nk = 0;
@@ -223,6 +229,34 @@ console.log(`ok — ${finished}/300 partidas terminadas, média de ${(turnsTotal
         if (err) { assert.equal(JSON.stringify(s), before); continue; }
         ok++; if (a.t === 'nuke') nk++;
         assert.equal(G.invariant(s), null, `seed ${seed}: ${G.invariant(s)} após ${JSON.stringify(a)}`);
-        if (fog0 != null && s.fog) for (const e of s.ev) assert(!(['attack', 'move'].includes(e.t) && (e.from === fog0 || e.to === fog0)) && !(e.t === 'place' && e.to === fog0), 'território sob névoa foi usado'); } }
-    console.log(`ok — ogiva: ${games}/160 partidas terminadas, ${launched} lançamentos de bots, ${choice} trocas obrigatórias com escolha, e ${ok} jogadas ao acaso (${nk} ogivas) sem quebrar regras`); }
+        for (const x of s.players.keys()) assert(s.pacts.filter((q) => q.a === x || q.b === x).length <= 1, 'jogador com dois pactos');
+        if (fog0 != null && s.fog) for (const e of s.ev) assert(!(e.t === 'attack' && e.to === fog0), 'território sob névoa foi atacado'); } }
+    console.log(`ok — ogiva: ${games}/200 partidas terminadas, ${launched} lançamentos de bots, ${choice} trocas obrigatórias com escolha, e ${ok} jogadas ao acaso (${nk} ogivas) sem quebrar regras`); }
+}
+
+// Pactos: um por jogador, espera para renovar, multa proporcional; metas e distribuição por número de jogadores
+{
+  const G = await import('../js/game.js');
+  const seats = (n) => Array.from({ length: n }, (_, i) => ({ name: 'N' + i, color: i, ctrl: 'local' }));
+  const rng = rngFrom(21), s = newGame(seats(4), rng, { pacts: true });
+  while (s.round === 0) apply(s, s.turn, botAction(s, { noPact: true }), rng);
+  const p = s.turn, q = (p + 1) % 4, r = (p + 2) % 4;
+  assert.equal(apply(s, p, { t: 'pactOffer', to: q }, rng), null); assert.equal(apply(s, q, { t: 'pactReply', accept: true }, rng), null);
+  assert.equal(s.pacts[0].until, s.round + 2, 'pacto de 2 rodadas');
+  assert.match(G.pactBlock(s, p, r), /um por vez/); assert.match(G.pactBlock(s, r, q), /já tem um pacto/);
+  // romper: metade do reforço (mínimo 3), só antes de reforçar
+  while (!(s.turn === p && s.step === 'reinforce' && s.round >= 2)) apply(s, s.turn, botAction(s, { noPact: true }), rng);
+  if (s.pacts.length) {
+    const pool = G.poolTotal(s), want = Math.min(pool, Math.max(3, Math.ceil(pool / 2)));
+    { const c = JSON.parse(JSON.stringify(s)); apply(c, p, { t: 'place', t0: c.terr.findIndex((t) => t.o === p), n: 1 }, rng); if (c.step === 'reinforce') assert.match(apply(c, p, { t: 'pactBreak', with: q }, rng), /antes de colocar/); }
+    assert.equal(apply(s, p, { t: 'pactBreak', with: q }, rng), null); assert.equal(G.poolTotal(s), pool - want, 'multa errada');
+    assert.match(G.pactBlock(s, p, q), /acabaram de ter um pacto/);
+  }
+  // metas de território por número de jogadores
+  assert.equal(G.countGoal(2, 1), G.BAL.goal[2]); assert.equal(G.countGoal(5, 1), G.GOAL); assert.equal(G.countGoal(3, 2), G.BAL.goal2[3]);
+  assert.match(G.objectiveText({ k: 'count', min: 1 }, 2), new RegExp(String(G.BAL.goal[2])));
+  // distribuição inicial: quem joga depois recebe mais
+  for (const n of [2, 3, 4, 6]) { const g = newGame(seats(n), rngFrom(n)); const pools = []; while (g.round === 0) { if (pools.length === g.turn) pools.push(G.poolTotal(g)); apply(g, g.turn, botAction(g), rngFrom(1)); }
+    for (let i = 1; i < n; i++) assert(pools[i] - pools[0] >= (G.BAL.seat[n] || 0) * i - 1, `distribuição inicial sem compensação (${n} jogadores): ${pools}`); }
+  console.log('ok — pactos (um por jogador, espera, multa proporcional), metas e distribuição inicial por número de jogadores');
 }

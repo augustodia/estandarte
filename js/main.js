@@ -2,7 +2,7 @@ import { TERR, CONTINENTS, SEA, MAP_W, MAP_H } from './map.js';
 import {
   COLORS, SYMBOLS, OBJECTIVES, objectiveText, newGame, apply, viewFor, botAction, owned,
   poolTotal, validTrade, bestTrade, tradeValue, cardSymbol, cardName, mustTrade, handSize,
-  EVENTS, eventText, attackBlock, moveBlock, pactOf, botPactReply, PACT_ROUNDS, PACT_PENALTY,
+  EVENTS, eventText, attackBlock, moveBlock, pactOf, botPactReply, PACT_ROUNDS, PACT_PENALTY, pactPenalty, pactBlock, nukeRefund,
   nukeBlock, nukeDamage, nukeTrade,
 } from './game.js';
 import { createInvite, joinInvite, initCert, myFingerprint, armSpare, useSpare } from './net.js';
@@ -31,7 +31,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '29'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '30'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -458,8 +458,8 @@ function guestScan() {
 // Regras opcionais, ligadas pelo anfitrião numa seção recolhível da sala.
 const EXTRAS = [
   ['events', 'Eventos de rodada', 'De vez em quando, um evento surpresa muda as regras para todos por uma rodada.'],
-  ['pacts', 'Pactos', 'Dois jogadores combinam não se atacar por 3 rodadas. Romper antes custa exércitos.'],
-  ['nukes', 'Ogiva nuclear', 'No lugar de uma troca de cartas, destrói tropas de um território inimigo e o isola por uma rodada.'],
+  ['pacts', 'Pactos', 'Dois jogadores combinam não se atacar por 2 rodadas. Romper antes custa metade do reforço.'],
+  ['nukes', 'Ogiva nuclear', 'No lugar de uma troca de cartas, destrói até metade das tropas de um território inimigo.'],
 ];
 document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('extras')) app.extrasOpen = e.target.open; }, true);
 function renderLobby() {
@@ -736,11 +736,11 @@ function drawFog(v) {
   el('path', { class: 'fog-fill', d: t.d, 'fill-rule': 'evenodd' }, fogLayer);
 }
 function confirmNuke(t) {
-  const v = app.view, me = v.turn, d = v.terr[t], lost = Math.min(d.a - 1, nukeDamage(v)), own = v.players[d.o];
+  const v = app.view, me = v.turn, d = v.terr[t], lost = nukeDamage(v, t), own = v.players[d.o];
   const mine = v.pacts.filter((x) => x.a === me || x.b === me).length;
   modal(`<h3 class="rad">Lançar a ogiva?</h3>
-    <p style="color:var(--ink);font-size:16px">Alvo: <b>${TERR[t].n}</b>, de <b style="color:${COLORS[own.color].c}">${esc(own.name)}</b>. Perde <b>${lost}</b> de ${d.a} exércitos e fica isolado por uma rodada.</p>
-    <ul><li><b>Seu turno acaba aqui:</b> você perde o reforço deste turno (${poolTotal(v)}), não ataca e não remaneja.</li><li>Você entrega 3 cartas e não recebe os ${tradeValue(v.trades)} exércitos da troca.</li><li>${CONTINENTS[TERR[t].c].n} não paga bônus a ninguém enquanto durar a névoa.</li>${mine ? `<li>Seus pactos acabam (${mine}).</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
+    <p style="color:var(--ink);font-size:16px">Alvo: <b>${TERR[t].n}</b>, de <b style="color:${COLORS[own.color].c}">${esc(own.name)}</b>. Perde <b>${lost}</b> de ${d.a} exércitos.</p>
+    <ul><li>Você entrega 3 cartas e recebe <b>${nukeRefund(v)}</b> exércitos, metade dos ${tradeValue(v.trades)} da troca.</li><li>Você não ataca neste turno (reforço e remanejamento continuam).</li><li>Ninguém pode atacar ${TERR[t].n} até a sua vez voltar. O dono joga normalmente.</li>${mine ? `<li>Seu pacto acaba.</li>` : ''}<li>Sua próxima troca terá de ser normal.</li></ul>
     <div class="row"><button class="btn rad" data-m="fire">Lançar</button><button class="btn" data-m="close">Cancelar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     if (e.target.dataset.m !== 'fire') return;
@@ -802,7 +802,7 @@ function processEvents(v) {
     else if (e.t === 'win') { play('win'); buzz([150, 80, 150, 80, 300, 80, 400]); }
     else if (e.t === 'nuke') {
       boom(e.to); shake(true); spotlight([e.to], 2600); play('nuke'); buzz([300, 80, 500]);
-      flash('Ogiva nuclear!', '#7dff4a', `${nm(e.p)} atingiu ${TERR[e.to].n} (${nm(e.def)}): −${e.lost}`, 2600, true);
+      flash('Ogiva nuclear!', '#7dff4a', `${nm(e.p)} atingiu ${TERR[e.to].n} (${nm(e.def)}): −${e.lost}`, 2200, true);
     } else if (e.t === 'fogEnd') flash(`A névoa sobre ${TERR[e.to].n} se dissipou`, '#7dff4a', '', 1100, false, true);
     else if (e.t === 'pactVoid') { if (mine(e.a) || mine(e.b)) flash('Pacto encerrado', '#e2b04a', `${nm(e.a)} e ${nm(e.b)} · acabou com a ogiva`, 1500, false, true); }
     else if (e.t === 'eventEnd') flash(`${EVENTS[e.k].n} terminou`, '#e2b04a', '', 1000, false, true);
@@ -903,7 +903,6 @@ function tapTerritory(t) {
       const dbl = app.tapT === t && Date.now() - (app.tapAt || 0) < 450;
       app.tapT = t; app.tapAt = dbl ? 0 : Date.now();
       if (!mine) app.sel = null;
-      else if (v.fog && v.fog.t === t) { app.sel = null; toast(`Névoa nuclear: ${TERR[t].n} não recebe reforços até ela se dissipar.`, 3600); }
       else if (mustTrade(v)) toast('Com 5 cartas é obrigatório trocar antes.');
       else if (v.pool.free + (v.pool.cont[TERR[t].c] || 0) < 1) { app.sel = null; toast('Os exércitos restantes são bônus de outro continente.'); }
       else if (dbl) { app.sel = t; app.n = 1; act({ t: 'place', t0: t, n: 1 }); return; } // toque duplo: coloca 1 exército na hora
@@ -1094,12 +1093,12 @@ function renderGame() {
   }
 
   // rodapé
-  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.${v.fog && v.fog.t === app.info ? ' · <b class="rad">sob névoa nuclear</b>' : ''}`
+  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.${v.fog && v.fog.t === app.info ? ' · <b class="rad">sob névoa: não pode ser atacado</b>' : ''}`
     : v.event && v.phase === 'play' ? `<b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}` : esc(v.log[v.log.length - 1] || '');
   let msg = '', btns = '', warn = '';
   if (v.phase === 'over') {
     const w = v.players[v.winner];
-    msg = `<b style="color:${COLORS[w.color].c}">${esc(w.name)}</b> venceu! ${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj])) : ''}`;
+    msg = `<b style="color:${COLORS[w.color].c}">${esc(w.name)}</b> venceu! ${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj], v.players.length)) : ''}`;
     btns = app.role === 'host' ? '<button class="btn small primary" data-do="again">Nova partida</button>' : '';
   } else if (!can) {
     const nm = `<b style="color:${COLORS[cur.color].c}">${esc(cur.name)}</b>`;
@@ -1112,7 +1111,7 @@ function renderGame() {
     const extra = Object.entries(v.pool.cont).map(([c, n]) => `+${n} em ${CONTINENTS[c].n}`).join(', ');
     const left = `<b>${v.pool.free}</b> livre${v.pool.free === 1 ? '' : 's'}${extra ? ` (${extra})` : ''}`;
     const tri = Array.isArray(meP.cards) && !nukeBlock(v, v.turn) ? nukeTrade(meP.cards, T, v.turn) : null; // pode pagar uma ogiva com as cartas?
-    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói <b>${nukeDamage(v)}</b> exércitos dele (sempre sobra 1) e custa o seu turno inteiro.`
+    msg = app.nukeMode ? `<b class="rad">Ogiva:</b> toque no território inimigo que será o alvo. Destrói até <b>${nukeDamage(v)}</b> exércitos (no máximo metade do que o alvo tem). Você recebe ${nukeRefund(v)} em vez dos ${tradeValue(v.trades)} da troca e não ataca neste turno.`
       : mustTrade(v) ? (tri ? 'Você tem 5 ou mais cartas: troque ou lance a ogiva antes de reforçar.' : 'Você tem 5 ou mais cartas: troque antes de reforçar.') : rng ? `Reforçar <b>${TERR[app.sel].n}</b> · ${left}` : `Toque num território seu para reforçar (toque duplo coloca 1) · ${left}`;
     const tr = Array.isArray(meP.cards) ? bestTrade(meP.cards, T, v.turn) : null;
     btns = (rng ? stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="place">Colocar</button>' : '')
@@ -1170,7 +1169,7 @@ function showWin(v) {
       <svg class="cup" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10h24v14a12 12 0 0 1-24 0z"/><path d="M20 14h-8v4a8 8 0 0 0 8 8M44 14h8v4a8 8 0 0 1-8 8M32 36v10M22 54h20M26 46h12v8H26z"/></svg>
       <p class="wl">${mine ? 'Você venceu!' : 'Vitória de'}</p>
       <h2>${esc(w.name)}</h2>
-      <p class="wobj"><b>${v.winBy === 'last' ? 'Último exército em jogo · o objetivo era' : 'Objetivo cumprido'}</b>${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj]).replace(/ Se for o seu.*$/, '')) : ''}</p>
+      <p class="wobj"><b>${v.winBy === 'last' ? 'Último exército em jogo · o objetivo era' : 'Objetivo cumprido'}</b>${w.obj != null ? esc(objectiveText(OBJECTIVES[w.obj], v.players.length).replace(/ Se for o seu.*$/, '')) : ''}</p>
       <ol class="rank">${rank.map(({ p, i, n }) => `<li${i === v.winner ? ' class="first"' : ''}><span class="dot" style="background:${COLORS[p.color].c}"></span><span class="who">${esc(p.name)}</span><span>${p.alive ? n + ' territórios' : 'eliminado'}</span></li>`).join('')}</ol>
       <div class="row"><button class="btn" data-do="winMap">Ver o mapa</button>${app.role === 'host' ? '<button class="btn primary" data-do="again">Nova partida</button>' : ''}</div>
     </div>`;
@@ -1182,7 +1181,7 @@ function showOffer(v) {
   const of = v.offer, a = v.players[of.from], b = v.players[of.to];
   modal(`<h3>Proposta de pacto</h3>
     <p style="color:var(--ink);font-size:16px"><b style="color:${COLORS[a.color].c}">${esc(a.name)}</b> propõe um pacto de não agressão a <b style="color:${COLORS[b.color].c}">${esc(b.name)}</b>.</p>
-    <p>Até o fim da rodada ${v.round + PACT_ROUNDS + 1} nenhum dos dois ataca o outro. Quem quiser romper antes só pode no início do próprio turno e perde ${PACT_PENALTY} exércitos do reforço.</p>
+    <p>Até o fim da rodada ${v.round + PACT_ROUNDS + 1} nenhum dos dois ataca o outro. Cada jogador só pode ter um pacto por vez. Quem quiser romper antes só pode no início do próprio turno, antes de reforçar, e perde metade do reforço daquele turno (no mínimo ${PACT_PENALTY}).</p>
     <div class="row"><button class="btn primary" data-m="yes">Aceitar</button><button class="btn" data-m="no">Recusar</button></div>`, () => { app.offerOpen = false; });
   app.offerOpen = true;
   $('#modal .sheet').onclick = (e) => {
@@ -1203,26 +1202,29 @@ function showExtras() {
       <ul class="evlist">${Object.values(EVENTS).map((x) => `<li><b>${x.n}:</b> ${esc(x.cont ? x.d(0).replace(CONTINENTS[0].n, 'um continente sorteado') : x.d())}</li>`).join('')}</ul>`;
   }
   if (v.opts.pacts) {
-    h += `<h3>Pactos</h3><p>Dois jogadores combinam não se atacar por ${PACT_ROUNDS} rodadas. Proponha na sua vez (uma proposta por turno). Romper antes só no início do seu turno, e custa ${PACT_PENALTY} exércitos do reforço.</p>`;
+    h += `<h3>Pactos</h3><p>Dois jogadores combinam não se atacar por ${PACT_ROUNDS} rodadas. Cada jogador só pode ter um pacto por vez, e os mesmos dois esperam 2 rodadas para fazer outro. Proponha na sua vez (uma proposta por turno). Romper antes só no início do seu turno, antes de reforçar, e custa metade do reforço do turno (no mínimo ${PACT_PENALTY}).</p>`;
     h += `<ul class="plist">${v.pacts.map((x) => {
       const mineP = x.a === me || x.b === me, other = x.a === me ? x.b : x.a;
-      return `<li><span class="who">${tag(x.a)} e ${tag(x.b)} · até o fim da rodada ${x.until + 1}</span>${mineP && myTurn && v.step === 'reinforce' ? `<button class="btn small warn" data-break="${other}">Romper</button>` : ''}</li>`;
+      return `<li><span class="who">${tag(x.a)} e ${tag(x.b)} · até o fim da rodada ${x.until + 1}</span>${mineP && myTurn && v.step === 'reinforce' && !v.placed ? `<button class="btn small warn" data-break="${other}">Romper</button>` : ''}</li>`;
     }).join('') || '<li><span class="who">Nenhum pacto em vigor.</span></li>'}</ul>`;
     if (offerIsMine(v)) h += `<button class="btn primary" data-m="answer">Responder à proposta de ${esc(v.players[v.offer.from].name)}</button>`;
     else if (v.offer) h += `<p>${tag(v.offer.from)} aguarda a resposta de ${tag(v.offer.to)}.</p>`;
     if (myTurn) {
       const used = v.players[me].offered === v.round + ':' + v.turn;
-      const cand = v.players.map((p, i) => i).filter((i) => i !== me && v.players[i].alive && !pactOf(v, me, i));
+      const cand = v.players.map((p, i) => i).filter((i) => i !== me && v.players[i].alive && !pactBlock(v, me, i));
+      const mineNow = v.pacts.some((x) => x.a === me || x.b === me);
       h += alive <= 2 ? '<p>Com só dois jogadores em jogo não há pactos.</p>'
+        : mineNow ? '<p>Você já tem um pacto: só pode ter um por vez.</p>'
         : used ? '<p>Você já fez a proposta deste turno.</p>'
+        : !cand.length ? '<p>Ninguém disponível para um pacto agora (já têm pacto ou estão no prazo de espera).</p>'
         : `<div class="row wrap">${cand.map((i) => `<button class="btn small" data-offer="${i}"${v.offer ? ' disabled' : ''}><span class="dot" style="background:${COLORS[v.players[i].color].c}"></span>Propor a ${esc(v.players[i].name)}</button>`).join('')}</div>`;
     } else h += '<p>Você propõe ou rompe pactos na sua vez.</p>';
   }
   if (v.opts.nukes) {
     const why = myTurn ? nukeBlock(v, me) : null;
     h += `<h3>Ogiva nuclear</h3>${v.fog ? `<p style="color:var(--ink);font-size:16px"><b class="rad">Névoa sobre ${TERR[v.fog.t].n}</b>, lançada por ${tag(v.fog.by)}. Dissipa quando a vez voltar para quem lançou.</p>` : ''}
-      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói <b>${nukeDamage(v)}</b> exércitos do alvo, o dobro do valor da troca. Não há sorteio: o número é fixo, e só é menor quando o alvo tem menos que isso, porque sempre sobra 1.</p>
-      <ul class="evlist"><li>Custa o turno inteiro: você não recebe os exércitos da troca nem o reforço, não ataca e não remaneja. Por isso só pode ser lançada antes de colocar qualquer reforço.</li><li>O alvo fica isolado até a sua vez voltar: não ataca, não é atacado, não recebe reforços nem movimentos. O continente dele não paga bônus.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>Os pactos de quem lança acabam na hora.</li></ul>
+      <p>No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói <b>${nukeDamage(v)}</b> exércitos, o dobro do valor da troca, mas nunca mais que a metade do que o alvo tem. Não há sorteio.</p>
+      <ul class="evlist"><li>Você recebe metade dos exércitos da troca (hoje ${nukeRefund(v)}) e não ataca no turno. Reforço e remanejamento continuam.</li><li>Até a sua vez voltar, ninguém pode atacar o território atingido. O dono joga normalmente: reforça, ataca a partir dele e recebe o bônus do continente.</li><li>Quando a névoa some, você é o primeiro a poder atacar ali.</li><li>Só uma névoa no mapa por vez.</li><li>A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.</li><li>O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.</li><li>O pacto de quem lança acaba na hora.</li></ul>
       ${why && v.step === 'reinforce' ? `<p>${esc(why)}</p>` : ''}`;
   }
   modal(h + '<button class="btn primary" data-m="close">Fechar</button>');
@@ -1234,7 +1236,7 @@ function showExtras() {
     if (d.offer != null) { closeModal(); act({ t: 'pactOffer', to: +d.offer }); }
     if (d.break != null) {
       const w = +d.break;
-      modal(`<h3>Romper o pacto?</h3><p>Você perde ${PACT_PENALTY} exércitos do reforço deste turno (ou o que restar dele) e volta a poder atacar ${tag(w)}. Todos ficam sabendo.</p>
+      modal(`<h3>Romper o pacto?</h3><p>Você perde <b>${pactPenalty(app.view)}</b> exércitos, metade do reforço deste turno, e volta a poder atacar ${tag(w)}. Vocês dois só poderão fazer outro pacto depois de 2 rodadas. Todos ficam sabendo.</p>
         <div class="row"><button class="btn warn" data-m="sure">Romper</button><button class="btn" data-m="close">Manter</button></div>`);
       $('#modal .sheet').onclick = (ev) => { if (ev.target.dataset.m === 'sure') { closeModal(); act({ t: 'pactBreak', with: w }); } };
     }
@@ -1255,7 +1257,7 @@ function confirmEnd(k, run) {
 }
 function showObjective() {
   const v = app.view, me = v.players[app.role === 'guest' ? app.me : viewer()];
-  modal(`<h3>Objetivo de ${esc(me.name)}</h3><p style="color:var(--ink);font-size:16px">${me.obj != null ? esc(objectiveText(OBJECTIVES[me.obj])) : '—'}</p>
+  modal(`<h3>Objetivo de ${esc(me.name)}</h3><p style="color:var(--ink);font-size:16px">${me.obj != null ? esc(objectiveText(OBJECTIVES[me.obj], v.players.length)) : '—'}</p>
     <p>Mantenha em segredo. Territórios: ${owned(v, v.players.indexOf(me))} de ${TERR.length}.</p><button class="btn" data-m="close">Fechar</button>`);
 }
 function showCards() {
@@ -1308,8 +1310,8 @@ function showRules() {
   <li><b>Rotas marítimas:</b> linhas pontilhadas também são fronteiras. O Alasca liga com o Extremo Oriente pela borda do mapa.</li></ul>
   <h3>Regras extras (opcionais)</h3>
   <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
-  <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Para romper antes, só no início do seu turno e ao custo de ${PACT_PENALTY} exércitos do reforço. Com dois jogadores em jogo os pactos acabam.</li></ul>
-  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sobra ao menos 1) e fica isolado sob névoa até a sua vez voltar: sem ataques, reforços ou movimentos, e o continente dele não paga bônus. Lançar custa o seu turno inteiro (sem reforço, ataque ou remanejamento), então tem de ser a primeira ação dele. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
+  <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Cada jogador só pode ter um pacto por vez. Para romper antes, só no início do seu turno, antes de reforçar, ao custo de metade do reforço (no mínimo ${PACT_PENALTY}). Com dois jogadores em jogo os pactos acabam.</li></ul>
+  <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria, no máximo metade do que tem. Você recebe metade dos exércitos da troca e não ataca no turno. Até a sua vez voltar, ninguém pode atacar o território atingido, mas o dono joga normalmente. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
   <h3>Conexão</h3>
   <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>
   <button class="btn" data-m="close">Fechar</button>`);
