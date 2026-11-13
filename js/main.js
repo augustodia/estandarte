@@ -31,7 +31,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '27'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '28'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -950,6 +950,9 @@ function stepRange(v) {
   return hi > 0 ? [1, hi] : null;
 }
 
+// Símbolos das cartas desenhados com o mesmo tamanho (os caracteres ● ■ ▲ variam de fonte para fonte).
+const SYM_SVG = ['<circle cx="12" cy="12" r="9.5"/>', '<rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/>', '<path d="M12 2.5 22 20.5H2z"/>', '<path d="m12 1.8 3 6.9 7.5.7-5.7 5 1.7 7.4L12 17.9l-6.5 3.9 1.7-7.4-5.7-5 7.5-.7z"/>']
+  .map((d, i) => `<svg class="sym" viewBox="0 0 24 24" role="img" aria-label="${['círculo', 'quadrado', 'triângulo', 'coringa'][i]}">${d}</svg>`);
 const STEP = { reinforce: 'Reforço', attack: 'Ataque', move: 'Remanejamento' };
 const ICON = {
   goal: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
@@ -1150,12 +1153,7 @@ function renderGame() {
   }
   const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span><span>Você: ${esc(meP.name)}</span></span>`;
   $('#bar').innerHTML = `<div class="msg">${msg}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
-  if (app.confirm && (app.confirm.n !== v.n || !can)) app.confirm = null;
-  const ask = app.confirm && $(`#bar [data-do=${app.confirm.k}]`);
-  if (ask) {
-    ask.textContent = 'Confirmar?'; ask.classList.add('ask'); ask.classList.remove('ghost');
-    $('#bar .msg').textContent = app.confirm.k === 'endAttack' ? 'Encerrar os ataques deste turno? Toque de novo para confirmar.' : 'Encerrar o seu turno? Toque de novo para confirmar.';
-  }
+  if (app.endAsk != null && (app.endAsk !== v.n || !can)) closeModal(); // a janela de confirmação some se a jogada deixou de valer (tempo esgotado, por exemplo)
 }
 
 // Tela de vitória: ocupa a tela toda, na cor do vencedor, com o objetivo cumprido e a classificação final.
@@ -1242,20 +1240,18 @@ function showExtras() {
     }
   };
 }
-// Encerrar ataques ou o turno pede dois toques: o primeiro arma o botão ("Confirmar?"), o segundo executa.
-// Toques colados (menos de 0,35 s) não contam, para um toque duplo sem querer não confirmar.
-let confirmTimer = null;
+// Encerrar ataques ou o turno pede confirmação numa janela. O botão que confirma fica do lado oposto ao que abriu a janela
+// e ignora toques nos primeiros 0,4 s, para um toque duplo sem querer não confirmar.
 function confirmEnd(k, run) {
-  const c = app.confirm, now = Date.now();
-  if (c && c.k === k && c.n === app.view.n) {
-    if (now - c.at < 350) return;
-    app.confirm = null; clearTimeout(confirmTimer);
-    return run();
-  }
-  app.confirm = { k, n: app.view.n, at: now };
-  clearTimeout(confirmTimer);
-  confirmTimer = setTimeout(() => { app.confirm = null; if (app.view) renderGame(); }, 4000);
-  renderGame();
+  const atk = k === 'endAttack', at = Date.now();
+  modal(`<h3>${atk ? 'Encerrar os ataques?' : 'Encerrar o turno?'}</h3>
+    <p>${atk ? 'Você passa para o remanejamento e não ataca mais neste turno.' : 'A vez passa para o próximo jogador.'}</p>
+    <div class="row"><button class="btn primary" data-m="sure">${atk ? 'Encerrar ataques' : 'Encerrar turno'}</button><button class="btn" data-m="close">Continuar jogando</button></div>`, () => { app.endAsk = null; });
+  app.endAsk = app.view.n;
+  $('#modal .sheet').onclick = (e) => {
+    if (e.target.dataset.m !== 'sure' || Date.now() - at < 400) return;
+    closeModal(); run();
+  };
 }
 function showObjective() {
   const v = app.view, me = v.players[app.role === 'guest' ? app.me : viewer()];
@@ -1271,7 +1267,7 @@ function showCards() {
     const ok = canTrade && validTrade([...picked]);
     $('#modal .sheet').innerHTML = `<h3>Cartas (${hand.length})</h3>
       <p>Troque 3 símbolos iguais ou 3 diferentes (★ vale qualquer um) no início do seu turno. Próxima troca vale <b>${tradeValue(v.trades)}</b> exércitos; cartas de territórios seus dão +2 neles. Com 5 cartas a troca é automática.</p>
-      <div class="cards">${hand.map((c) => `<button class="card${picked.has(c) ? ' on' : ''}" data-card="${c}"><b>${SYMBOLS[cardSymbol(c)]}</b>${esc(cardName(c))}</button>`).join('') || '<p>Nenhuma carta ainda. Conquiste um território no turno para ganhar uma.</p>'}</div>
+      <div class="cards">${hand.map((c) => `<button class="card${picked.has(c) ? ' on' : ''}" data-card="${c}"><b>${SYM_SVG[cardSymbol(c)]}</b>${esc(cardName(c))}</button>`).join('') || '<p>Nenhuma carta ainda. Conquiste um território no turno para ganhar uma.</p>'}</div>
       <div class="row"><button class="btn primary" data-m="trade" ${ok ? '' : 'disabled'}>Trocar selecionadas</button><button class="btn" data-m="close">Fechar</button></div>`;
   };
   modal('');

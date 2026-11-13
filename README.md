@@ -72,7 +72,7 @@ Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes
 - **Conquista e remanejamento:** − e + definem quantos exércitos mover.
 - **Sempre deitado:** durante a partida a tela fica deitada mesmo com o celular em pé (ela gira 90° e você vira o aparelho); o mapa ocupa a tela e os controles ficam numa faixa no rodapé. Dá para voltar ao modo automático no menu ☰.
 
-Encerrar os ataques e encerrar o turno pedem dois toques: o primeiro arma o botão ("Confirmar?"), o segundo executa. Toques colados não contam, e o botão desarma sozinho em 4 segundos.
+Encerrar os ataques e encerrar o turno pedem confirmação numa janela, para um toque sem querer não passar a vez.
 
 ## O que cada um vê durante a partida
 

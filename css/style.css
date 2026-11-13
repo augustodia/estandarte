@@ -262,3 +262,4 @@ body.land #modal{padding:0 var(--sr) 0 var(--sl)}
 .btn.ask{background:#e2b04a;border-color:#e2b04a;color:#1c1408;animation:askpulse .8s ease-in-out infinite}
 @keyframes askpulse{50%{filter:brightness(1.18)}}
 @media (prefers-reduced-motion:reduce){.btn.ask{animation:none}}
+.card .sym{display:block;width:24px;height:24px;margin:0 auto;fill:currentColor;stroke:none}
