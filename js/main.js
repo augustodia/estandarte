@@ -32,7 +32,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '32'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '33'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -52,7 +52,11 @@ function modal(html, onClose) {
 }
 function closeModal() {
   if (modalCleanup) { const f = modalCleanup; modalCleanup = null; f(); }
-  $('#modal').hidden = true; $('#modal .sheet').innerHTML = '';
+  const m = $('#modal');
+  if (m.hidden) return;
+  const ghost = m.cloneNode(true); ghost.removeAttribute('id'); ghost.classList.add('closing'); ghost.setAttribute('aria-hidden', 'true');
+  m.after(ghost); setTimeout(() => ghost.remove(), 200); // a cópia some animada; a janela real já está livre para a próxima
+  m.hidden = true; $('#modal .sheet').innerHTML = '';
 }
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -501,32 +505,63 @@ const el = (tag, attrs, parent) => {
 const PAD = 30;
 const nodes = [];
 let aimLayer = null, fogLayer = null, hazardLayer = null;
+const seaRoutes = []; // traços das ligações por mar, para acender os que saem do território selecionado
 // símbolo de radiação (três pás), mostrado ao lado do marcador do território atingido
 const TREFOIL = [-90, 30, 150].map((a) => { const q = (r, deg) => `${(r * Math.cos(deg * Math.PI / 180)).toFixed(2)} ${(r * Math.sin(deg * Math.PI / 180)).toFixed(2)}`; return `M${q(2.4, a - 30)}L${q(7.6, a - 30)}A7.6 7.6 0 0 1 ${q(7.6, a + 30)}L${q(2.4, a + 30)}A2.4 2.4 0 0 0 ${q(2.4, a - 30)}Z`; }).join('');
 (function buildMap() {
-  const aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), routes = el('g', {}, svg), fogs = el('g', { class: 'foglayer' }, svg), hazard = el('g', { class: 'hazard' }, svg2), labels = el('g', {}, svg2), aim = el('g', { class: 'aimlayer' }, svg2), hits = el('g', {}, svg2);
+  const sea = el('g', { class: 'sea' }, svg), aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), shade = el('g', { class: 'shade' }, svg), moat = el('g', {}, svg), routes = el('g', { class: 'routes' }, svg), fogs = el('g', { class: 'foglayer' }, svg), hazard = el('g', { class: 'hazard' }, svg2), labels = el('g', {}, svg2), aim = el('g', { class: 'aimlayer' }, svg2), hits = el('g', {}, svg2);
   aimLayer = aim; fogLayer = fogs; hazardLayer = hazard;
   const defs = el('defs', {}, svg);
   const halo = el('radialGradient', { id: 'foghalo' }, defs);
   el('stop', { offset: '.45', 'stop-color': '#58ff3c', 'stop-opacity': '.5' }, halo); el('stop', { offset: '1', 'stop-color': '#58ff3c', 'stop-opacity': '0' }, halo);
-  // ligações por mar: um traço de costa a costa, por cima da terra, para ficar sempre visível
-  const link = (x1, y1, x2, y2) => { el('line', { class: 'sea-case', x1, y1, x2, y2 }, routes); el('line', { class: 'sea-route', x1, y1, x2, y2 }, routes); };
-  SEA.forEach(([, , x1, y1, x2, y2, wrap]) => {
-    if (wrap) { link(x1, y1, -PAD, y1); link(x2, y2, MAP_W + PAD, y2); } // dá a volta no mapa: um trecho até cada borda
-    else link(x1, y1, x2, y2);
+  // relevo: cada território recebe luz de cima à esquerda e sombra embaixo à direita, como uma peça em relevo
+  const light = el('linearGradient', { id: 'landlight', x1: 0, y1: 0, x2: 1, y2: 1 }, defs);
+  for (const [o, c, a] of [[0, '#fff', 0.24], [0.42, '#fff', 0], [0.58, '#000', 0], [1, '#000', 0.3]]) el('stop', { offset: o, 'stop-color': c, 'stop-opacity': a }, light);
+  // mar: paralelos e meridianos bem discretos e uma rosa dos ventos no Índico
+  for (let x = -710; x <= MAP_W + 710; x += 71) el('line', { class: 'grat', x1: x, y1: -500, x2: x, y2: MAP_H + 500 }, sea);
+  for (let y = -497; y <= MAP_H + 500; y += 71) el('line', { class: 'grat', x1: -720, y1: y, x2: MAP_W + 720, y2: y }, sea);
+  {
+    const rose = el('g', { class: 'rose', transform: 'translate(985 590)' }, sea), pt = (len, w, a) => `M0 0L${w} ${-w}L0 ${-len}L${-w} ${-w}Z`;
+    el('circle', { r: 30 }, rose); el('circle', { r: 23 }, rose);
+    for (let k = 0; k < 8; k++) el('path', { class: k % 2 ? 'minor' : 'major', d: k % 2 ? pt(22, 3.2) : pt(38, 5), transform: `rotate(${k * 45})` }, rose);
+    el('text', { y: -42 }, rose).textContent = 'N';
+  }
+  // ligações por mar: um arco suave de costa a costa (a barriga vai para o lado com mais mar) e um "porto" em cada ponta
+  const arc = (x1, y1, x2, y2) => {
+    const L = Math.hypot(x2 - x1, y2 - y1), mx = (x1 + x2) / 2, my = (y1 + y2) / 2, nx = -(y2 - y1) / L, ny = (x2 - x1) / L, h = L * (L > 45 ? 0.2 : 0.14);
+    const free = (cx, cy) => Math.min(...TERR.map((t) => Math.hypot(t.x - cx, t.y - cy)));
+    const sg = free(mx + nx * h * 2, my + ny * h * 2) >= free(mx - nx * h * 2, my - ny * h * 2) ? 1 : -1;
+    return `M${x1} ${y1}Q${(mx + nx * h * sg).toFixed(1)} ${(my + ny * h * sg).toFixed(1)} ${x2} ${y2}`;
+  };
+  const link = (d, a, b) => {
+    el('path', { class: 'sea-case', d }, routes);
+    const r = el('path', { class: 'sea-route', d }, routes);
+    if (a != null) { r.dataset.a = a; r.dataset.b = b; seaRoutes.push(r); }
+  };
+  const port = (x, y) => { el('circle', { class: 'port', cx: x, cy: y, r: 3.1 }, routes); };
+  SEA.forEach(([a, b, x1, y1, x2, y2, wrap]) => {
+    if (wrap) { // dá a volta no mapa: um trecho até cada borda, com setas indicando que continua do outro lado
+      link(`M${x1} ${y1}H${-PAD - 20}`, a, b); link(`M${x2} ${y2}H${MAP_W + PAD + 20}`, a, b);
+      el('path', { class: 'wrapmark', d: `M${-PAD + 8} ${y1 - 5}l-6 5 6 5M${-PAD + 16} ${y1 - 5}l-6 5 6 5` }, routes);
+      el('path', { class: 'wrapmark', d: `M${MAP_W + PAD - 8} ${y2 - 5}l6 5-6 5M${MAP_W + PAD - 16} ${y2 - 5}l6 5-6 5` }, routes);
+    } else link(arc(x1, y1, x2, y2), a, b);
+    port(x1, y1); port(x2, y2);
   });
   TERR.forEach((t, i) => {
     const col = CONTINENTS[t.c].color;
     const poly = el('path', { class: 'terr', d: t.d, 'data-t': i, 'fill-rule': 'evenodd' }, land);
+    const shd = el('path', { class: 'tshade', d: t.d, 'fill-rule': 'evenodd' }, shade);
     // marcador (exércitos + nome) num grupo próprio, para poder manter o tamanho na tela ao afastar o zoom
     const g = el('g', { class: 'mark' }, hits);
-    el('text', { class: 'tname', x: 0, y: 24 }, g).textContent = t.n;
+    const name = el('text', { class: 'tname', x: 0, y: 24 }, g);
+    name.textContent = t.n;
+    el('circle', { class: 'bshadow', cx: 0, cy: 2, r: 13.4 }, g);
     const badge = el('circle', { class: 'badge', cx: 0, cy: 0, r: 12.5 }, g);
     const num = el('text', { class: 'num', x: 0, y: 0.5 }, g);
     const tre = el('g', { class: 'trefoil', transform: 'translate(13.5 -13.5)' }, g);
     el('circle', { class: 'tdisc', r: 7.6 }, tre); el('path', { d: TREFOIL, transform: 'scale(.72)' }, tre); el('circle', { class: 'tdot', r: 1.1 }, tre);
     const hit = el('circle', { class: 'hit', cx: 0, cy: 0, r: 19, 'data-t': i }, g);
-    nodes.push({ poly, num, badge, g, hit });
+    nodes.push({ poly, num, badge, g, hit, name, shade: shd });
   });
   CONTINENTS.forEach((c, ci) => {
     el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
@@ -542,7 +577,7 @@ let markK = 0;
 function scaleMarks() {
   // ao afastar o zoom os marcadores crescem (até um limite) para continuarem legíveis e tocáveis
   const k = Math.round(Math.min(2.2, Math.max(1, 10.5 / (12.5 * cam.z))) * 50) / 50;
-  svg.classList.toggle('far', cam.z < 0.5);
+  svg2.classList.toggle('far', cam.z < 0.5);
   // contornos de continente com espessura limitada em pixels: ao aproximar o zoom eles não engrossam
   // nem cobrem ilhas e territórios estreitos
   const u = (units, px) => Math.min(units, px / cam.z).toFixed(2);
@@ -554,6 +589,34 @@ function scaleMarks() {
   if (k === markK) return;
   markK = k;
   nodes.forEach((nd, i) => nd.g.setAttribute('transform', `translate(${TERR[i].x} ${TERR[i].y}) scale(${k})`));
+  layoutLabels(k);
+}
+// Nomes dos territórios sem sobreposição: cada nome tenta ficar embaixo, em cima, à direita ou à esquerda do marcador,
+// no primeiro lugar em que não cobre outro marcador nem outro nome. Se não couber em nenhum, fica escondido até aproximar o zoom.
+let nameW = null;
+function layoutLabels(k) {
+  if (!nameW) { // largura de cada nome, medida num canvas (funciona mesmo com o mapa ainda escondido)
+    const c = document.createElement('canvas').getContext('2d'); c.font = '600 8px system-ui, sans-serif';
+    nameW = nodes.map((nd) => c.measureText(nd.name.textContent).width + 2.4);
+  }
+  const R = 13.6 * k, placed = [];
+  const hitsMark = (b, self) => TERR.some((t, j) => j !== self && t.x + R > b.x0 && t.x - R < b.x1 && t.y + R > b.y0 && t.y - R < b.y1);
+  const hitsBox = (b) => placed.some((q) => b.x0 < q.x1 && b.x1 > q.x0 && b.y0 < q.y1 && b.y1 > q.y0);
+  // primeiro os territórios com vizinhos mais próximos: são os que têm menos opções
+  const order = TERR.map((t, i) => i).sort((a, b) => Math.min(...TERR.filter((_, j) => j !== a).map((t) => Math.hypot(t.x - TERR[a].x, t.y - TERR[a].y))) - Math.min(...TERR.filter((_, j) => j !== b).map((t) => Math.hypot(t.x - TERR[b].x, t.y - TERR[b].y))));
+  for (const i of order) {
+    const t = TERR[i], w = nameW[i], nd = nodes[i], hgt = 9.5;
+    const opts = [[0, 24, 'middle'], [0, -18, 'middle'], [16.5, 3, 'start'], [-16.5, 3, 'end']];
+    let done = false;
+    for (const [ox, oy, anchor] of opts) {
+      const cx = t.x + ox * k, cy = t.y + oy * k, x0 = anchor === 'middle' ? cx - (w / 2) * k : anchor === 'start' ? cx : cx - w * k;
+      const b = { x0: x0 - 1, x1: x0 + w * k + 1, y0: cy - hgt * k * 0.8, y1: cy + hgt * k * 0.35 };
+      if (hitsMark(b, i) || hitsBox(b)) continue;
+      nd.name.setAttribute('x', ox); nd.name.setAttribute('y', oy); nd.name.style.textAnchor = anchor; nd.name.removeAttribute('display');
+      placed.push(b); done = true; break;
+    }
+    if (!done) nd.name.setAttribute('display', 'none');
+  }
 }
 
 // Pan e zoom por viewBox, mantendo a proporção do contêiner.
@@ -685,10 +748,43 @@ function fxFloat(t, text, color, dy = 0) {
   n.textContent = text; later(n, 1400);
 }
 function fxPulse(t, color, big) { later(el('circle', { class: 'fx-pulse' + (big ? ' big' : ''), cx: TERR[t].x, cy: TERR[t].y, r: 13, stroke: color }, fx), 1300); }
+// Remanejamento: um rastro tracejado que corre da origem ao destino.
 function fxArrow(a, b, color) {
   const A = TERR[a], B = TERR[b];
-  if (Math.abs(A.x - B.x) < MAP_W / 2) later(el('line', { class: 'fx-arrow', x1: A.x, y1: A.y, x2: B.x, y2: B.y, stroke: color }, fx), 1100);
+  if (Math.abs(A.x - B.x) < MAP_W / 2) { const d = `M${A.x} ${A.y}L${B.x} ${B.y}`; later(el('path', { class: 'fx-arrow', d, stroke: color }, fx), 1100); later(el('path', { class: 'fx-march', d }, fx), 1100); }
   later(el('circle', { class: 'fx-dot', cx: B.x, cy: B.y, r: 7, fill: color, stroke: '#fff', 'stroke-width': 2 }, fx), 1100);
+  kick(b, A, B, 3);
+}
+// Empurra um marcador para longe de um ponto e deixa voltar, como mola.
+function kick(i, from, at, amp) {
+  const dx = at.x - from.x, dy = at.y - from.y, L = Math.hypot(dx, dy) || 1;
+  try { nodes[i].g.animate([{ translate: '0 0' }, { translate: `${((dx / L) * amp).toFixed(1)}px ${((dy / L) * amp).toFixed(1)}px`, offset: 0.22 }, { translate: '0 0' }], { duration: 420, easing: 'cubic-bezier(.2,1.5,.4,1)' }); } catch {}
+}
+// Ataque: tiros traçantes da origem ao alvo, clarão e estilhaços no impacto, o alvo recua. Na conquista, o território pisca.
+function fxStrike(a, b, color, won) {
+  const A = TERR[a], B = TERR[b], far = Math.abs(A.x - B.x) > MAP_W / 2; // ligação que dá a volta no mapa: sem traço
+  if (!far) {
+    const d = `M${A.x} ${A.y}L${B.x} ${B.y}`;
+    for (let k = 0; k < 3; k++) later(el('path', { class: 'fx-tracer', d, pathLength: 100, stroke: color, style: `animation-delay:${k * 75}ms` }, fx), 800);
+    later(el('path', { class: 'fx-tracer core', d, pathLength: 100, style: 'animation-delay:40ms' }, fx), 800);
+    kick(a, B, A, 2.5);
+  }
+  setTimeout(() => {
+    const g = el('g', { class: 'fx-hit', transform: `translate(${B.x} ${B.y})` }, fx);
+    el('circle', { class: 'flashdot', r: 10 }, g);
+    for (let k = 0; k < 8; k++) el('line', { class: 'spark', x1: 0, y1: -9, x2: 0, y2: -19, stroke: k % 2 ? '#fff' : color, transform: `rotate(${k * 45 + ((b * 37) % 40)})` }, g);
+    later(g, 650);
+    fxPulse(b, color, won);
+    kick(b, A, B, far ? 0 : 6);
+    if (won) later(el('path', { class: 'fx-wash', d: B.d, 'fill-rule': 'evenodd' }, fx), 700);
+  }, far ? 0 : 240);
+}
+// O número do marcador salta quando muda: verde se cresceu, vermelho se diminuiu.
+function popNum(nd, up) {
+  try {
+    nd.num.animate([{ scale: 1.6, fill: up ? '#8dffb0' : '#ff9a8c' }, { scale: 1, fill: '#fff' }], { duration: 480, easing: 'cubic-bezier(.2,1.5,.4,1)' });
+    nd.badge.animate([{ scale: 1.2 }, { scale: 1 }], { duration: 400, easing: 'ease-out' });
+  } catch {}
 }
 // Destaque passageiro dos territórios envolvidos na jogada de outro jogador (o resto do mapa esmaece).
 function spotlight(ids, ms = 1000) {
@@ -856,7 +952,7 @@ function processEvents(v) {
     }
     else if (e.t === 'move') { fxArrow(e.from, e.to, col(e.p)); fxFloat(e.to, '+' + e.k, '#fff'); play('move'); if (!mine(e.p)) spotlight([e.from, e.to]); }
     else if (e.t === 'attack') {
-      fxArrow(e.from, e.to, col(e.p));
+      fxStrike(e.from, e.to, col(e.p), e.won);
       if (e.la) fxFloat(e.from, '−' + e.la, '#ff8a7a');
       if (e.ld) fxFloat(e.to, '−' + e.ld, '#ff8a7a');
       shake(e.won);
@@ -864,7 +960,6 @@ function processEvents(v) {
       const involved = mine(e.p) || mine(e.def);
       play('dice'); play(!e.won ? 'attack' : mine(e.def) && !mine(e.p) ? 'lost' : 'conquer');
       if (e.won) {
-        fxPulse(e.to, col(e.p), true);
         if (involved) buzz([80, 40, 160]);
         if (mine(e.p)) flash('Conquistou!', col(e.p), TERR[e.to].n, 1000, true);
         else if (mine(e.def)) flash(`${nm(e.p)} tomou ${TERR[e.to].n}`, col(e.p), '', 1200, false, true); // aviso discreto: o mapa fica livre para ver o que acontece
@@ -1023,6 +1118,9 @@ function stepRange(v) {
   return hi > 0 ? [1, hi] : null;
 }
 
+// Faces dos dados, com as pintas.
+const DIE = [null, [[12, 12]], [[7.2, 7.2], [16.8, 16.8]], [[7, 7], [12, 12], [17, 17]], [[7.2, 7.2], [16.8, 7.2], [7.2, 16.8], [16.8, 16.8]], [[7, 7], [17, 7], [12, 12], [7, 17], [17, 17]], [[7.2, 6.4], [16.8, 6.4], [7.2, 12], [16.8, 12], [7.2, 17.6], [16.8, 17.6]]]
+  .map((p) => p && `<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="face" x="1" y="1" width="22" height="22" rx="5.5"/>${p.map(([x, y]) => `<circle class="pip" cx="${x}" cy="${y}" r="2.15"/>`).join('')}</svg>`);
 // Símbolos das cartas desenhados com o mesmo tamanho (os caracteres ● ■ ▲ variam de fonte para fonte).
 const SYM_SVG = ['<circle cx="12" cy="12" r="9.5"/>', '<rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/>', '<path d="M12 2.5 22 20.5H2z"/>', '<path d="m12 1.8 3 6.9 7.5.7-5.7 5 1.7 7.4L12 17.9l-6.5 3.9 1.7-7.4-5.7-5 7.5-.7z"/>']
   .map((d, i) => `<svg class="sym" viewBox="0 0 24 24" role="img" aria-label="${['círculo', 'quadrado', 'triângulo', 'coringa'][i]}">${d}</svg>`);
@@ -1087,9 +1185,12 @@ function renderGame() {
   // no reforço, quando só restam bônus de continente, apaga onde não dá para colocar
   const bonusOnly = can && v.step === 'reinforce' && v.pool.free === 0 && !mustTrade(v);
   const spot = !can && app.spot && app.spot.until > Date.now() ? app.spot.set : null, front = [];
+  const prevArm = app.prevArm && app.prevArm.length === T.length ? app.prevArm : null;
+  app.prevArm = T.map((t) => t.a);
   nodes.forEach((nd, i) => {
     nd.poly.setAttribute('fill', COLORS[v.players[T[i].o].color].c);
     nd.num.textContent = T[i].a;
+    if (prevArm && prevArm[i] !== T[i].a) popNum(nd, T[i].a > prevArm[i]);
     const hl = app.target != null ? i === app.target : targets.has(i);
     // quem joga: esmaece o que não é origem nem alvo possível; quem assiste: esmaece tudo menos
     // o que o jogador da vez selecionou (ou, sem seleção, os territórios da última jogada)
@@ -1097,10 +1198,13 @@ function renderGame() {
       : v.phase === 'over' ? T[i].o !== v.winner : pk ? i !== pk.sel && i !== pk.target : spot ? !spot.has(i) : false;
     const ps = pk ? (i === pk.sel ? ' sel' : i === pk.target ? ' tgt' : '') : spot && spot.has(i) ? ' lit' : '';
     nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + ps);
+    nd.shade.setAttribute('class', dim ? 'tshade dim' : 'tshade');
     if (i === app.sel || hl || ps) front.push(nd.poly);
   });
   front.forEach((p) => p.parentNode.appendChild(p)); // destacados por cima dos vizinhos, para o contorno aparecer inteiro
 
+  // ligações por mar que saem do território selecionado e levam a um alvo possível ficam acesas
+  for (const r of seaRoutes) { const a = +r.dataset.a, b = +r.dataset.b; r.classList.toggle('on', can && app.sel != null && ((a === app.sel && targets.has(b)) || (b === app.sel && targets.has(a)))); }
   // linhas até onde dá para atacar ou mover (e, para quem assiste, a mira do jogador da vez)
   aimLayer.replaceChildren();
   const aimTo = (a, b, cls, color) => {
@@ -1156,14 +1260,22 @@ function renderGame() {
   chip.hidden = !(v.event && v.phase === 'play');
   if (!chip.hidden) { chip.innerHTML = `${ICON.extras}<span>${EVENTS[v.event.k].n}${v.event.c != null ? ' · ' + CONTINENTS[v.event.c].n : ''}</span>`; chip.setAttribute('aria-label', `Evento da rodada: ${EVENTS[v.event.k].n}. ${eventText(v.event)}`); }
 
-  // dados
+  // dados: uma linha por lado, na cor de cada jogador; os pares se alinham e quem perde o par apaga
   if (v.roll && v.roll.n !== app.lastRoll) {
     app.lastRoll = v.roll.n;
-    const r = v.roll, pairs = Math.min(r.att.length, r.def.length);
-    const die = (x, cls, lost) => `<span class="die ${cls}${lost ? ' lost' : ''}">${x}</span>`;
+    const r = v.roll, pairs = Math.min(r.att.length, r.def.length), atk = (v.ev || []).filter((e) => e.t === 'attack').pop();
+    const side = (list, cls, name, color, lostAt) => {
+      const lost = list.filter((x, i) => i < pairs && lostAt(i)).length;
+      return `<div class="dside ${cls}" style="--c:${color}"><small>${esc(name)}</small><span class="drow">${list.map((x, i) => `<span class="die ${cls}${i < pairs ? (lostAt(i) ? ' lost' : ' won') : ''}" style="--i:${i}" aria-label="${x}">${DIE[x] || x}</span>`).join('')}</span><b class="dres${lost ? '' : ' zero'}">${lost ? '−' + lost : '✓'}</b></div>`;
+    };
     const d = $('#dice');
-    d.innerHTML = `<span>${r.att.map((x, i) => die(x, 'a', i < pairs && x <= r.def[i])).join('')}</span><span>×</span><span>${r.def.map((x, i) => die(x, 'd', i < pairs && r.att[i] > x)).join('')}</span>`;
-    d.hidden = false; clearTimeout(d._t); d._t = setTimeout(() => (d.hidden = true), 2600);
+    d.innerHTML = side(r.att, 'a', cur.name, COLORS[cur.color].c, (i) => r.att[i] <= r.def[i])
+      + side(r.def, 'd', atk ? v.players[atk.def].name : 'Defesa', atk ? COLORS[v.players[atk.def].color].c : '#8b96a3', (i) => r.att[i] > r.def[i]);
+    // fica do lado oposto ao combate, para não cobrir a ação
+    const yy = atk ? ((TERR[atk.from].y + TERR[atk.to].y) / 2 - cam.y) * cam.z : 0;
+    d.classList.toggle('low', yy < svg.clientHeight * 0.45);
+    d.hidden = false; d.classList.remove('go'); void d.offsetWidth; d.classList.add('go');
+    clearTimeout(d._t); d._t = setTimeout(() => (d.hidden = true), 2900);
   }
 
   // rodapé
@@ -1332,6 +1444,7 @@ function confirmEnd(k, run) {
 function showObjective() {
   const v = app.view, me = v.players[app.role === 'guest' ? app.me : viewer()];
   modal(`<h3>Objetivo de ${esc(me.name)}</h3><p style="color:var(--ink);font-size:16px">${me.obj != null ? esc(objectiveText(OBJECTIVES[me.obj], v.players.length)) : '—'}</p>
+    <div class="meter" style="--p:${(100 * owned(v, v.players.indexOf(me)) / TERR.length).toFixed(1)}%;--c:${COLORS[me.color].c}"><i></i></div>
     <p>Mantenha em segredo. Territórios: ${owned(v, v.players.indexOf(me))} de ${TERR.length}.</p><button class="btn" data-m="close">Fechar</button>`);
 }
 function showCards() {
@@ -1360,7 +1473,7 @@ function showMenu() {
   modal(`<h3>Jogadores</h3><ul class="plist">${v.players.map((p, i) => {
     const seat = host ? app.seats[p.seat] : null;
     const offline = host && p.ctrl === 'remote' && (!seat.link || seat.lag);
-    return `<li><span class="dot" style="background:${COLORS[p.color].c}"></span><span class="who">${p.alive ? '' : '☠ '}<b>${esc(p.name)}</b> · ${owned(v, i)} terr. · ${handSize(p)} cartas${p.ctrl === 'bot' ? ' · bot' : ''}${offline ? ` · <span class="off">${seat.link ? 'sem resposta' : 'offline'}</span>` : ''}</span>
+    return `<li style="--c:${COLORS[p.color].c};--p:${(100 * owned(v, i) / TERR.length).toFixed(1)}%" class="pl${i === v.turn ? ' now' : ''}"><span class="dot" style="background:${COLORS[p.color].c}"></span><span class="who">${p.alive ? '' : '☠ '}<b>${esc(p.name)}</b> · ${owned(v, i)} terr. · ${handSize(p)} cartas${p.ctrl === 'bot' ? ' · bot' : ''}${offline ? ` · <span class="off">${seat.link ? 'sem resposta' : 'offline'}</span>` : ''}</span>
       ${host && p.ctrl === 'remote' && p.alive ? `<button class="btn small" data-re="${p.seat}">QR</button>` : ''}${offline && p.alive ? `<button class="btn small" data-bot="${i}">Virar bot</button>` : ''}</li>`;
   }).join('')}</ul>
   <div class="log">${v.log.slice().reverse().map(esc).join('<br>')}</div>

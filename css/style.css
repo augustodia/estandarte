@@ -55,7 +55,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;stroke:none;overflow:visible}
 .depth{fill:#050a13;stroke:#050a13;stroke-width:1;stroke-linejoin:round;transform:translateY(var(--depth,4px))}
 .mapbtn{position:absolute;bottom:10px;height:34px;border-radius:17px;border:1px solid var(--line);background:#15263dd9;color:var(--ink);font:600 12px/1 system-ui,sans-serif;padding:0 12px;display:inline-flex;align-items:center;justify-content:center}
-#fit{right:var(--sr);width:34px;padding:0}#fit svg{width:16px;height:16px}
+#fit{left:calc(var(--sl) + 17px);bottom:88px;width:34px;padding:0;z-index:2;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}#fit svg{width:16px;height:16px}
 #bar{background:var(--panel);border-top:1px solid var(--line);padding:8px var(--sr) var(--sb) var(--sl);display:flex;flex-direction:column;gap:6px}
 #bar .msg{font-size:14px;line-height:1.3;min-height:18px;overflow-wrap:anywhere}
 #bar .actions{display:flex;gap:6px;align-items:center}
@@ -70,8 +70,15 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .you{display:flex;align-items:center;gap:5px;max-width:50%;min-width:0}.you span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.you .dot{width:10px;height:10px;border-width:1px}
 
 /* mapa */
-.sea-case{stroke:#0a1422;stroke-width:6px;vector-effect:non-scaling-stroke;stroke-linecap:round;fill:none;pointer-events:none}
-.sea-route{stroke:#dcecff;stroke-width:2.5px;vector-effect:non-scaling-stroke;stroke-dasharray:1 6;stroke-linecap:round;fill:none;pointer-events:none}
+.grat{stroke:#9fc3ff;stroke-opacity:.055;stroke-width:1px;vector-effect:non-scaling-stroke;pointer-events:none}
+.rose{pointer-events:none;opacity:.2}.rose circle{fill:none;stroke:#9fc3ff;stroke-width:1}.rose .major{fill:#9fc3ff}.rose .minor{fill:none;stroke:#9fc3ff;stroke-width:1}
+.rose text{fill:#9fc3ff;font:700 11px Georgia,serif;text-anchor:middle;stroke:none}
+.tshade{fill:url(#landlight);stroke:none;pointer-events:none}.tshade.dim{opacity:.22}
+.sea-case{stroke:#081120;stroke-width:5.5px;vector-effect:non-scaling-stroke;stroke-linecap:round;fill:none;pointer-events:none}
+.sea-route{stroke:#cfe3ff;stroke-width:1.8px;vector-effect:non-scaling-stroke;stroke-dasharray:1.5 5.5;stroke-linecap:round;fill:none;pointer-events:none;transition:stroke .2s,stroke-width .2s}
+.sea-route.on{stroke:#fff;stroke-width:3px;stroke-dasharray:6 5;animation:march .8s linear infinite}
+.port{fill:#cfe3ff;stroke:#081120;stroke-width:1.4;pointer-events:none}
+.wrapmark{fill:none;stroke:#cfe3ff;stroke-width:2px;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .aim{stroke:#fff;stroke-width:2.5px;vector-effect:non-scaling-stroke;stroke-dasharray:7 6;stroke-linecap:round;fill:none;pointer-events:none;animation:march .8s linear infinite;filter:drop-shadow(0 0 2px #000)}
 .aim.one{stroke-width:4px}
 /* Continente como "ilha": um canal escuro no contorno externo (moat) separa um continente do outro,
@@ -87,7 +94,8 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .terr.tgt{stroke:#fff;stroke-width:2.5px;stroke-dasharray:6 4;animation:march 1s linear infinite}
 .terr.dim{filter:brightness(.36) saturate(.45)}
 @keyframes march{to{stroke-dashoffset:-20}}
-.badge{fill:#0c1626;stroke:#fffc;stroke-width:1.6;pointer-events:none}
+.bshadow{fill:#02060c;opacity:.45;pointer-events:none}
+.badge{fill:#0c1626;stroke:#fffd;stroke-width:1.7;pointer-events:none}
 .hit{fill:transparent;stroke:none}
 .num{fill:#fff;font:700 14px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none;stroke:none}
 .tname{fill:#fff;font:600 8px system-ui,sans-serif;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#0c1626;stroke-width:2.4;stroke-linejoin:round}
@@ -99,7 +107,8 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .fx-pulse{fill:none;stroke-width:4;transform-box:fill-box;transform-origin:center;animation:pulse .9s ease-out both}
 .fx-pulse.big{stroke-width:6;animation-duration:1.2s}
 @keyframes pulse{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(3.4)}}
-.fx-arrow{stroke-width:5;stroke-linecap:round;fill:none;animation:arrow 1s ease-out both}
+.fx-arrow{stroke-width:5;stroke-linecap:round;fill:none;opacity:.55;animation:arrow 1s ease-out both}
+.fx-march{stroke:#fff;stroke-width:2.5px;vector-effect:non-scaling-stroke;stroke-dasharray:7 7;stroke-linecap:round;fill:none;animation:arrow 1s ease-out both,march .45s linear infinite}
 .fx-dot{animation:arrow 1s ease-out both}
 @keyframes arrow{0%{opacity:0}15%{opacity:1}70%{opacity:.9}100%{opacity:0}}
 #tilt.shake{animation:shake .35s}#tilt.shake2{animation:shake2 .55s}#tilt.shake3{animation:shake3 .9s}
@@ -120,10 +129,6 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 #ring.low .time{stroke:var(--bad)}#ring.low .rt{fill:#ff8a7a;animation:tick 1s steps(2) infinite}
 /* dados, alertas */
 @keyframes tick{50%{opacity:.45}}
-#dice{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:#0a1422ee;border:1px solid var(--line);border-radius:12px;padding:6px 10px;display:flex;gap:8px;align-items:center;font-size:12px;max-width:calc(100% - 24px)}
-#dice[hidden]{display:none}#dice span{white-space:nowrap}
-.die{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;font:800 13px/1 system-ui,sans-serif;margin:0 1px;color:#fff}
-.die.a{background:#c0392b}.die.d{background:#c99a1e;color:#1c1408}.die.lost{opacity:.35}
 #flash{position:fixed;left:50%;top:40%;z-index:15;pointer-events:none;text-align:center;padding:12px 20px;border-radius:16px;background:#0a1422ee;border:2px solid var(--c,#f1e6cf);color:var(--c,#f1e6cf);width:max-content;max-width:min(86vw,380px);box-shadow:0 10px 40px #000a;transform:translate(-50%,-50%)}
 #flash[hidden]{display:none}
 #flash b{display:block;font:700 clamp(20px,6.4vw,28px)/1.15 Georgia,serif;letter-spacing:.03em;overflow-wrap:anywhere;text-wrap:balance}
@@ -254,7 +259,8 @@ details.extras summary span{flex:1;min-width:0;text-align:right;color:var(--mute
 :root{--sl:max(10px,env(safe-area-inset-left));--sr:max(10px,env(safe-area-inset-right));--st:env(safe-area-inset-top);--sb:max(8px,env(safe-area-inset-bottom))}
 body.land{--sl:max(20px,env(safe-area-inset-left));--sr:max(20px,env(safe-area-inset-right));--sb:max(14px,env(safe-area-inset-bottom))}
 body.rot{--sl:max(20px,env(safe-area-inset-top));--sr:max(20px,env(safe-area-inset-bottom));--st:env(safe-area-inset-right);--sb:max(14px,env(safe-area-inset-left))}
-body.land .mapbtn,body.land #ring,body.land #evchip{bottom:12px}
+body.land #ring,body.land #evchip{bottom:12px}
+body.land #fit{bottom:90px}
 body.land #modal{padding:0 var(--sr) 0 var(--sl)}
 /* cabeçalho fixo das janelas longas, com fechar sempre à mão */
 .shead{position:sticky;top:-16px;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-16px -14px 0;padding:10px 8px 10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -291,3 +297,112 @@ body.land #modal{padding:0 var(--sr) 0 var(--sl)}
 .trefoil path,.trefoil .tdot{fill:#141204}
 @keyframes trepulse{50%{filter:brightness(1.35) drop-shadow(0 0 3px #f4d21a)}}
 @media (prefers-reduced-motion:reduce){.hz-line,.hz-scan,.mark.rad .trefoil,.fx-lock,.fx-lock .ring{animation:none}}
+/* atmosfera do mapa: escurece as bordas da tela, como luz de mesa */
+#mapwrap::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(115% 95% at 50% 42%,transparent 52%,#04080fb3 100%),linear-gradient(#0000 70%,#04080f55)}
+@media (prefers-reduced-motion:reduce){.sea-route.on{animation:none}}
+/* combate: traçantes, impacto e conquista */
+.fx-tracer{fill:none;stroke-width:3.2px;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-dasharray:9 100;stroke-dashoffset:9;animation:tracer .3s cubic-bezier(.3,0,.7,1) both;filter:drop-shadow(0 0 2px currentColor)}
+.fx-tracer.core{stroke:#fff;stroke-width:1.4px;stroke-dasharray:6 100;stroke-dashoffset:6}
+@keyframes tracer{0%{stroke-dashoffset:9;opacity:1}92%{opacity:1}100%{stroke-dashoffset:-100;opacity:0}}
+.fx-hit .flashdot{fill:#fff;animation:hitflash .38s ease-out both}
+@keyframes hitflash{0%{transform:scale(.4);opacity:1}100%{transform:scale(2.6);opacity:0}}
+.fx-hit .spark{stroke-width:2.2;stroke-linecap:round;animation:hitspark .5s cubic-bezier(.1,.7,.3,1) both}
+@keyframes hitspark{0%{stroke-dasharray:10 10;stroke-dashoffset:10;opacity:1}60%{opacity:1}100%{stroke-dasharray:10 10;stroke-dashoffset:-10;opacity:0}}
+.fx-wash{fill:#fff;stroke:#fff;stroke-width:2;animation:wash .65s ease-out both;pointer-events:none}
+@keyframes wash{0%{opacity:.85}100%{opacity:0}}
+/* dados */
+#dice{position:absolute;left:50%;top:10px;z-index:4;transform:translateX(-50%);display:flex;flex-direction:column;gap:5px;padding:8px 10px;border-radius:14px;background:linear-gradient(#14253ef2,#0a1422f2);border:1px solid #37557f;box-shadow:0 10px 30px #000a,inset 0 1px 0 #ffffff14;max-width:calc(100% - 24px)}
+#dice[hidden]{display:none}
+#dice.low{top:auto;bottom:10px}
+#dice.go{animation:dicein .22s cubic-bezier(.2,1.3,.4,1) both}
+@keyframes dicein{0%{opacity:0;transform:translateX(-50%) scale(.85)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
+.dside{display:flex;align-items:center;gap:8px}
+.dside small{width:64px;font:600 11px/1.15 system-ui,sans-serif;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drow{display:flex;gap:5px;min-width:101px}
+.die{width:30px;height:30px;flex:none;animation:dieroll .46s cubic-bezier(.2,1.25,.4,1) both;animation-delay:calc(var(--i) * 65ms)}
+.die svg{width:100%;height:100%;display:block;stroke:none;filter:drop-shadow(0 2px 2px #0008)}
+.die .face{fill:var(--c);stroke:#fff5;stroke-width:1}
+.die .pip{fill:#fff}
+.dside.d .die .pip{fill:#fff}
+.die.lost{animation:dieroll .46s cubic-bezier(.2,1.25,.4,1) both,dielose .3s ease-out .72s both;animation-delay:calc(var(--i) * 65ms),.72s}
+.die.won{animation:dieroll .46s cubic-bezier(.2,1.25,.4,1) both,diewin .45s ease-out .72s both;animation-delay:calc(var(--i) * 65ms),.72s}
+@keyframes dieroll{0%{transform:translateY(-16px) rotate(-220deg) scale(.55);opacity:0}55%{transform:translateY(3px) rotate(12deg) scale(1.08);opacity:1}100%{transform:none;opacity:1}}
+@keyframes dielose{to{opacity:.34;filter:grayscale(.7);transform:scale(.86)}}
+@keyframes diewin{0%{filter:none}40%{filter:brightness(1.5) drop-shadow(0 0 6px var(--c))}100%{filter:brightness(1.12)}}
+.dres{width:26px;text-align:right;font:800 14px/1 system-ui,sans-serif;color:#ff8a7a;animation:dresin .25s ease-out .8s both}
+.dres.zero{color:#8dffb0}
+@keyframes dresin{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.die,.die.lost,.die.won,#dice.go,.dres,.fx-tracer,.fx-hit .flashdot,.fx-hit .spark{animation-duration:.01s;animation-delay:0s}}
+
+/* ===== acabamento geral ===== */
+:root{--glass:linear-gradient(180deg,#1a2e4bf2,#11203af2);--edge:inset 0 1px 0 #ffffff14,0 8px 28px #0009}
+.btn{transition:transform .08s,filter .15s,background .15s;box-shadow:inset 0 1px 0 #ffffff12,0 1px 2px #0006}
+.btn.primary{background:linear-gradient(180deg,#f0c35e,#d39b2f);border-color:#f3cd78;box-shadow:inset 0 1px 0 #fff5,0 2px 8px #d39b2f44}
+.btn.ghost{box-shadow:none}
+.btn.rad{background:linear-gradient(180deg,#1e4a28,#123018)}
+.btn:active{transform:translateY(1px) scale(.98)}
+.icon{background:linear-gradient(180deg,#14243b,#0b1626);box-shadow:inset 0 1px 0 #ffffff10;transition:transform .08s}
+.icon:active{transform:scale(.94)}
+.icon span{font-variant-numeric:tabular-nums}
+/* tela inicial: os botões não encolhem quando falta altura (tela deitada) */
+#home>*{flex:none}
+#home{justify-content:safe center;background:radial-gradient(90% 55% at 50% 0,#22406a 0,transparent 70%),radial-gradient(60% 40% at 50% 100%,#1b2f4d66,transparent 70%)}
+#home h1{font-size:40px;letter-spacing:.1em;background:linear-gradient(180deg,#fff6df,#d8c39a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px #0008)}
+.crest{width:72px;animation:crest 3.2s ease-in-out infinite;filter:drop-shadow(0 6px 14px #d6454555)}
+@keyframes crest{50%{transform:translateY(-3px) rotate(-1.5deg)}}
+@media (orientation:landscape) and (max-height:520px){
+#home:not([hidden]){max-width:720px;display:grid;grid-template-columns:1fr 1fr;column-gap:24px;align-content:safe center}
+#home .crest,#home h1,#home .tag{grid-column:1}
+#home .crest{grid-row:1}#home h1{grid-row:2}#home .tag:first-of-type{grid-row:3}
+#home .field,#home .btn{grid-column:2}
+#home #offline,#home #ver{grid-column:1}
+#home{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:10px}.crest{width:60px}
+}
+/* sala */
+.seats li{background:var(--glass);box-shadow:var(--edge);animation:seatin .3s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes seatin{from{opacity:0;transform:translateY(6px)}}
+.seats .dot{width:20px;height:20px;box-shadow:0 0 0 3px #0006,0 0 12px currentColor}
+#lobby h2{font-size:26px}
+/* painel e barra da partida */
+#hud,#bar{background:linear-gradient(180deg,#172a45,#0f1d33);border-color:#2d4a72}
+body.land #hud{box-shadow:inset -1px 0 0 #2d4a72}
+#bar .msg b{color:#fff}
+.step{background:linear-gradient(180deg,#0b1626,#0f1e33);box-shadow:inset 0 2px 4px #0008}
+.step b{font-variant-numeric:tabular-nums}
+#hud .dot{box-shadow:0 0 0 2px #0008,0 0 10px var(--glowc,#fff4)}
+/* janelas */
+#modal{background:#02060cb3;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:fadein .18s ease-out both}
+#modal .sheet{background:var(--glass);border-color:#35557f;box-shadow:0 -10px 40px #000b,inset 0 1px 0 #ffffff18;animation:sheetin .28s cubic-bezier(.2,1.1,.3,1) both}
+.closing{position:fixed;inset:0;z-index:10;display:flex;align-items:flex-end;justify-content:center;background:#02060cb3;pointer-events:none;animation:fadeout .18s ease-in both}
+.closing .sheet{animation:sheetout .18s ease-in both}
+@keyframes fadein{from{opacity:0}}@keyframes fadeout{to{opacity:0}}
+@keyframes sheetin{from{transform:translateY(40px);opacity:0}}
+@keyframes sheetout{to{transform:translateY(30px);opacity:0}}
+body.land #modal,body.land .closing{align-items:center}
+body.land #modal .sheet,body.land .closing .sheet{border-radius:16px;max-height:94%}
+@keyframes sheetin2{from{transform:scale(.94);opacity:0}}
+body.land #modal .sheet{animation-name:sheetin2}
+.sheet h3{font-size:21px;color:#fff3dc}
+/* cartas: frente de carta de baralho */
+.card{background:linear-gradient(160deg,#fbf3e1,#e9dcc0);border:2px solid #c9b48a;box-shadow:0 3px 8px #0007,inset 0 0 0 3px #fff6;min-height:92px;padding:10px 6px;transition:transform .15s}
+.card b{color:#2a1f0e;margin-bottom:8px}
+.card.on{transform:translateY(-6px);border-color:var(--gold);box-shadow:0 8px 18px #000a,0 0 0 3px #e2b04a99}
+.cards .card:nth-child(odd){--r:-1deg}.cards .card:nth-child(even){--r:1deg}
+.card:not(.on){rotate:var(--r)}
+/* objetivo e lista de jogadores: barra de domínio */
+.meter{height:10px;border-radius:5px;background:#0a1422;box-shadow:inset 0 1px 3px #000a;overflow:hidden}
+.meter i{display:block;height:100%;width:var(--p);background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 60%,#fff));animation:meter .8s cubic-bezier(.2,.9,.3,1) both}
+@keyframes meter{from{width:0}}
+.plist li.pl{position:relative}
+.plist li.pl::after{content:"";position:absolute;left:0;bottom:-1px;height:2px;width:var(--p);background:var(--c);opacity:.85}
+.plist li.now .who b{color:#fff}
+.plist li.now::before{content:"";position:absolute;left:-10px;top:50%;width:4px;height:60%;translate:0 -50%;border-radius:2px;background:var(--c)}
+/* alertas */
+#flash{background:var(--glass);box-shadow:0 0 0 1px #0008,0 10px 40px #000b,0 0 30px color-mix(in srgb,var(--c) 30%,transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#flash b{text-shadow:0 0 18px color-mix(in srgb,var(--c) 55%,transparent)}
+#toast{background:#0a1422f0;border:1px solid #35557f;box-shadow:0 8px 24px #000a;animation:toastin .2s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,-6px)}}
+/* chip do evento e botão de ajuste */
+#evchip{background:#0a1422d9;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:0 4px 14px #0008}
+#ring{filter:drop-shadow(0 4px 10px #000a)}
+@media (prefers-reduced-motion:reduce){.crest,.seats li,#modal,#modal .sheet,.closing,.closing .sheet,.meter i,#toast{animation:none}}
