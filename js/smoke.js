@@ -388,7 +388,7 @@ export function createSmoke(canvas) {
     if (acc < dt || (hiddenBox && !fast)) return; // fora da tela, a névoa fica parada (poupa bateria)
     acc = acc > 2 * dt ? 0 : acc - dt;
     const t0 = performance.now();
-    step(dt);
+    step(S.det >= 0 && S.age < 4 ? dt * 0.5 : dt); // a explosão em câmera lenta, para todos acompanharem
     if (!hiddenBox) draw();
     cost += (performance.now() - t0 - cost) * 0.08;
     if (cost > (fast ? 12 : 14)) { if (++slow > 45 && quality < QUALITY.length - 1) { slow = 0; cost = 0; setQuality(quality + 1); } } else slow = 0;

@@ -44,13 +44,16 @@ const SOUNDS = {
   tick: () => tone(1000, 0, 0.04, { type: 'square', vol: 0.06 }),
   timeout: () => tone(300, 0, 0.4, { to: 150, type: 'sawtooth', vol: 0.12 }),
   // ogiva: assobio da chegada, estalo seco do impacto, estrondo grave, trovão que rola e destroços caindo
-  nuke: () => {
-    tone(1500, 0, 0.46, { to: 260, type: 'sawtooth', vol: 0.09 }); noise(0, 0.46, { vol: 0.07, freq: 2600, kind: 'bandpass' });
-    const t = 0.46;
-    noise(t, 0.09, { vol: 0.8, freq: 3200, kind: 'highpass' });
-    noise(t, 2.4, { vol: 0.62, freq: 300 }); noise(t + 0.05, 3.6, { vol: 0.34, freq: 110 });
-    tone(96, t, 2.3, { to: 22, vol: 0.5 }); tone(48, t + 0.02, 2.8, { to: 18, vol: 0.34, type: 'triangle' });
-    for (let k = 0; k < 9; k++) noise(t + 0.35 + Math.random() * 1.9, 0.03 + Math.random() * 0.05, { vol: 0.1 + Math.random() * 0.12, freq: 1500 + Math.random() * 2500, kind: 'highpass' });
+  // alarme nuclear: sirene que sobe e desce
+  siren: () => { for (let k = 0; k < 6; k++) { tone(420, k * 0.6, 0.3, { to: 880, type: 'sawtooth', vol: 0.06 }); tone(880, k * 0.6 + 0.3, 0.3, { to: 420, type: 'sawtooth', vol: 0.06 }); tone(210, k * 0.6, 0.6, { type: 'square', vol: 0.02 }); } },
+  // lançamento: ronco do foguete que cresce e um assobio caindo no fim
+  launch: () => { noise(0, 2.9, { vol: 0.16, freq: 420 }); tone(70, 0, 2.9, { to: 140, type: 'sawtooth', vol: 0.05 }); tone(1800, 2.1, 0.8, { to: 300, type: 'sine', vol: 0.07 }); },
+  // impacto: estalo seco, estrondo grave longo, trovão que rola e destroços caindo
+  boom: () => {
+    noise(0, 0.09, { vol: 0.8, freq: 3200, kind: 'highpass' });
+    noise(0, 3.2, { vol: 0.62, freq: 300 }); noise(0.05, 4.4, { vol: 0.36, freq: 110 });
+    tone(96, 0, 3, { to: 22, vol: 0.5 }); tone(48, 0.02, 3.6, { to: 18, vol: 0.34, type: 'triangle' });
+    for (let k = 0; k < 12; k++) noise(0.4 + Math.random() * 2.6, 0.03 + Math.random() * 0.05, { vol: 0.1 + Math.random() * 0.12, freq: 1500 + Math.random() * 2500, kind: 'highpass' });
   },
   // contador Geiger: estalos secos em intervalos irregulares
   geiger: () => { let t = 0; for (let k = 0; k < 16; k++) { t += 0.02 + Math.random() * Math.random() * 0.22; noise(t, 0.006, { vol: 0.34, freq: 2800, kind: 'highpass' }); } },

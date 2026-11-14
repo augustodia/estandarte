@@ -111,7 +111,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .fx-march{stroke:#fff;stroke-width:2.5px;vector-effect:non-scaling-stroke;stroke-dasharray:7 7;stroke-linecap:round;fill:none;animation:arrow 1s ease-out both,march .45s linear infinite}
 .fx-dot{animation:arrow 1s ease-out both}
 @keyframes arrow{0%{opacity:0}15%{opacity:1}70%{opacity:.9}100%{opacity:0}}
-#tilt.shake{animation:shake .35s}#tilt.shake2{animation:shake2 .55s}#tilt.shake3{animation:shake3 .9s}
+#tilt.shake{animation:shake .35s}#tilt.shake2{animation:shake2 .55s}#tilt.shake3{animation:shake3 1.5s}
 @keyframes shake{20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(3px,2px)}}
 @keyframes shake2{10%{transform:translate(-9px,4px)}25%{transform:translate(9px,-5px)}40%{transform:translate(-8px,-4px)}55%{transform:translate(7px,5px)}70%{transform:translate(-5px,2px)}85%{transform:translate(4px,-2px)}}
 
@@ -248,10 +248,10 @@ details.extras summary span{flex:1;min-width:0;text-align:right;color:var(--mute
 @keyframes ember{0%{transform:translateY(8px);opacity:0}25%{opacity:.95}100%{transform:translateY(-34px);opacity:0}}
 @keyframes fogbreath{50%{opacity:1}}
 @keyframes fogdash{to{stroke-dashoffset:-90}}
-.fx-shock{stroke:none;transform-box:fill-box;transform-origin:center;animation:shock 1.5s cubic-bezier(.12,.62,.3,1) both}
-.fx-shock.first{animation-duration:1.15s}
+.fx-shock{stroke:none;transform-box:fill-box;transform-origin:center;animation:shock 2.4s cubic-bezier(.12,.62,.3,1) both}
+.fx-shock.first{animation-duration:1.9s}
 @keyframes shock{0%{transform:scale(.5);opacity:1}70%{opacity:.8}100%{transform:scale(40);opacity:0}}
-#mapwrap.boom::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle at var(--bx,50%) var(--by,50%),#fff 0,#fff7dc 9%,#ffd98a 22%,#b9ff7a55 46%,#1d6a2600 78%);animation:boomflash 1.6s cubic-bezier(.1,.7,.2,1) both}
+#mapwrap.boom::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle at var(--bx,50%) var(--by,50%),#fff 0,#fff7dc 9%,#ffd98a 22%,#b9ff7a55 46%,#1d6a2600 78%);animation:boomflash 2.5s cubic-bezier(.1,.7,.2,1) both}
 @keyframes boomflash{0%{opacity:1}7%{opacity:1}22%{opacity:.55}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.fog-glow,.fog-fill,.smoke,.fog-ember,.fx-shock{animation:none}#mapwrap.boom::after{animation-duration:.4s}}
 /* Zona segura: nada de botão colado nas bordas, nos cantos arredondados, no entalhe da câmera ou na barra de gestos.
@@ -274,8 +274,8 @@ body.land #modal{padding:0 var(--sr) 0 var(--sl)}
 #map2{position:absolute;inset:0;width:100%;height:100%;display:block;stroke:none;overflow:visible;pointer-events:none}
 #smoke{position:absolute;left:0;top:0;pointer-events:none}
 @keyframes shake3{6%{transform:translate(-14px,7px) rotate(-.5deg)}14%{transform:translate(13px,-8px) rotate(.45deg)}24%{transform:translate(-11px,-6px) rotate(-.35deg)}34%{transform:translate(10px,7px) rotate(.3deg)}46%{transform:translate(-7px,4px) rotate(-.2deg)}58%{transform:translate(6px,-4px)}72%{transform:translate(-4px,2px)}86%{transform:translate(2px,-1px)}}
-#tilt.punch{animation:punch .65s cubic-bezier(.2,.9,.25,1)}
-#tilt.punch.shake3{animation:punch .65s cubic-bezier(.2,.9,.25,1),shake3 .9s}
+#tilt.punch{animation:punch 1.1s cubic-bezier(.2,.9,.25,1)}
+#tilt.punch.shake3{animation:punch 1.1s cubic-bezier(.2,.9,.25,1),shake3 1.5s}
 @keyframes punch{0%{scale:1}14%{scale:1.05}100%{scale:1}}
 @keyframes jolt{0%{translate:0 0}22%{translate:var(--jx) var(--jy)}100%{translate:0 0}}
 @keyframes slam{0%{translate:0 0;opacity:1}8%{opacity:0}30%{opacity:0}100%{translate:0 0;opacity:1}}
@@ -406,3 +406,16 @@ body.land #modal .sheet{animation-name:sheetin2}
 #evchip{background:#0a1422d9;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:0 4px 14px #0008}
 #ring{filter:drop-shadow(0 4px 10px #000a)}
 @media (prefers-reduced-motion:reduce){.crest,.seats li,#modal,#modal .sheet,.closing,.closing .sheet,.meter i,#toast{animation:none}}
+/* lançamento da ogiva: alerta vermelho, míssil e rastro */
+#mapwrap.alarm::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;box-shadow:inset 0 0 0 3px #ff3b2f,inset 0 0 90px #ff1e1e88;animation:alarm .6s ease-in-out infinite alternate}
+@keyframes alarm{from{opacity:.25}to{opacity:1}}
+.fx-missile .body{fill:#e9eef5;stroke:#1a2433;stroke-width:.7}
+.fx-missile .fin{fill:#c73a2e}
+.fx-missile .tip{fill:#ff3b2f}
+.fx-missile .flame{fill:#ffcf5a;filter:drop-shadow(0 0 3px #ff8a1f);animation:flame .08s steps(2) infinite}
+@keyframes flame{50%{transform:scaleX(1.35);opacity:.8}}
+.fx-trail{fill:#d7dde6;opacity:.6;transform-box:fill-box;transform-origin:center;animation:trail 2.3s ease-out both}
+@keyframes trail{0%{opacity:.7;transform:scale(.6);fill:#ffd27a}12%{fill:#e6e9ee}100%{opacity:0;transform:scale(3.4)}}
+.pactbtn{display:inline-flex;align-items:center;gap:6px;border-color:#e2b04a88;color:#ffe2a3}
+.pactbtn svg{width:16px;height:16px;flex:none}
+@media (prefers-reduced-motion:reduce){#mapwrap.alarm::after,.fx-missile .flame{animation:none}}

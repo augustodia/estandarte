@@ -32,7 +32,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '33'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '34'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -335,6 +335,7 @@ function scheduleBot() {
   clearTimeout(app.botTimer);
   const g = app.game;
   if (!g || g.phase !== 'play') return;
+  if (Date.now() < (app.cinemaUntil || 0)) { app.botTimer = setTimeout(scheduleBot, app.cinemaUntil - Date.now() + 50); return; } // todos assistem à ogiva antes do próximo lance
   if (g.offer && g.players[g.offer.to].ctrl === 'bot') { // bot responde à proposta de pacto, mesmo fora da vez dele
     app.botTimer = setTimeout(() => { if (g.offer) apply(g, g.offer.to, botPactReply(g)); sync(); }, 900);
     return;
@@ -528,7 +529,9 @@ const TREFOIL = [-90, 30, 150].map((a) => { const q = (r, deg) => `${(r * Math.c
   }
   // ligações por mar: um arco suave de costa a costa (a barriga vai para o lado com mais mar) e um "porto" em cada ponta
   const arc = (x1, y1, x2, y2) => {
-    const L = Math.hypot(x2 - x1, y2 - y1), mx = (x1 + x2) / 2, my = (y1 + y2) / 2, nx = -(y2 - y1) / L, ny = (x2 - x1) / L, h = L * (L > 45 ? 0.2 : 0.14);
+    const L = Math.hypot(x2 - x1, y2 - y1);
+    if (L < 60) return `M${x1} ${y1}L${x2} ${y2}`; // travessias curtas: reta, de ponta a ponta
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, nx = -(y2 - y1) / L, ny = (x2 - x1) / L, h = L * 0.16;
     const free = (cx, cy) => Math.min(...TERR.map((t) => Math.hypot(t.x - cx, t.y - cy)));
     const sg = free(mx + nx * h * 2, my + ny * h * 2) >= free(mx - nx * h * 2, my - ny * h * 2) ? 1 : -1;
     return `M${x1} ${y1}Q${(mx + nx * h * sg).toFixed(1)} ${(my + ny * h * sg).toFixed(1)} ${x2} ${y2}`;
@@ -539,7 +542,10 @@ const TREFOIL = [-90, 30, 150].map((a) => { const q = (r, deg) => `${(r * Math.c
     if (a != null) { r.dataset.a = a; r.dataset.b = b; seaRoutes.push(r); }
   };
   const port = (x, y) => { el('circle', { class: 'port', cx: x, cy: y, r: 3.1 }, routes); };
+  // ajustes finos de onde a travessia toca a costa (ponta da bota italiana até a Tunísia)
+  const FIX = { 'Itália e Bálcãs|Magrebe': [719, 304, 693, 329] };
   SEA.forEach(([a, b, x1, y1, x2, y2, wrap]) => {
+    const fx = FIX[TERR[a].n + '|' + TERR[b].n]; if (fx) [x1, y1, x2, y2] = fx;
     if (wrap) { // dá a volta no mapa: um trecho até cada borda, com setas indicando que continua do outro lado
       link(`M${x1} ${y1}H${-PAD - 20}`, a, b); link(`M${x2} ${y2}H${MAP_W + PAD + 20}`, a, b);
       el('path', { class: 'wrapmark', d: `M${-PAD + 8} ${y1 - 5}l-6 5 6 5M${-PAD + 16} ${y1 - 5}l-6 5 6 5` }, routes);
@@ -795,15 +801,53 @@ function spotlight(ids, ms = 1000) {
 // Ogiva em dois tempos. Primeiro a chegada: assobio e uma mira fechando sobre o alvo. Depois o impacto, junto com o estrondo:
 // clarão a partir do alvo, "soco" de câmera, tremor, ondas de choque, os marcadores vizinhos empurrados pela onda (e voltando,
 // como mola) e a detonação na simulação de fumaça.
-const IMPACT_MS = 460;
-function incoming(t) {
-  const { x, y } = TERR[t];
-  app.incoming = t;
-  const wrap = el('g', { transform: `translate(${x} ${y})` }, fx), g = el('g', { class: 'fx-lock' }, wrap);
-  el('circle', { class: 'ring', r: 30 }, g); el('circle', { class: 'ring r2', r: 30 }, g);
+// Lançamento em cena, para todos acompanharem (≈ 4 s): alarme e alerta vermelho, a câmera vai até a rota, o míssil sobe
+// de um território de quem lançou e desce sobre o alvo deixando rastro, enquanto a mira fecha. Depois vem o impacto.
+const ALARM_MS = 900, FLIGHT_MS = 2900, IMPACT_MS = ALARM_MS + FLIGHT_MS;
+function panTo(x0, y0, x1, y1, ms) { // enquadra os dois pontos com folga, deslizando a câmera
+  const { r, contain, max } = limits(); if (!r.width) return;
+  const bw = Math.abs(x1 - x0) + 260, bh = Math.abs(y1 - y0) + 200, z1 = Math.max(contain, Math.min(max, cam.z, r.width / bw, r.height / bh));
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, a = { x: cam.x, y: cam.y, z: cam.z }, b = { z: z1, x: cx - r.width / z1 / 2, y: cy - r.height / z1 / 2 }, t0 = performance.now();
+  const f = (now) => { const k = Math.min(1, (now - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; cam.z = a.z + (b.z - a.z) * e; cam.x = a.x + (b.x - a.x) * e; cam.y = a.y + (b.y - a.y) * e; applyCam(); if (k < 1) requestAnimationFrame(f); };
+  requestAnimationFrame(f);
+}
+function incoming(t, by) {
+  const B = TERR[t];
+  app.incoming = t; app.cinemaUntil = Date.now() + IMPACT_MS + 2600;
+  // origem: o território de quem lançou mais perto do alvo (sem dar a volta no mapa)
+  const own = (app.view ? app.view.terr : []).map((x, i) => i).filter((i) => app.view.terr[i].o === by && Math.abs(TERR[i].x - B.x) < MAP_W / 2);
+  const s0 = own.sort((a, b) => Math.hypot(TERR[a].x - B.x, TERR[a].y - B.y) - Math.hypot(TERR[b].x - B.x, TERR[b].y - B.y))[0];
+  const A = s0 != null ? TERR[s0] : { x: B.x - 220, y: B.y - 160 };
+  const w = $('#mapwrap'); w.classList.remove('alarm'); void w.offsetWidth; w.classList.add('alarm'); setTimeout(() => w.classList.remove('alarm'), IMPACT_MS + 200);
+  play('siren'); buzz([300, 200, 300, 200, 300]);
+  panTo(A.x, A.y, B.x, B.y, ALARM_MS);
+  // mira sobre o alvo, fechando durante o voo
+  const wrap = el('g', { transform: `translate(${B.x} ${B.y})` }, fx), g = el('g', { class: 'fx-lock', style: `animation-duration:${IMPACT_MS}ms` }, wrap);
+  el('circle', { class: 'ring', r: 30, style: `animation-duration:${IMPACT_MS}ms` }, g); el('circle', { class: 'ring r2', r: 30, style: `animation-duration:${IMPACT_MS}ms` }, g);
   for (let k = 0; k < 4; k++) el('line', { class: 'tick', x1: 0, y1: -44, x2: 0, y2: -30, transform: `rotate(${k * 90})` }, g);
   later(wrap, IMPACT_MS + 120);
+  setTimeout(() => missile(A, B, FLIGHT_MS), ALARM_MS);
   setTimeout(() => impact(t), IMPACT_MS);
+}
+// O míssil: arco alto da origem ao alvo, acelerando, apontado para onde vai, com chama e rastro de fumaça.
+function missile(A, B, ms) {
+  const L = Math.hypot(B.x - A.x, B.y - A.y), C = { x: (A.x + B.x) / 2, y: Math.min(A.y, B.y) - Math.max(90, L * 0.55) };
+  const at = (k) => ({ x: (1 - k) ** 2 * A.x + 2 * (1 - k) * k * C.x + k * k * B.x, y: (1 - k) ** 2 * A.y + 2 * (1 - k) * k * C.y + k * k * B.y });
+  const sc = Math.max(1, markK), g = el('g', { class: 'fx-missile' }, fx);
+  el('path', { class: 'flame', d: 'M-9 0L-24 -3.2L-31 0L-24 3.2Z' }, g);
+  el('path', { class: 'body', d: 'M-10 -2.6H8L13 0L8 2.6H-10Z' }, g);
+  el('path', { class: 'fin', d: 'M-10 -2.6L-14 -6.5L-6 -2.6ZM-10 2.6L-14 6.5L-6 2.6Z' }, g);
+  el('circle', { class: 'tip', cx: 10.5, cy: 0, r: 1.6 }, g);
+  play('launch');
+  const t0 = performance.now(); let lastPuff = 0;
+  const f = (now) => {
+    const raw = Math.min(1, (now - t0) / ms), k = raw * raw * (1.5 - 0.5 * raw); // sobe devagar, desce rápido
+    const p = at(k), q = at(Math.min(1, k + 0.01)), ang = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI;
+    g.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${ang.toFixed(1)}) scale(${sc})`);
+    if (now - lastPuff > 45) { lastPuff = now; later(el('circle', { class: 'fx-trail', cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: (3.5 * sc).toFixed(1) }, fx), 2400); }
+    if (raw < 1) requestAnimationFrame(f); else g.remove();
+  };
+  requestAnimationFrame(f);
 }
 function impact(t) {
   const { x, y } = TERR[t], w = $('#mapwrap');
@@ -811,13 +855,13 @@ function impact(t) {
   // clarão centrado no alvo
   w.style.setProperty('--bx', ((x - cam.x) * cam.z).toFixed(0) + 'px'); w.style.setProperty('--by', ((y - cam.y) * cam.z).toFixed(0) + 'px');
   w.classList.remove('boom'); void w.offsetWidth; w.classList.add('boom');
-  setTimeout(() => w.classList.remove('boom'), 1700);
+  setTimeout(() => w.classList.remove('boom'), 2600);
   // câmera: um soco de zoom a partir do alvo e o tremor forte
   tilt.style.transformOrigin = `${((x - cam.x) * cam.z).toFixed(0)}px ${((y - cam.y) * cam.z).toFixed(0)}px`;
   tilt.classList.remove('punch'); void tilt.offsetWidth; tilt.classList.add('punch');
-  setTimeout(() => tilt.classList.remove('punch'), 700);
-  shake(3); buzz([40, 30, 380, 60, 220]);
-  for (let k = 0; k < 3; k++) later(el('circle', { class: 'fx-shock' + (k ? '' : ' first'), cx: x, cy: y, r: 10, fill: 'url(#shockgrad)', style: `animation-delay:${k * 0.2}s` }, fx), 2600);
+  setTimeout(() => tilt.classList.remove('punch'), 1200);
+  shake(3); buzz([40, 30, 380, 60, 220]); play('boom');
+  for (let k = 0; k < 3; k++) later(el('circle', { class: 'fx-shock' + (k ? '' : ' first'), cx: x, cy: y, r: 10, fill: 'url(#shockgrad)', style: `animation-delay:${k * 0.35}s` }, fx), 3800);
   // a onda de choque empurra os marcadores: quanto mais perto, mais forte e mais cedo
   nodes.forEach((nd, i) => {
     const dx = TERR[i].x - x, dy = TERR[i].y - y, dist = Math.hypot(dx, dy) || 1;
@@ -830,11 +874,11 @@ function impact(t) {
   nodes.forEach((nd, i) => {
     const dist = Math.hypot(TERR[i].x - x, TERR[i].y - y);
     if (dist > 560) return;
-    nd.g.style.animation = `${i === t ? 'slam' : 'jolt'} .85s cubic-bezier(.16,1.7,.36,1) ${(dist / 1250).toFixed(2)}s both`;
+    nd.g.style.animation = `${i === t ? 'slam' : 'jolt'} 1.2s cubic-bezier(.16,1.7,.36,1) ${(dist / 800).toFixed(2)}s both`;
     setTimeout(() => { nd.g.style.animation = ''; }, 1700);
   });
   if (app.fogKey === t) startSmoke(t, true);
-  setTimeout(() => app.fogKey === t && play('geiger'), 1500);
+  setTimeout(() => app.fogKey === t && play('geiger'), 3000);
 }
 function startSmoke(t, detonate) {
   const tr = TERR[t], b = nodes[t].poly.getBBox();
@@ -969,8 +1013,9 @@ function processEvents(v) {
     else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p), !mine(e.p)); play('timeout'); }
     else if (e.t === 'win') { play('win'); buzz([150, 80, 150, 80, 300, 80, 400]); }
     else if (e.t === 'nuke') {
-      incoming(e.to); spotlight([e.to], 3000); play('nuke');
-      flash('Ogiva nuclear!', '#7dff4a', `${nm(e.p)} atingiu ${TERR[e.to].n} (${nm(e.def)}): −${e.lost}`, 2600, true, true); // no alto da tela, para não cobrir a explosão
+      incoming(e.to, e.p); spotlight([e.to], IMPACT_MS + 2600);
+      flash('Alerta nuclear!', '#ff4a3a', `${nm(e.p)} lançou uma ogiva contra ${TERR[e.to].n} (${nm(e.def)})`, IMPACT_MS, true, true); // no alto da tela, para não cobrir o voo
+      setTimeout(() => flash(`${TERR[e.to].n} atingido`, '#7dff4a', `−${e.lost} exércitos · radioativo até a vez de ${nm(e.p)} voltar`, 2600, true, true), IMPACT_MS + 400);
     } else if (e.t === 'fogEnd') flash(`A névoa sobre ${TERR[e.to].n} se dissipou`, '#7dff4a', '', 1100, false, true);
     else if (e.t === 'pactVoid') { if (mine(e.a) || mine(e.b)) flash('Pacto encerrado', '#e2b04a', `${nm(e.a)} e ${nm(e.b)} · acabou com a ogiva`, 1500, false, true); }
     else if (e.t === 'eventEnd') flash(`${EVENTS[e.k].n} terminou`, '#e2b04a', '', 1000, false, true);
@@ -1095,7 +1140,9 @@ function tapTerritory(t) {
       }
     } else if (v.step === 'move') {
       if (mine && app.sel != null && t !== app.sel && adj(app.sel, t) && moveBlock(v, app.sel, t)) { app.target = null; toast(moveBlock(v, app.sel, t), 3600); }
+      else if (mine && app.sel != null && t === app.target) app.n++; // tocar de novo no destino soma 1 (a seleção continua)
       else if (mine && app.sel != null && t !== app.sel && adj(app.sel, t)) app.target = t;
+      else if (mine && t === app.sel && app.target != null) app.n = Math.max(1, app.n - 1); // tocar na origem tira 1
       else if (!mine || t === app.sel) app.sel = app.target = null;
       else if (v.movable[t] > 0) { app.sel = t; app.target = null; }
       else { app.sel = app.target = null; toast('Nenhum exército disponível para mover daqui.'); }
@@ -1130,6 +1177,7 @@ const ICON = {
   cards: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="11" height="15" rx="2"/><path d="M9 3h9a2 2 0 0 1 2 2v13"/></svg>',
   menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
   extras: '<svg viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></svg>',
+  pact: '<svg viewBox="0 0 24 24"><path d="M2 12l4-4 4 2 3-2 4 1 5 3-4 4-3 1-4-2-3 1z"/><path d="M8 13l3 2M10 11l3 2"/></svg>',
 };
 function renderGame() {
   const v = app.view;
@@ -1152,6 +1200,7 @@ function renderGame() {
   if (v.step === 'attack' && app.target != null && T[app.target].o === v.turn) app.sel = app.target = null;
   if (v.step === 'move' && app.target != null && T[app.target].o !== v.turn) app.target = null;
   if (v.step === 'attack' && app.sel != null && T[app.sel].a < 2) app.sel = app.target = null;
+  if (v.step === 'move' && app.sel != null && !(v.movable[app.sel] > 0)) app.sel = app.target = null; // a origem não tem mais o que mover
   if (v.step === 'attack' && app.sel != null && app.target != null && attackBlock(v, app.sel, app.target)) app.target = null;
 
   if (app.nukeMode && (!can || nukeBlock(v, v.turn))) app.nukeMode = false;
@@ -1316,11 +1365,16 @@ function renderGame() {
       btns = '<button class="btn small" data-do="endAttack">Encerrar ataques</button>';
     }
   } else if (rng) {
-    msg = `Mover de <b>${TERR[app.sel].n}</b> para <b>${TERR[app.target].n}</b>`;
+    msg = `Mover de <b>${TERR[app.sel].n}</b> para <b>${TERR[app.target].n}</b> · toque no destino para somar, na origem para tirar`;
     btns = stepper() + '<button class="btn small" data-do="max">Máx</button><button class="btn small primary" data-do="moveOk">Mover</button><button class="btn small ghost" data-do="endTurn">Encerrar</button>';
   } else {
     msg = app.sel != null ? `Mover de ${TERR[app.sel].n} (até ${v.movable[app.sel] || 0}): toque no destino ligado pelas linhas.` : 'Remaneje: toque na origem e depois num vizinho seu.';
     btns = '<button class="btn small primary" data-do="endTurn">Encerrar turno</button>';
+  }
+  // pactos: um botão à vista na sua vez (abre a janela onde se escolhe a quem propor)
+  if (can && v.phase === 'play' && v.opts && v.opts.pacts && !app.nukeMode && !v.occupy && v.step !== 'move' && v.players.filter((p) => p.alive).length > 2 && !rng) {
+    const busy = v.pacts.some((x) => x.a === v.turn || x.b === v.turn);
+    btns += `<button class="btn small pactbtn" data-do="extras">${ICON.pact}${busy ? 'Pacto ativo' : 'Propor pacto'}</button>`;
   }
   if (app.role === 'host' && v.phase === 'play') {
     const off = app.seats.filter((s) => s.ctrl === 'remote' && (!s.link || s.lag));
@@ -1562,7 +1616,7 @@ const actions = {
   max() { const r = stepRange(app.view); if (r) { app.n = r[1]; renderGame(); } },
   place() { const n = app.n; app.n = 1; act({ t: 'place', t0: app.sel, n }); },
   occupyOk: () => act({ t: 'occupy', n: app.n }),
-  moveOk() { const m = { t: 'move', from: app.sel, to: app.target, n: app.n }; app.target = null; act(m); },
+  moveOk() { const m = { t: 'move', from: app.sel, to: app.target, n: app.n }; app.nKey = null; act(m); }, // origem e destino continuam escolhidos para mover mais
   blitz: () => act({ t: 'attack', from: app.sel, to: app.target, blitz: true }),
   endAttack: () => confirmEnd('endAttack', () => { app.sel = app.target = null; act({ t: 'endAttack' }); }),
   endTurn: () => confirmEnd('endTurn', () => { app.sel = app.target = null; act({ t: 'endTurn' }); }),
