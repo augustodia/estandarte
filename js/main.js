@@ -7,6 +7,7 @@ import {
 } from './game.js';
 import { createInvite, joinInvite, initCert, myFingerprint, armSpare, useSpare } from './net.js';
 import { play, unlock, soundOn, setSound } from './sound.js';
+import { createSmoke } from './smoke.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -31,7 +32,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '31'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '32'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -55,6 +56,7 @@ function closeModal() {
 }
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+  if (id !== 'game' && app.fogKey != null) clearFog(true); // saiu da partida: a simulação da névoa para
   applyLayout();
   if (id === 'game') requestAnimationFrame(fitView);
 }
@@ -485,6 +487,11 @@ function renderLobby() {
 /* ---------- mapa ---------- */
 const SVGNS = 'http://www.w3.org/2000/svg';
 const svg = $('#map');
+// O mapa são três camadas empilhadas: a terra (svg), a fumaça da ogiva (canvas) e, por cima, marcadores, nomes e efeitos (svg2).
+// Assim a fumaça passa por cima do terreno e por baixo dos números. Só a camada da terra recebe os toques.
+const svg2 = $('#map2'), tilt = $('#tilt');
+const smoke = createSmoke($('#smoke'));
+if (new URLSearchParams(location.search).has('debug')) window.__smoke = smoke;
 const el = (tag, attrs, parent) => {
   const e = document.createElementNS(SVGNS, tag);
   for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -493,10 +500,12 @@ const el = (tag, attrs, parent) => {
 };
 const PAD = 30;
 const nodes = [];
-let aimLayer = null, fogLayer = null;
+let aimLayer = null, fogLayer = null, hazardLayer = null;
+// símbolo de radiação (três pás), mostrado ao lado do marcador do território atingido
+const TREFOIL = [-90, 30, 150].map((a) => { const q = (r, deg) => `${(r * Math.cos(deg * Math.PI / 180)).toFixed(2)} ${(r * Math.sin(deg * Math.PI / 180)).toFixed(2)}`; return `M${q(2.4, a - 30)}L${q(7.6, a - 30)}A7.6 7.6 0 0 1 ${q(7.6, a + 30)}L${q(2.4, a + 30)}A2.4 2.4 0 0 0 ${q(2.4, a - 30)}Z`; }).join('');
 (function buildMap() {
-  const aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), routes = el('g', {}, svg), fogs = el('g', { class: 'foglayer' }, svg), labels = el('g', {}, svg), aim = el('g', { class: 'aimlayer' }, svg), hits = el('g', {}, svg);
-  aimLayer = aim; fogLayer = fogs;
+  const aura = el('g', {}, svg), depth = el('g', {}, svg), land = el('g', {}, svg), moat = el('g', {}, svg), routes = el('g', {}, svg), fogs = el('g', { class: 'foglayer' }, svg), hazard = el('g', { class: 'hazard' }, svg2), labels = el('g', {}, svg2), aim = el('g', { class: 'aimlayer' }, svg2), hits = el('g', {}, svg2);
+  aimLayer = aim; fogLayer = fogs; hazardLayer = hazard;
   const defs = el('defs', {}, svg);
   const halo = el('radialGradient', { id: 'foghalo' }, defs);
   el('stop', { offset: '.45', 'stop-color': '#58ff3c', 'stop-opacity': '.5' }, halo); el('stop', { offset: '1', 'stop-color': '#58ff3c', 'stop-opacity': '0' }, halo);
@@ -514,8 +523,10 @@ let aimLayer = null, fogLayer = null;
     el('text', { class: 'tname', x: 0, y: 24 }, g).textContent = t.n;
     const badge = el('circle', { class: 'badge', cx: 0, cy: 0, r: 12.5 }, g);
     const num = el('text', { class: 'num', x: 0, y: 0.5 }, g);
-    el('circle', { class: 'hit', cx: 0, cy: 0, r: 19, 'data-t': i }, g);
-    nodes.push({ poly, num, badge, g });
+    const tre = el('g', { class: 'trefoil', transform: 'translate(13.5 -13.5)' }, g);
+    el('circle', { class: 'tdisc', r: 7.6 }, tre); el('path', { d: TREFOIL, transform: 'scale(.72)' }, tre); el('circle', { class: 'tdot', r: 1.1 }, tre);
+    const hit = el('circle', { class: 'hit', cx: 0, cy: 0, r: 19, 'data-t': i }, g);
+    nodes.push({ poly, num, badge, g, hit });
   });
   CONTINENTS.forEach((c, ci) => {
     el('text', { class: 'cname', x: c.x, y: c.y, fill: c.color }, labels).textContent = `${c.n} +${c.bonus}`;
@@ -562,7 +573,9 @@ function applyCam() {
   const w = r.width / cam.z, h = r.height / cam.z;
   const clamp = (v, size, total) => (size >= total + 2 * PAD ? (total - size) / 2 : Math.min(total + PAD - size, Math.max(-PAD, v)));
   cam.x = clamp(cam.x, w, MAP_W); cam.y = clamp(cam.y, h, MAP_H);
-  svg.setAttribute('viewBox', `${cam.x} ${cam.y} ${w} ${h}`);
+  const vb = `${cam.x} ${cam.y} ${w} ${h}`;
+  svg.setAttribute('viewBox', vb); svg2.setAttribute('viewBox', vb);
+  smoke.view(cam.x, cam.y, cam.z, r.width, r.height);
   scaleMarks();
 }
 let camReady = false;
@@ -611,8 +624,10 @@ svg.addEventListener('pointermove', (e) => {
 const endPtr = (e) => {
   const had = ptrs.delete(e.pointerId);
   if (had && e.type === 'pointerup' && gesture && gesture.id === e.pointerId && !gesture.moved && ptrs.size === 0) {
-    const hit = document.elementFromPoint(e.clientX, e.clientY);
-    let t = hit && hit.dataset && hit.dataset.t != null ? +hit.dataset.t : null;
+    // primeiro os marcadores (ficam numa camada que não recebe toques): vale o mais próximo que contém o dedo; depois, a terra embaixo
+    let t = null, near = Infinity;
+    nodes.forEach((nd, i) => { const b = nd.hit.getBoundingClientRect(), rr = b.width / 2, d = Math.hypot(b.left + rr - e.clientX, b.top + b.height / 2 - e.clientY); if (d <= rr && d < near) { near = d; t = i; } });
+    if (t == null) { const hit = document.elementFromPoint(e.clientX, e.clientY); t = hit && hit.dataset && hit.dataset.t != null ? +hit.dataset.t : null; }
     if (t == null) { // toque no mar: aceita o território cujo marcador está a até 24px do dedo
       let best = 24; // medido na tela, para valer também com o mapa em perspectiva
       nodes.forEach((nd, i) => { const b = nd.badge.getBoundingClientRect(), d = Math.hypot(b.left + b.width / 2 - e.clientX, b.top + b.height / 2 - e.clientY); if (d < best) { best = d; t = i; } });
@@ -659,7 +674,11 @@ function nextFlash() {
   box.hidden = false; box.classList.remove('go'); void box.offsetWidth; box.classList.add('go');
   flashTimer = setTimeout(nextFlash, f.ms);
 }
-const fx = el('g', { class: 'fx' }, svg);
+const fx = el('g', { class: 'fx' }, svg2);
+{ // frente da onda de choque: transparente por dentro, um rastro esverdeado e a borda branca e fina
+  const sg = el('radialGradient', { id: 'shockgrad' }, el('defs', {}, svg2));
+  for (const [o, c, a] of [[0, '#b6ff7a', 0], [0.7, '#b6ff7a', 0], [0.9, '#c9ffa0', 0.2], [0.965, '#ffffff', 0.85], [1, '#ffffff', 0]]) el('stop', { offset: o, 'stop-color': c, 'stop-opacity': a }, sg);
+}
 const later = (node, ms) => setTimeout(() => node.remove(), ms);
 function fxFloat(t, text, color, dy = 0) {
   const n = el('text', { class: 'fx-float', x: TERR[t].x, y: TERR[t].y - 18 + dy, fill: color }, fx);
@@ -677,11 +696,70 @@ function spotlight(ids, ms = 1000) {
   clearTimeout(app.spotTimer);
   app.spotTimer = setTimeout(() => { app.spot = null; renderGame(); }, ms + 30);
 }
-// Explosão da ogiva: clarão na tela inteira e onda de choque saindo do alvo.
-function boom(t) {
-  const w = $('#mapwrap'); w.classList.remove('boom'); void w.offsetWidth; w.classList.add('boom');
-  setTimeout(() => w.classList.remove('boom'), 1600);
-  for (let k = 0; k < 3; k++) later(el('circle', { class: 'fx-shock', cx: TERR[t].x, cy: TERR[t].y, r: 10, style: `animation-delay:${k * 0.18}s` }, fx), 2200);
+// Ogiva em dois tempos. Primeiro a chegada: assobio e uma mira fechando sobre o alvo. Depois o impacto, junto com o estrondo:
+// clarão a partir do alvo, "soco" de câmera, tremor, ondas de choque, os marcadores vizinhos empurrados pela onda (e voltando,
+// como mola) e a detonação na simulação de fumaça.
+const IMPACT_MS = 460;
+function incoming(t) {
+  const { x, y } = TERR[t];
+  app.incoming = t;
+  const wrap = el('g', { transform: `translate(${x} ${y})` }, fx), g = el('g', { class: 'fx-lock' }, wrap);
+  el('circle', { class: 'ring', r: 30 }, g); el('circle', { class: 'ring r2', r: 30 }, g);
+  for (let k = 0; k < 4; k++) el('line', { class: 'tick', x1: 0, y1: -44, x2: 0, y2: -30, transform: `rotate(${k * 90})` }, g);
+  later(wrap, IMPACT_MS + 120);
+  setTimeout(() => impact(t), IMPACT_MS);
+}
+function impact(t) {
+  const { x, y } = TERR[t], w = $('#mapwrap');
+  app.incoming = null;
+  // clarão centrado no alvo
+  w.style.setProperty('--bx', ((x - cam.x) * cam.z).toFixed(0) + 'px'); w.style.setProperty('--by', ((y - cam.y) * cam.z).toFixed(0) + 'px');
+  w.classList.remove('boom'); void w.offsetWidth; w.classList.add('boom');
+  setTimeout(() => w.classList.remove('boom'), 1700);
+  // câmera: um soco de zoom a partir do alvo e o tremor forte
+  tilt.style.transformOrigin = `${((x - cam.x) * cam.z).toFixed(0)}px ${((y - cam.y) * cam.z).toFixed(0)}px`;
+  tilt.classList.remove('punch'); void tilt.offsetWidth; tilt.classList.add('punch');
+  setTimeout(() => tilt.classList.remove('punch'), 700);
+  shake(3); buzz([40, 30, 380, 60, 220]);
+  for (let k = 0; k < 3; k++) later(el('circle', { class: 'fx-shock' + (k ? '' : ' first'), cx: x, cy: y, r: 10, fill: 'url(#shockgrad)', style: `animation-delay:${k * 0.2}s` }, fx), 2600);
+  // a onda de choque empurra os marcadores: quanto mais perto, mais forte e mais cedo
+  nodes.forEach((nd, i) => {
+    const dx = TERR[i].x - x, dy = TERR[i].y - y, dist = Math.hypot(dx, dy) || 1;
+    if (dist > 560) return;
+    const amp = i === t ? 0 : 20 / (1 + dist / 80);
+    nd.g.style.setProperty('--jx', ((dx / dist) * amp).toFixed(1) + 'px'); nd.g.style.setProperty('--jy', ((dy / dist) * amp).toFixed(1) + 'px');
+    nd.g.style.animation = 'none';
+  });
+  void svg2.getBoundingClientRect();
+  nodes.forEach((nd, i) => {
+    const dist = Math.hypot(TERR[i].x - x, TERR[i].y - y);
+    if (dist > 560) return;
+    nd.g.style.animation = `${i === t ? 'slam' : 'jolt'} .85s cubic-bezier(.16,1.7,.36,1) ${(dist / 1250).toFixed(2)}s both`;
+    setTimeout(() => { nd.g.style.animation = ''; }, 1700);
+  });
+  if (app.fogKey === t) startSmoke(t, true);
+  setTimeout(() => app.fogKey === t && play('geiger'), 1500);
+}
+function startSmoke(t, detonate) {
+  const tr = TERR[t], b = nodes[t].poly.getBBox();
+  hazardLayer.replaceChildren();
+  el('path', { class: 'hz-line', d: tr.d, 'fill-rule': 'evenodd' }, hazardLayer);
+  nodes.forEach((nd, i) => nd.g.classList.toggle('rad', i === t));
+  try {
+    smoke.start({ path: tr.d, bbox: { x: b.x, y: b.y, width: b.width, height: b.height }, cx: tr.x, cy: tr.y, detonate });
+    const r = boxOf(); smoke.view(cam.x, cam.y, cam.z, r.width, r.height);
+  } catch (err) { console.warn('fumaça indisponível, usando a versão simples', err); fogFallback(t); }
+}
+function clearFog(now) { app.fogKey = null; smoke.stop(now); fogLayer.replaceChildren(); hazardLayer.replaceChildren(); nodes.forEach((nd) => nd.g.classList.remove('rad')); }
+// Névoa radioativa sobre o território atingido (ver js/smoke.js). Some aos poucos quando a rodada dela acaba.
+function drawFog(v) {
+  const key = v.fog && v.phase === 'play' ? v.fog.t : null;
+  if (key === app.fogKey) return;
+  app.fogKey = key;
+  fogLayer.replaceChildren();
+  if (key == null) return clearFog(false);
+  if (app.incoming === key) return; // a ogiva ainda está a caminho: a fumaça começa no impacto
+  startSmoke(key, false);
 }
 // Névoa nuclear sobre o território isolado: fumaça de verdade, feita de duas texturas de ruído fractal geradas uma vez
 // e ladrilhadas em três camadas que deslizam em direções e velocidades diferentes, recortadas por uma máscara de borda
@@ -711,12 +789,8 @@ function smokeTextures() {
   smokeTex = { dense: make(7, 0.36, 0.66, [22, 70, 30], [118, 214, 84], 0.92), wisp: make(91, 0.5, 0.74, [130, 235, 105], [232, 255, 200], 0.9) };
   return smokeTex;
 }
-function drawFog(v) {
-  const key = v.fog && v.phase === 'play' ? v.fog.t : null;
-  if (key === app.fogKey) return;
-  app.fogKey = key;
+function fogFallback(key) {
   fogLayer.replaceChildren();
-  if (key == null) return;
   const t = TERR[key], b = nodes[key].poly.getBBox(), M = 46, tex = smokeTextures();
   const x0 = b.x - M, y0 = b.y - M, w = b.width + 2 * M, h = b.height + 2 * M, cx = b.x + b.width / 2, cy = b.y + b.height / 2;
   const mask = el('mask', { id: 'fogmask', maskUnits: 'userSpaceOnUse', x: x0, y: y0, width: w, height: h }, fogLayer);
@@ -733,7 +807,6 @@ function drawFog(v) {
   layer(tex.dense, 140, 1, -1, 26, 0.9);
   layer(tex.wisp, 210, -1, 0, 34, 0.85, 'wisp');
   for (let k = 0; k < 7; k++) el('circle', { class: 'fog-ember', cx: (cx + (((k * 53) % 100) / 100 - 0.5) * b.width * 0.7).toFixed(1), cy: (cy + (((k * 29) % 100) / 100 - 0.3) * b.height * 0.6).toFixed(1), r: 1.6, style: `animation-duration:${3.5 + (k % 3) * 1.2}s;animation-delay:${-k * 0.9}s` }, body);
-  el('path', { class: 'fog-fill', d: t.d, 'fill-rule': 'evenodd' }, fogLayer);
 }
 function confirmNuke(t) {
   const v = app.view, me = v.turn, d = v.terr[t], lost = nukeDamage(v, t), own = v.players[d.o];
@@ -749,7 +822,7 @@ function confirmNuke(t) {
     if (cards) act({ t: 'nuke', cards, to: t });
   };
 }
-function shake(big) { svg.classList.remove('shake', 'shake2'); void svg.getBoundingClientRect(); svg.classList.add(big ? 'shake2' : 'shake'); }
+function shake(big) { tilt.classList.remove('shake', 'shake2', 'shake3'); void tilt.getBoundingClientRect(); tilt.classList.add(big === 3 ? 'shake3' : big ? 'shake2' : 'shake'); }
 
 const PHASE_ALERT = {
   reinforce: ['Reforço', 'Reforce seus territórios'],
@@ -801,8 +874,8 @@ function processEvents(v) {
     else if (e.t === 'timeout') { flash(mine(e.p) ? 'Tempo esgotado!' : `Tempo de ${nm(e.p)} esgotou`, '#e06a5a', '', 1000, mine(e.p), !mine(e.p)); play('timeout'); }
     else if (e.t === 'win') { play('win'); buzz([150, 80, 150, 80, 300, 80, 400]); }
     else if (e.t === 'nuke') {
-      boom(e.to); shake(true); spotlight([e.to], 2600); play('nuke'); buzz([300, 80, 500]);
-      flash('Ogiva nuclear!', '#7dff4a', `${nm(e.p)} atingiu ${TERR[e.to].n} (${nm(e.def)}): −${e.lost}`, 2200, true);
+      incoming(e.to); spotlight([e.to], 3000); play('nuke');
+      flash('Ogiva nuclear!', '#7dff4a', `${nm(e.p)} atingiu ${TERR[e.to].n} (${nm(e.def)}): −${e.lost}`, 2600, true, true); // no alto da tela, para não cobrir a explosão
     } else if (e.t === 'fogEnd') flash(`A névoa sobre ${TERR[e.to].n} se dissipou`, '#7dff4a', '', 1100, false, true);
     else if (e.t === 'pactVoid') { if (mine(e.a) || mine(e.b)) flash('Pacto encerrado', '#e2b04a', `${nm(e.a)} e ${nm(e.b)} · acabou com a ogiva`, 1500, false, true); }
     else if (e.t === 'eventEnd') flash(`${EVENTS[e.k].n} terminou`, '#e2b04a', '', 1000, false, true);
@@ -892,6 +965,7 @@ function tapTerritory(t) {
   const v = app.view;
   if (!v) return;
   app.info = t;
+  if (v.fog && v.fog.t === t && smoke.active) { smoke.poke(TERR[t].x, TERR[t].y); play('geiger'); } // tocar na nuvem mexe com ela
   const me = v.turn, T = v.terr, mine = T[t].o === me, adj = (a, b) => TERR[a].adj.includes(b);
   if (canAct() && !v.occupy) {
     if (app.nukeMode) { // escolhendo o alvo da ogiva

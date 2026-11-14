@@ -24,7 +24,7 @@ function noise(at, dur, { vol = 0.25, freq = 1200, kind = 'lowpass' } = {}) {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
   const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = ctx.currentTime + at;
-  s.buffer = noiseBuf; f.type = kind; f.frequency.value = freq;
+  s.buffer = noiseBuf; s.loop = dur > 0.45; f.type = kind; f.frequency.value = freq;
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   s.connect(f).connect(g).connect(ctx.destination); s.start(t); s.stop(t + dur + 0.02);
 }
@@ -43,7 +43,17 @@ const SOUNDS = {
   warn: () => { tone(1000, 0, 0.09, { type: 'square', vol: 0.08 }); tone(1000, 0.16, 0.09, { type: 'square', vol: 0.08 }); },
   tick: () => tone(1000, 0, 0.04, { type: 'square', vol: 0.06 }),
   timeout: () => tone(300, 0, 0.4, { to: 150, type: 'sawtooth', vol: 0.12 }),
-  nuke: () => { tone(900, 0, 0.5, { to: 140, type: 'sawtooth', vol: 0.1 }); noise(0.5, 1.6, { vol: 0.5, freq: 320 }); tone(70, 0.5, 1.5, { to: 28, vol: 0.4 }); noise(0.55, 0.5, { vol: 0.3, freq: 1800 }); },
+  // ogiva: assobio da chegada, estalo seco do impacto, estrondo grave, trovão que rola e destroços caindo
+  nuke: () => {
+    tone(1500, 0, 0.46, { to: 260, type: 'sawtooth', vol: 0.09 }); noise(0, 0.46, { vol: 0.07, freq: 2600, kind: 'bandpass' });
+    const t = 0.46;
+    noise(t, 0.09, { vol: 0.8, freq: 3200, kind: 'highpass' });
+    noise(t, 2.4, { vol: 0.62, freq: 300 }); noise(t + 0.05, 3.6, { vol: 0.34, freq: 110 });
+    tone(96, t, 2.3, { to: 22, vol: 0.5 }); tone(48, t + 0.02, 2.8, { to: 18, vol: 0.34, type: 'triangle' });
+    for (let k = 0; k < 9; k++) noise(t + 0.35 + Math.random() * 1.9, 0.03 + Math.random() * 0.05, { vol: 0.1 + Math.random() * 0.12, freq: 1500 + Math.random() * 2500, kind: 'highpass' });
+  },
+  // contador Geiger: estalos secos em intervalos irregulares
+  geiger: () => { let t = 0; for (let k = 0; k < 16; k++) { t += 0.02 + Math.random() * Math.random() * 0.22; noise(t, 0.006, { vol: 0.34, freq: 2800, kind: 'highpass' }); } },
   dead: () => tone(220, 0, 0.6, { to: 70, type: 'sawtooth', vol: 0.14 }),
   win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.13, i === 4 ? 0.6 : 0.18, { type: 'triangle', vol: 0.22 })),
 };

@@ -67,6 +67,7 @@ Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes
   - O pacto de quem lança acaba na hora; não se lança contra parceiro de pacto nem em continente sob Cessar-fogo.
   - Com 5 cartas e direito à ogiva, a troca continua obrigatória, mas o jogo deixa escolher em vez de trocar sozinho. Se o tempo acabar, faz a troca normal.
   - Bots lançam quando o que destroem cobre com folga a parte da troca de que abrem mão, de preferência contra a pilha vizinha que mais os ameaça.
+  - A névoa é uma simulação de fluido de verdade (`js/smoke.js`): advecção, projeção de pressão, vorticidade e expansão térmica numa grade pequena, com relevo iluminado, brilho do solo, partículas levadas pelo escoamento e descargas elétricas. Roda num canvas 2D comum, entre a camada do terreno e a dos marcadores, e baixa a qualidade sozinha em aparelho fraco. A explosão tem mira de chegada, clarão, bola de fogo, onda de choque que empurra os marcadores vizinhos e fagulhas.
   - Essas regras saíram de um laboratório com cerca de 480 mil partidas simuladas e 46 variações. Duas conclusões guiaram a escolha: proibir quem lança de atacar no turno torna a ogiva um mau negócio em qualquer configuração (ficar um turno sem atacar custa mais do que a troca), e limitar o dano a uma fração do alvo também. Na versão adotada, quem tem a ogiva vence de 3% a 9% mais do que quem não tem, e ela aparece cerca de 2 vezes por partida.
 
 ## Controles

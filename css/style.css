@@ -102,7 +102,7 @@ textarea{font:12px/1.3 ui-monospace,Menlo,monospace;resize:none;word-break:break
 .fx-arrow{stroke-width:5;stroke-linecap:round;fill:none;animation:arrow 1s ease-out both}
 .fx-dot{animation:arrow 1s ease-out both}
 @keyframes arrow{0%{opacity:0}15%{opacity:1}70%{opacity:.9}100%{opacity:0}}
-#map.shake{animation:shake .35s}#map.shake2{animation:shake2 .55s}
+#tilt.shake{animation:shake .35s}#tilt.shake2{animation:shake2 .55s}#tilt.shake3{animation:shake3 .9s}
 @keyframes shake{20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(3px,2px)}}
 @keyframes shake2{10%{transform:translate(-9px,4px)}25%{transform:translate(9px,-5px)}40%{transform:translate(-8px,-4px)}55%{transform:translate(7px,5px)}70%{transform:translate(-5px,2px)}85%{transform:translate(4px,-2px)}}
 
@@ -172,7 +172,7 @@ video{width:100%;border-radius:12px;background:#000;max-height:46vh;object-fit:c
 .plist .who{flex:1;min-width:0}.plist .btn.small{height:34px;padding:0 10px;font-size:13px;flex:none}
 .log{font-size:12px;color:var(--mute);max-height:120px;overflow:auto}
 
-@media (prefers-reduced-motion:reduce){.terr.tgt,#map.shake,#map.shake2{animation:none}.terr{transition:none}}
+@media (prefers-reduced-motion:reduce){.terr.tgt,#tilt.shake,#tilt.shake2,#tilt.shake3,#tilt.punch{animation:none}.terr{transition:none}}
 @media (prefers-reduced-motion:reduce){.aim{animation:none}}
 /* Layout deitado (classe .land, posta pelo JS): vale com o celular deitado de verdade ou com a tela girada à força. */
 body.land #game:not([hidden]){display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr auto}
@@ -243,10 +243,11 @@ details.extras summary span{flex:1;min-width:0;text-align:right;color:var(--mute
 @keyframes ember{0%{transform:translateY(8px);opacity:0}25%{opacity:.95}100%{transform:translateY(-34px);opacity:0}}
 @keyframes fogbreath{50%{opacity:1}}
 @keyframes fogdash{to{stroke-dashoffset:-90}}
-.fx-shock{fill:none;stroke:#b6ff7a;stroke-width:5;transform-box:fill-box;transform-origin:center;animation:shock 1.5s ease-out both}
-@keyframes shock{0%{transform:scale(.4);opacity:1}100%{transform:scale(16);opacity:0;stroke-width:1}}
-#mapwrap.boom::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle,#f4ffe8 0,#9dff6a 35%,#1d6a2600 80%);animation:boomflash 1.5s ease-out both}
-@keyframes boomflash{0%{opacity:0}8%{opacity:.95}30%{opacity:.5}100%{opacity:0}}
+.fx-shock{stroke:none;transform-box:fill-box;transform-origin:center;animation:shock 1.5s cubic-bezier(.12,.62,.3,1) both}
+.fx-shock.first{animation-duration:1.15s}
+@keyframes shock{0%{transform:scale(.5);opacity:1}70%{opacity:.8}100%{transform:scale(40);opacity:0}}
+#mapwrap.boom::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle at var(--bx,50%) var(--by,50%),#fff 0,#fff7dc 9%,#ffd98a 22%,#b9ff7a55 46%,#1d6a2600 78%);animation:boomflash 1.6s cubic-bezier(.1,.7,.2,1) both}
+@keyframes boomflash{0%{opacity:1}7%{opacity:1}22%{opacity:.55}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.fog-glow,.fog-fill,.smoke,.fog-ember,.fx-shock{animation:none}#mapwrap.boom::after{animation-duration:.4s}}
 /* Zona segura: nada de botão colado nas bordas, nos cantos arredondados, no entalhe da câmera ou na barra de gestos.
    Com a tela girada pelo jogo, os recuos do aparelho trocam de lado: o topo físico (entalhe) vira a esquerda do palco. */
@@ -263,3 +264,30 @@ body.land #modal{padding:0 var(--sr) 0 var(--sl)}
 @keyframes askpulse{50%{filter:brightness(1.18)}}
 @media (prefers-reduced-motion:reduce){.btn.ask{animation:none}}
 .card .sym{display:block;width:24px;height:24px;margin:0 auto;fill:currentColor;stroke:none}
+/* mapa em camadas: terra (#map), fumaça (#smoke) e marcadores/efeitos (#map2) */
+#map2{position:absolute;inset:0;width:100%;height:100%;display:block;stroke:none;overflow:visible;pointer-events:none}
+#smoke{position:absolute;left:0;top:0;pointer-events:none}
+@keyframes shake3{6%{transform:translate(-14px,7px) rotate(-.5deg)}14%{transform:translate(13px,-8px) rotate(.45deg)}24%{transform:translate(-11px,-6px) rotate(-.35deg)}34%{transform:translate(10px,7px) rotate(.3deg)}46%{transform:translate(-7px,4px) rotate(-.2deg)}58%{transform:translate(6px,-4px)}72%{transform:translate(-4px,2px)}86%{transform:translate(2px,-1px)}}
+#tilt.punch{animation:punch .65s cubic-bezier(.2,.9,.25,1)}
+#tilt.punch.shake3{animation:punch .65s cubic-bezier(.2,.9,.25,1),shake3 .9s}
+@keyframes punch{0%{scale:1}14%{scale:1.05}100%{scale:1}}
+@keyframes jolt{0%{translate:0 0}22%{translate:var(--jx) var(--jy)}100%{translate:0 0}}
+@keyframes slam{0%{translate:0 0;opacity:1}8%{opacity:0}30%{opacity:0}100%{translate:0 0;opacity:1}}
+/* mira da ogiva chegando */
+.fx-lock{animation:lockrot .46s cubic-bezier(.3,0,.7,1) both}
+.fx-lock .ring{fill:none;stroke:#ff5a3c;stroke-width:2.5;animation:lockin .46s cubic-bezier(.5,0,.9,.4) both}
+.fx-lock .ring.r2{stroke:#ffd0c4;stroke-width:1.2;animation-delay:.05s}
+.fx-lock .tick{stroke:#ff5a3c;stroke-width:2.5;stroke-linecap:round}
+@keyframes lockin{0%{transform:scale(4.4);opacity:0}25%{opacity:1}100%{transform:scale(.25);opacity:1}}
+@keyframes lockrot{0%{transform:rotate(-70deg) scale(2.6);opacity:0}30%{opacity:1}100%{transform:rotate(0deg) scale(.5);opacity:1}}
+/* zona radioativa: contorno tracejado, um traço claro que percorre a borda e o símbolo no marcador */
+.hazard{pointer-events:none}
+.hz-line{fill:none;stroke:#b4ff86;stroke-opacity:.85;stroke-width:1.6;stroke-dasharray:5 4;animation:fogdash 12s linear infinite;filter:drop-shadow(0 0 2px #2bff3c)}
+.hz-scan{fill:none;stroke:#f1ffe6;stroke-width:2.4;stroke-linecap:round;stroke-dasharray:7 93;animation:hzscan 5s linear infinite;filter:drop-shadow(0 0 3px #7dff4a)}
+@keyframes hzscan{to{stroke-dashoffset:-100}}
+.trefoil{display:none}
+.mark.rad .trefoil{display:block;animation:trepulse 1.6s ease-in-out infinite}
+.trefoil .tdisc{fill:#f4d21a;stroke:#141204;stroke-width:1.2}
+.trefoil path,.trefoil .tdot{fill:#141204}
+@keyframes trepulse{50%{filter:brightness(1.35) drop-shadow(0 0 3px #f4d21a)}}
+@media (prefers-reduced-motion:reduce){.hz-line,.hz-scan,.mark.rad .trefoil,.fx-lock,.fx-lock .ring{animation:none}}
