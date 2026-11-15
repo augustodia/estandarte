@@ -36,7 +36,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = 'alpha-1.1'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
+const VERSION = 'alpha-1.2'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -92,6 +92,38 @@ function applyLayout() {
 const pt = (e) => (rotated() ? { x: e.clientY, y: innerWidth - e.clientX } : { x: e.clientX, y: e.clientY });
 const myName = () => ($('#name').value.trim() || 'Jogador').slice(0, 14);
 
+// Atributo só é escrito se mudou: escrever o mesmo valor ainda faz o navegador recalcular estilo.
+const setAttr = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+// Cor esmaecida = a mesma conta do antigo filtro CSS brightness(.36) saturate(.45), feita uma vez por cor.
+const dimCache = new Map();
+function dimColor(hex) {
+  let c = dimCache.get(hex);
+  if (c) return c;
+  const n = parseInt(hex.slice(1), 16), b = 0.36, s = 0.45;
+  const r = ((n >> 16) & 255) * b, g = ((n >> 8) & 255) * b, bl = (n & 255) * b;
+  const ch = (x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0');
+  c = '#' + ch((0.213 + 0.787 * s) * r + (0.715 - 0.715 * s) * g + (0.072 - 0.072 * s) * bl)
+    + ch((0.213 - 0.213 * s) * r + (0.715 + 0.285 * s) * g + (0.072 - 0.072 * s) * bl)
+    + ch((0.213 - 0.213 * s) * r + (0.715 - 0.715 * s) * g + (0.072 + 0.928 * s) * bl);
+  dimCache.set(hex, c);
+  return c;
+}
+
+// As bibliotecas de QR (~310 KB) só carregam quando precisa: antes eram lidas e compiladas toda vez que o jogo
+// abria, atrasando a primeira tela. Ficam no cache offline, então funcionam sem internet.
+const vendorCache = {};
+const loadVendor = (name) => vendorCache[name] || (vendorCache[name] = new Promise((res, rej) => {
+  const s = document.createElement('script');
+  s.src = `vendor/${name}.js`; s.onload = res; s.onerror = () => { delete vendorCache[name]; rej(new Error(name)); };
+  document.head.append(s);
+}));
+// Desenha o QR dentro de box assim que a biblioteca estiver pronta (se a janela ainda estiver aberta).
+function qrInto(box, text) {
+  if (typeof qrcode === 'function') return void box.append(drawQr(text));
+  box.textContent = 'Gerando QR…';
+  loadVendor('qrcode').then(() => { if (box.isConnected) box.replaceChildren(drawQr(text)); }).catch(() => { box.textContent = 'Não foi possível gerar o QR. Use o código ou o link.'; });
+}
+
 function drawQr(text) {
   const qr = qrcode(0, 'L'); qr.addData(text); qr.make();
   const n = qr.getModuleCount(), q = 3, cell = 6;
@@ -131,9 +163,10 @@ function startScanner(box, onCode, shared) {
   video.setAttribute('playsinline', ''); video.muted = true;
   box.replaceChildren(video);
   const canvas = document.createElement('canvas'), g = canvas.getContext('2d', { willReadFrequently: true });
+  loadVendor('jsQR').catch(() => {});
   const tick = () => {
     if (stopped) return;
-    if (video.readyState >= 2 && video.videoWidth) {
+    if (typeof jsQR === 'function' && video.readyState >= 2 && video.videoWidth) {
       const s = Math.min(1, 640 / video.videoWidth);
       canvas.width = video.videoWidth * s; canvas.height = video.videoHeight * s;
       g.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -283,7 +316,7 @@ async function hostInvite(targetSeat = null) {
     if (!inv.link.open) setTimeout(() => !inv.link.open && inv.cancel(), 20000);
     if (app.pausedAt) { if (app.game && app.game.tEnd) app.game.tEnd += Date.now() - app.pausedAt; app.pausedAt = null; sync(); }
   });
-  $('#qrbox').append(drawQr(url));
+  qrInto($('#qrbox'), url);
   if (camStream) stop = startScanner($('#scanbox'), accept, camStream);
   $('#modal .sheet').onclick = (e) => {
     const m = e.target.dataset.m;
@@ -473,7 +506,7 @@ async function guestJoin(raw) {
   modal(`<h3>Mostre este QR ao anfitrião</h3><p>No celular dele: “Ler resposta”. A conexão abre sozinha em seguida.</p>
     <div class="qr" id="qrbox"></div>
     <div class="row"><button class="btn small" data-m="copy">Copiar código</button><button class="btn small ghost" data-m="close">Cancelar</button></div>`);
-  $('#qrbox').append(drawQr(j.code));
+  qrInto($('#qrbox'), j.code);
   $('#modal .sheet').onclick = (e) => {
     if (e.target.dataset.m === 'copy') copyText(j.code);
     if (e.target.dataset.m === 'close') { j.cancel(); closeModal(); }
@@ -643,7 +676,7 @@ function onlineInvite() {
     <div class="qr" id="qrbox"></div>
     <p class="tag roomurl">${esc(url)}</p>
     <div class="row">${navigator.share ? '<button class="btn small primary" data-m="share">Compartilhar</button>' : ''}<button class="btn small" data-m="copy">Copiar link</button><button class="btn small ghost" data-m="close">Fechar</button></div>`);
-  $('#qrbox').append(drawQr(url));
+  qrInto($('#qrbox'), url);
   $('#modal .sheet').onclick = (e) => {
     const m = e.target.dataset.m;
     if (m === 'copy') copyText(url);
@@ -709,7 +742,7 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 const svg = $('#map');
 // O mapa são três camadas empilhadas: a terra (svg), a fumaça da ogiva (canvas) e, por cima, marcadores, nomes e efeitos (svg2).
 // Assim a fumaça passa por cima do terreno e por baixo dos números. Só a camada da terra recebe os toques.
-const svg2 = $('#map2'), tilt = $('#tilt');
+const svg2 = $('#map2'), svgfx = $('#mapfx'), tilt = $('#tilt');
 const smoke = createSmoke($('#smoke'));
 if (new URLSearchParams(location.search).has('debug')) window.__smoke = smoke;
 const el = (tag, attrs, parent) => {
@@ -855,7 +888,7 @@ function applyCam() {
   const clamp = (v, size, total) => (size >= total + 2 * PAD ? (total - size) / 2 : Math.min(total + PAD - size, Math.max(-PAD, v)));
   cam.x = clamp(cam.x, w, MAP_W); cam.y = clamp(cam.y, h, MAP_H);
   const vb = `${cam.x} ${cam.y} ${w} ${h}`;
-  svg.setAttribute('viewBox', vb); svg2.setAttribute('viewBox', vb);
+  svg.setAttribute('viewBox', vb); svg2.setAttribute('viewBox', vb); svgfx.setAttribute('viewBox', vb);
   smoke.view(cam.x, cam.y, cam.z, r.width, r.height);
   scaleMarks();
 }
@@ -958,9 +991,9 @@ function nextFlash() {
   box.hidden = false; box.classList.remove('go'); void box.offsetWidth; box.classList.add('go');
   flashTimer = setTimeout(nextFlash, f.ms);
 }
-const fx = el('g', { class: 'fx' }, svg2);
+const fx = el('g', { class: 'fx' }, svgfx);
 { // frente da onda de choque: transparente por dentro, um rastro esverdeado e a borda branca e fina
-  const sg = el('radialGradient', { id: 'shockgrad' }, el('defs', {}, svg2));
+  const sg = el('radialGradient', { id: 'shockgrad' }, el('defs', {}, svgfx));
   for (const [o, c, a] of [[0, '#b6ff7a', 0], [0.7, '#b6ff7a', 0], [0.9, '#c9ffa0', 0.2], [0.965, '#ffffff', 0.85], [1, '#ffffff', 0]]) el('stop', { offset: o, 'stop-color': c, 'stop-opacity': a }, sg);
 }
 const later = (node, ms) => setTimeout(() => node.remove(), ms);
@@ -1452,8 +1485,7 @@ function renderGame() {
   const prevArm = app.prevArm && app.prevArm.length === T.length ? app.prevArm : null;
   app.prevArm = T.map((t) => t.a);
   nodes.forEach((nd, i) => {
-    nd.poly.setAttribute('fill', COLORS[v.players[T[i].o].color].c);
-    nd.num.textContent = T[i].a;
+    const col = COLORS[v.players[T[i].o].color].c;
     if (prevArm && prevArm[i] !== T[i].a) popNum(nd, T[i].a > prevArm[i]);
     const hl = app.target != null ? i === app.target : targets.has(i);
     // quem joga: esmaece o que não é origem nem alvo possível; quem assiste: esmaece tudo menos
@@ -1461,11 +1493,17 @@ function renderGame() {
     const dim = can ? app.nukeMode ? !!nukeBlock(v, v.turn, i) : (app.sel != null && v.step !== 'reinforce' ? i !== app.sel && !targets.has(i) : bonusOnly && !(T[i].o === v.turn && v.pool.cont[TERR[i].c] > 0))
       : v.phase === 'over' ? T[i].o !== v.winner : pk ? i !== pk.sel && i !== pk.target : spot ? !spot.has(i) : false;
     const ps = pk ? (i === pk.sel ? ' sel' : i === pk.target ? ' tgt' : '') : spot && spot.has(i) ? ' lit' : '';
-    nd.poly.setAttribute('class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + ps);
-    nd.shade.setAttribute('class', dim ? 'tshade dim' : 'tshade');
+    // Esmaecer muda a cor de preenchimento (já calculada) em vez de aplicar filtro CSS: filtro em ~40 caminhos do
+    // SVG obrigava o navegador a redesenhar cada um à parte a cada quadro. Só mexe no que mudou.
+    setAttr(nd.poly, 'fill', dim ? dimColor(col) : col);
+    setAttr(nd.poly, 'class', 'terr' + (i === app.sel ? ' sel' : '') + (hl ? ' tgt' : '') + (dim ? ' dim' : '') + ps);
+    setAttr(nd.shade, 'class', dim ? 'tshade dim' : 'tshade');
+    if (nd.num.textContent !== String(T[i].a)) nd.num.textContent = T[i].a;
     if (i === app.sel || hl || ps) front.push(nd.poly);
   });
-  front.forEach((p) => p.parentNode.appendChild(p)); // destacados por cima dos vizinhos, para o contorno aparecer inteiro
+  // destacados por cima dos vizinhos, para o contorno aparecer inteiro (só reordena se precisar)
+  const tail = front.length ? [...front[0].parentNode.children].slice(-front.length) : [];
+  if (front.some((p, k) => tail[k] !== p)) front.forEach((p) => p.parentNode.appendChild(p));
 
   // ligações por mar que saem do território selecionado e levam a um alvo possível ficam acesas
   for (const r of seaRoutes) { const a = +r.dataset.a, b = +r.dataset.b; r.classList.toggle('on', can && app.sel != null && ((a === app.sel && targets.has(b)) || (b === app.sel && targets.has(a)))); }
@@ -1941,6 +1979,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------- inicialização ---------- */
+addEventListener('load', () => (window.requestIdleCallback || setTimeout)(() => { loadVendor('qrcode').catch(() => {}); }, { timeout: 4000 }));
 // O jogo não roda dentro de outro site (evita que uma página esconda o jogo e engane cliques).
 if (window.top !== window.self) { try { window.top.location = location.href; } catch { document.body.innerHTML = '<p style="padding:24px">Abra o Estandarte direto no navegador.</p>'; } }
 $('#name').value = store.get('name') || '';

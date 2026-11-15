@@ -73,7 +73,9 @@ const MARGIN = 96; // quanto o domínio passa do território, em unidades do map
 
 export function createSmoke(canvas) {
   const ctx = canvas.getContext('2d');
-  const nzA = noiseTile(11), nzB = noiseTile(57);
+  // As texturas de ruído (2 × 256²) só são geradas na primeira ogiva: antes custavam tempo toda vez que o jogo abria.
+  let nzA = null, nzB = null;
+  const ensureNoise = () => { if (!nzA) { nzA = noiseTile(11); nzB = noiseTile(57); } };
   const off = document.createElement('canvas'), octx = off.getContext('2d');
   const tiny = document.createElement('canvas'), tctx = tiny.getContext('2d');
   const mote = glowSprite(120, 255, 110), ember = glowSprite(255, 150, 50);
@@ -401,6 +403,7 @@ export function createSmoke(canvas) {
     get stats() { return S ? { quality, cost: +cost.toFixed(2), N: S.N, M: S.M, P, mean: +S.mean.toFixed(2), speed: +(S.speed || 0).toFixed(1), age: +S.age.toFixed(1), motes: S.motes.length, sparks: S.sparks.length, arcs: S.arcs.length } : null; },
     // cfg: { path, bbox:{x,y,width,height}, cx, cy, detonate } em unidades do mapa
     start(cfg) {
+      ensureNoise();
       cancelAnimationFrame(raf); raf = 0;
       const b = cfg.bbox, size = Math.max(b.width, b.height) + 2 * MARGIN;
       const c = { path: cfg.path, cx: cfg.cx, cy: cfg.cy, detonate: !!cfg.detonate && !still, size, ox: b.x + b.width / 2 - size / 2, oy: b.y + b.height / 2 - size / 2 };
