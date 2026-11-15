@@ -1,6 +1,6 @@
 # Estandarte
 
-Jogo de estratégia por turnos para 2 a 6 jogadores: distribua exércitos, conquiste territórios e cumpra seu objetivo secreto antes dos outros. Roda no navegador do celular (iOS e Android) como PWA instalável e **não tem backend**: os aparelhos se conectam direto entre si por WebRTC, pareados por QR code.
+Jogo de estratégia por turnos para 2 a 6 jogadores: distribua exércitos, conquiste territórios e cumpra seu objetivo secreto antes dos outros. Roda no navegador do celular (iOS e Android) como PWA instalável. Na mesma rede **não precisa de servidor**: os aparelhos se conectam direto entre si por WebRTC, pareados por QR code. Para jogar com quem está longe há o modo **Jogar online**, que usa um servidor (repositório privado `backend-estandarte`, em Go).
 
 **Jogar:** https://augustodia.github.io/estandarte/
 
@@ -39,6 +39,19 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - No iPhone, o app instalado na tela de início e o Safari têm caches separados. Sem internet, abra o app instalado e use **Entrar em partida** em vez da câmera do sistema.
 - Redes com isolamento entre clientes (comum em Wi-Fi público) bloqueiam a conexão direta.
 - Em redes diferentes a conexão depende de STUN público e pode falhar em algumas operadoras de 4G/5G. Não há servidor TURN.
+
+## Jogar online
+
+1. Um jogador toca em **Jogar online → Criar sala online**. A sala ganha um código de 5 letras (ex.: `K7M2Q`).
+2. Ele toca em **Convidar** e manda o link (ou mostra o QR). Quem abrir o link entra direto; também dá para digitar o código em **Jogar online → Entrar na sala**.
+3. Quem criou a sala escolhe o tempo por turno, as regras extras e os bots, e inicia a partida.
+
+- Cada um joga do próprio celular, de qualquer lugar com internet. As regras, os dados e os bots rodam no servidor, com o mesmo motor de regras (portado para Go e conferido jogada a jogada contra este).
+- Se a conexão cair ou a página recarregar, o jogo volta sozinho para o mesmo lugar (o aparelho é reconhecido).
+- Quem sai no meio da partida vira bot e pode voltar pelo link. Sem relógio, a vez de quem está desconectado passa depois de 1 min 30 s.
+- O servidor gratuito dorme depois de 15 minutos sem ninguém jogando e leva até 1 minuto para acordar: a tela mostra "Acordando o servidor…".
+- As partidas vivem só na memória do servidor: se ele reiniciar (nova versão publicada, manutenção), as salas abertas se perdem.
+- Para testar com outro servidor: abra o jogo com `?server=ws://localhost:8080` (fica guardado no aparelho; `?server=` vazio volta ao padrão). O endereço padrão está em `js/online.js`.
 
 ## Regras em resumo
 
@@ -102,10 +115,11 @@ Sem build e sem dependências em tempo de execução além de duas bibliotecas d
 | `js/sound.js` | Efeitos sonoros sintetizados (Web Audio), sem arquivos de áudio |
 | `tools/gen-map.mjs` | Gera `js/map.js` a partir do Natural Earth 1:110m: recorta os territórios, amplia regiões pequenas e simplifica as formas numa grade |
 | `js/net.js` | WebRTC DataChannel e compactação do SDP para caber no QR |
+| `js/online.js` | Conexão com o servidor das partidas online (WebSocket, espera o servidor acordar) |
 | `js/main.js` | Interface, pareamento, câmera/leitor de QR, pan e zoom do mapa |
 | `sw.js` | Cache offline |
 
-O anfitrião é a autoridade: valida as ações, rola os dados e envia a cada convidado apenas o que ele pode ver (mãos e objetivos alheios ficam ocultos). Toda jogada é transacional: se for inválida, ou se deixasse o jogo num estado que quebra alguma regra (ataque na primeira rodada, território sem exército, cartas duplicadas, vez de jogador eliminado…), ela é recusada e nada muda.
+O anfitrião (ou, online, o servidor) é a autoridade: valida as ações, rola os dados e envia a cada convidado apenas o que ele pode ver (mãos e objetivos alheios ficam ocultos). Toda jogada é transacional: se for inválida, ou se deixasse o jogo num estado que quebra alguma regra (ataque na primeira rodada, território sem exército, cartas duplicadas, vez de jogador eliminado…), ela é recusada e nada muda.
 
 ## Desenvolvimento
 

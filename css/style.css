@@ -419,3 +419,6 @@ body.land #modal .sheet{animation-name:sheetin2}
 .pactbtn{display:inline-flex;align-items:center;gap:6px;border-color:#e2b04a88;color:#ffe2a3}
 .pactbtn svg{width:16px;height:16px;flex:none}
 @media (prefers-reduced-motion:reduce){#mapwrap.alarm::after,.fx-missile .flame{animation:none}}
+
+/* sala online */
+.roomurl{word-break:break-all;font-size:12px;user-select:all}
