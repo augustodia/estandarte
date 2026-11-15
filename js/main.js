@@ -8,7 +8,7 @@ import {
 import { createInvite, joinInvite, initCert, myFingerprint, armSpare, useSpare } from './net.js';
 import { play, unlock, soundOn, setSound } from './sound.js';
 import { createSmoke } from './smoke.js';
-import { connectOnline, serverUrl, roomCode, DEFAULT_SERVER } from './online.js';
+import { connectOnline, serverUrl, roomCode, DEFAULT_SERVER, listRooms } from './online.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -35,7 +35,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '38'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '39'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -49,6 +49,7 @@ let modalCleanup = null, modalAt = 0;
 function modal(html, onClose) {
   closeModal();
   $('#modal .sheet').onclick = null;
+  $('#modal .sheet').className = 'sheet';
   $('#modal .sheet').innerHTML = html;
   $('#modal').hidden = false; modalAt = Date.now();
   modalCleanup = onClose || null;
@@ -392,7 +393,8 @@ const guestHandlers = {
     if (msg.t === 'gone') return onlineGone(msg.m); // online: a sala acabou, fui removido ou entrei por outra janela
     if (app.online && (msg.t === 'lobby' || msg.t === 'state') && msg.code) {
       app.online.code = msg.code; app.owner = !!msg.owner; app.onl = msg.on || null;
-      store.set('online', { code: msg.code, server: app.online.server, at: Date.now() });
+      app.watch = !!msg.watch; app.watchers = msg.watchers || 0; app.online.watch = app.watch;
+      store.set('online', { code: msg.code, server: app.online.server, watch: app.watch, at: Date.now() });
     }
     if (msg.t === 'spare') { app.spare = { code: msg.code, gu: msg.gu, gp: msg.gp }; store.set('spare', app.spare); return; }
     if (msg.t === 'lobby') { app.lobby = msg; app.view = null; app.winShown = false; $('#win').hidden = true; show('lobby'); renderLobby(); }
@@ -486,10 +488,10 @@ function guestScan() {
 
 /* ---------- online ---------- */
 // Online o servidor é o anfitrião: este aparelho se comporta como convidado, com as mesmas mensagens da rede local.
-function onlineStart(query, title) {
+function onlineStart(query, title, watch = false) {
   if (navigator.onLine === false) return toast('Sem internet: jogar online precisa de conexão. Na mesma rede, use “Criar partida”.', 5000);
   if (app.link) { const l = app.link; app.link = null; l.close(); }
-  app.online = { server: serverUrl(), code: null, query };
+  app.online = { server: serverUrl(), code: null, query, watch };
   modal(`<h3>${esc(title)}</h3><p id="wake">Conectando ao servidor…</p><button class="btn ghost" data-m="cancel">Cancelar</button>`);
   $('#modal .sheet').onclick = (e) => { if (e.target.dataset.m === 'cancel') onlineGone(''); };
   onlineConnect();
@@ -499,7 +501,7 @@ function onlineConnect() {
   if (!o || app.link) return;
   clearTimeout(o.retry);
   if (o.pending) o.pending.close();
-  const query = o.code ? 'room=' + encodeURIComponent(o.code) : o.query;
+  const query = o.code ? 'room=' + encodeURIComponent(o.code) + (o.watch ? '&watch=1' : '') : o.query;
   const link = connectOnline(o.server, query, {
     ...guestHandlers,
     onopen(l) { if (app.online !== o || o.pending !== l) return l.close(); o.pending = null; guestHandlers.onopen(l); },
@@ -534,21 +536,61 @@ const roomLink = (code) => {
 };
 function onlineMenu(code) {
   modal(`<div class="shead"><h3>Jogar online</h3><button class="x" data-m="close" aria-label="Fechar">✕</button></div>
-    <p>Para jogar com quem está longe, pela internet. Um cria a sala e manda o link ou o código para os outros.</p>
-    <label class="field">Seu nome<input id="oname" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado" value="${esc($('#name').value)}"></label>
-    <button class="btn primary" data-m="create">Criar sala online</button>
-    <label class="field">Código da sala<input id="rcode" maxlength="80" autocomplete="off" autocapitalize="characters" placeholder="Ex.: K7M2Q" value="${esc(code || '')}"></label>
-    <button class="btn" data-m="enter">Entrar na sala</button>`);
+    <div class="ogrid"><div class="ocol">
+      <label class="field">Seu nome<input id="oname" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado" value="${esc($('#name').value)}"></label>
+      <button class="btn primary" data-m="create">Criar sala online</button>
+      <label class="field">Tem um código ou link?<span class="row"><input id="rcode" maxlength="80" autocomplete="off" autocapitalize="characters" placeholder="Ex.: K7M2Q" value="${esc(code || '')}"><button class="btn" data-m="enter">Entrar</button></span></label>
+    </div><div class="ocol">
+      <div class="rhead"><b>Salas abertas</b><span id="rstat"></span><button class="btn small ghost" data-m="refresh" aria-label="Atualizar">↻</button></div>
+      <div id="rlist" class="rlist"><p class="rempty">Procurando salas…</p></div>
+    </div></div>`);
+  $('#modal .sheet').classList.add('wide');
+  const keepName = () => { $('#name').value = $('#oname').value.trim().slice(0, 14); store.set('name', $('#name').value); };
   $('#modal .sheet').onclick = (e) => {
-    const m = e.target.dataset.m;
-    if (m === 'create' || m === 'enter') { $('#name').value = $('#oname').value.trim().slice(0, 14); store.set('name', $('#name').value); }
+    const b = e.target.closest('button');
+    if (!b) return;
+    const m = b.dataset.m;
+    if (m === 'create' || m === 'enter' || b.dataset.join || b.dataset.watch) keepName();
     if (m === 'create') onlineStart('create=1', 'Criando a sala…');
+    if (m === 'refresh') refreshRooms(true);
     if (m === 'enter') {
       const c = roomCode($('#rcode').value);
       if (!c) return toast('Digite o código de 5 letras ou cole o link da sala.');
       onlineStart('room=' + c, 'Entrando na sala ' + c + '…');
     }
+    if (b.dataset.join) onlineStart('room=' + b.dataset.join, 'Entrando na sala ' + b.dataset.join + '…');
+    if (b.dataset.watch) onlineStart('room=' + b.dataset.watch + '&watch=1', 'Abrindo a partida ' + b.dataset.watch + '…', true);
   };
+  refreshRooms(true);
+}
+// Navegador de salas: as que aguardam jogadores e as partidas em andamento (que aceitam até 5 espectadores).
+// Atualiza sozinho a cada 5 s enquanto a janela estiver aberta.
+let roomsTimer = null, roomsBusy = false;
+async function refreshRooms(now) {
+  clearTimeout(roomsTimer);
+  const box = $('#rlist');
+  if (!box) return;
+  if (roomsBusy) return;
+  if (navigator.onLine === false) { box.innerHTML = '<p class="rempty">Sem internet.</p>'; return; }
+  roomsBusy = true;
+  const t0 = Date.now(), slow = setTimeout(() => { if ($('#rstat')) $('#rstat').textContent = 'acordando o servidor… (até 1 min)'; }, 2500);
+  let data = null;
+  try { data = await listRooms(serverUrl()); } catch {}
+  clearTimeout(slow); roomsBusy = false;
+  if (!$('#rlist')) return;
+  if (!data) { $('#rstat').textContent = 'servidor sem resposta'; roomsTimer = setTimeout(refreshRooms, 6000); return; }
+  $('#rstat').textContent = 'atualiza sozinho';
+  const dots = (ps) => ps.map((p) => `<i style="background:${COLORS[p.color].c}" title="${esc(p.name)}${p.ctrl === 'bot' ? ' (bot)' : ''}"></i>`).join('');
+  const ex = (r) => [r.secs ? r.secs / 60 + ' min por turno' : 'tempo livre', ...EXTRAS.filter(([k]) => r[k]).map(([, n]) => n.toLowerCase())].join(' · ');
+  const humans = (r) => r.players.filter((p) => p.ctrl !== 'bot').length;
+  const card = (r, wait) => `<div class="room"><div class="rmain"><b>Sala de ${esc(r.host)}</b> <code>${esc(r.code)}</code>
+      <small>${wait ? `${r.players.length} de 6 jogadores` : `rodada ${r.round} · ${r.players.length} jogadores (${humans(r)} ${humans(r) === 1 ? 'pessoa' : 'pessoas'})`} · ${esc(ex(r))}</small>
+      <span class="rdots">${dots(r.players)}${wait ? '' : `<em>👁 ${r.watchers}/${data.maxWatchers}</em>`}</span></div>
+      ${wait ? `<button class="btn small primary" data-join="${esc(r.code)}" ${r.full ? 'disabled' : ''}>${r.full ? 'Cheia' : 'Entrar'}</button>`
+      : `<button class="btn small" data-watch="${esc(r.code)}" ${r.full ? 'disabled' : ''}>${r.full ? 'Lotada' : 'Assistir'}</button>`}</div>`;
+  box.innerHTML = `<p class="rsec">Aguardando jogadores</p>${data.lobby.length ? data.lobby.map((r) => card(r, true)).join('') : '<p class="rempty">Nenhuma sala esperando agora. Crie uma!</p>'}
+    <p class="rsec">Em andamento · dá para assistir</p>${data.play.length ? data.play.map((r) => card(r, false)).join('') : '<p class="rempty">Nenhuma partida em andamento.</p>'}`;
+  roomsTimer = setTimeout(refreshRooms, Math.max(1000, 5000 - (Date.now() - t0)));
 }
 function onlineInvite() {
   const code = app.online && app.online.code;
@@ -589,6 +631,7 @@ function renderOnlineLobby() {
     ? `<div class="setting">Tempo por turno<span class="chips">${[[0, 'Livre'], [60, '1 min'], [120, '2 min'], [180, '3 min']].map(([v, l]) => `<button class="chip${L.secs === v ? ' on' : ''}" data-secs="${v}">${l}</button>`).join('')}</span></div>
        <details class="extras"${app.extrasOpen ?? bigScreen() ? ' open' : ''}><summary>Regras extras<span>${EXTRAS.filter(([k]) => L[k]).map(([, n]) => n).join(', ') || 'nenhuma ligada'}</span></summary>
          ${EXTRAS.map(([k, n, d]) => `<button class="opt${L[k] ? ' on' : ''}" data-opt="${k}" aria-pressed="${!!L[k]}"><span class="sw"></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</details>
+       <button class="opt${L.public !== false ? ' on' : ''}" data-pub="1" aria-pressed="${L.public !== false}"><span class="sw"></span><span><b>Sala pública</b><small>Aparece na lista de salas: qualquer um pode entrar e, depois que começar, assistir. Desligada, só entra quem tem o código.</small></span></button>
        <div class="row"><button class="btn" data-do="invite" ${full ? 'disabled' : ''}>Convidar</button><button class="btn" data-do="addBot" ${full ? 'disabled' : ''}>+ Bot</button></div>
        <button class="btn primary" data-do="begin" ${L.seats.length < 2 ? 'disabled' : ''}>Iniciar partida (${L.seats.length} jogadores)</button>
        <button class="btn ghost" data-do="leave">Sair da sala</button>`
@@ -1403,11 +1446,11 @@ function renderGame() {
   const stepper = (unit) => `<div class="step"><button data-step="-1" aria-label="Menos"${app.n <= rng[0] ? ' disabled' : ''}>−</button><b>${app.n}${unit ? `<small>${unit}</small>` : ''}</b><button data-step="1" aria-label="Mais"${app.n >= rng[1] ? ' disabled' : ''}>+</button></div>`;
 
   // topo
-  const meP = v.players[vw], extras = !!(v.opts && (v.opts.events || v.opts.pacts || v.opts.nukes));
+  const meP = v.players[vw] || null, extras = !!(v.opts && (v.opts.events || v.opts.pacts || v.opts.nukes));
   $('#hud').innerHTML = `<div class="turn"><span class="dot" style="background:${COLORS[cur.color].c}"></span>
     <span><b>${esc(cur.name)}</b><span class="phase">${v.phase === 'over' ? 'Fim de jogo' : `${STEP[v.step]} · rodada ${v.round + 1}`}</span></span></div>
-    <button class="icon" data-do="objective" aria-label="Objetivo" title="Objetivo (O)">${ICON.goal}<em>Objetivo</em></button>
-    <button class="icon" data-do="cards" aria-label="Cartas" title="Cartas (C)">${ICON.cards}<span>${handSize(meP)}</span><em>Cartas</em></button>
+    ${meP ? `<button class="icon" data-do="objective" aria-label="Objetivo" title="Objetivo (O)">${ICON.goal}<em>Objetivo</em></button>
+    <button class="icon" data-do="cards" aria-label="Cartas" title="Cartas (C)">${ICON.cards}<span>${handSize(meP)}</span><em>Cartas</em></button>` : '<span class="watching" title="Você está assistindo">👁 Assistindo</span>'}
     ${extras ? `<button class="icon${of && offerIsMine(v) ? ' call' : ''}" data-do="extras" aria-label="Regras extras" title="Regras extras">${ICON.extras}${v.opts.pacts && v.pacts.length ? `<span>${v.pacts.length}</span>` : ''}<em>Extras</em></button>` : ''}
     <button class="icon" data-do="menu" aria-label="Menu" title="Menu (M)">${ICON.menu}<em>Menu</em></button>`;
   renderSide(v);
@@ -1520,7 +1563,8 @@ function renderGame() {
       if (app.role === 'guest') app.link && app.link.send(m); else app.seats.forEach((s) => s.link && s.link.send(m));
     }
   }
-  const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span><span>Você: ${esc(meP.name)}</span></span>`;
+  const you = meP ? `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span><span>Você: ${esc(meP.name)}</span>${app.watchers ? `<span class="wn">· 👁 ${app.watchers}</span>` : ''}</span>`
+    : `<span class="you"><span>👁 Assistindo${app.watchers > 1 ? ` com mais ${app.watchers - 1}` : ''}</span></span>`;
   $('#bar').innerHTML = `<div class="msg">${tapText(msg)}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
   if (app.endAsk != null && (app.endAsk !== v.n || !can)) closeModal(); // a janela de confirmação some se a jogada deixou de valer (tempo esgotado, por exemplo)
 }
@@ -1551,7 +1595,7 @@ function renderSide(v) {
       <span class="dot"></span><span class="who"><b>${p.alive ? '' : '☠ '}${esc(p.name)}${(app.role === 'guest' ? i === app.me : p.ctrl === 'local' && v.players.filter((q) => q.ctrl === 'local').length === 1) ? ' <small class="me">você</small>' : ''}</b><small>${tags}</small></span>
       <span class="sn">${Math.round(100 * n / TERR.length)}%</span></li>`;
   }).join('');
-  const html = `<div class="shd"><span>Jogadores</span><span>domínio</span></div><ul class="splayers">${rows}</ul>
+  const html = `<div class="shd"><span>Jogadores${app.watchers ? ` · 👁 ${app.watchers} assistindo` : ''}</span><span>domínio</span></div><ul class="splayers">${rows}</ul>
     <div class="shd"><span>Registro</span></div><div class="slog">${v.log.slice(-40).reverse().map((l, k) => `<p${k ? '' : ' class="new"'}>${esc(l)}</p>`).join('')}</div>`;
   if (html !== app.sideKey) { app.sideKey = html; side.innerHTML = html; }
 }
@@ -1657,12 +1701,14 @@ function confirmEnd(k, run) {
 }
 function showObjective() {
   const v = app.view, me = v.players[app.role === 'guest' ? app.me : viewer()];
+  if (!me) return;
   modal(`<h3>Objetivo de ${esc(me.name)}</h3><p style="color:var(--ink);font-size:16px">${me.obj != null ? esc(objectiveText(OBJECTIVES[me.obj], v.players.length)) : '—'}</p>
     <div class="meter" style="--p:${(100 * owned(v, v.players.indexOf(me)) / TERR.length).toFixed(1)}%;--c:${COLORS[me.color].c}"><i></i></div>
     <p>Mantenha em segredo. Territórios: ${owned(v, v.players.indexOf(me))} de ${TERR.length}.</p><button class="btn" data-m="close">Fechar</button>`);
 }
 function showCards() {
   const v = app.view, pi = app.role === 'guest' ? app.me : viewer(), me = v.players[pi];
+  if (!me) return;
   const hand = Array.isArray(me.cards) ? me.cards : [];
   const picked = new Set();
   const canTrade = canAct() && v.turn === pi && v.step === 'reinforce';
@@ -1733,7 +1779,7 @@ function leave() {
   } else if (app.role === 'guest') { store.del('guest'); store.del('spare'); app.spare = null; }
   if (app.link) { const l = app.link; app.link = null; l.close(); }
   app.winShown = false; $('#win').hidden = true;
-  Object.assign(app, { role: null, seats: [], game: null, view: null, me: null, lobby: null, sel: null, target: null, info: null, lastViewer: null, owner: false, onl: null });
+  Object.assign(app, { role: null, seats: [], game: null, view: null, me: null, lobby: null, sel: null, target: null, info: null, lastViewer: null, owner: false, onl: null, watch: false, watchers: 0 });
   refreshHome();
   closeModal(); show('home');
 }
@@ -1767,7 +1813,7 @@ const actions = {
   begin: () => (app.online ? onlineSend({ t: 'begin' }) : hostBegin()),
   leave,
   quit() {
-    modal(`<h3>Sair da partida?</h3><p>${app.online ? 'Um bot assume o seu lugar. Para voltar, abra de novo o link da sala.' : app.role === 'host' ? 'A partida fica salva neste aparelho e pode ser retomada na tela inicial.' : 'Você poderá voltar lendo um novo QR do anfitrião.'}</p>
+    modal(`<h3>${app.watch ? 'Parar de assistir?' : 'Sair da partida?'}</h3><p>${app.watch ? 'Você volta para a tela inicial.' : app.online ? 'Um bot assume o seu lugar. Para voltar, abra de novo o link da sala.' : app.role === 'host' ? 'A partida fica salva neste aparelho e pode ser retomada na tela inicial.' : 'Você poderá voltar lendo um novo QR do anfitrião.'}</p>
       <div class="row"><button class="btn primary" data-do="leave">Sair</button><button class="btn" data-m="close">Ficar</button></div>`);
   },
   again() {
@@ -1804,6 +1850,7 @@ document.addEventListener('click', (e) => {
     if (EXTRAS.some(([k]) => k === d.opt)) return onlineSend({ t: 'cfg', [d.opt]: !app.lobby[d.opt] });
     if (d.kick != null) return onlineSend({ t: 'kick', i: +d.kick });
     if (d.color != null) return onlineSend({ t: 'color', i: +d.color });
+    if (d.pub != null) return onlineSend({ t: 'cfg', public: app.lobby.public === false });
   }
   if (d.secs != null) { app.cfg.secs = +d.secs; store.set('cfg', app.cfg); return sync(); }
   if (EXTRAS.some(([k]) => k === d.opt)) { if (app.role !== 'host' || app.game) return; app.cfg[d.opt] = !app.cfg[d.opt]; store.set('cfg', app.cfg); return sync(); }
@@ -1869,7 +1916,7 @@ $('#name').addEventListener('input', () => store.set('name', $('#name').value));
   const os = store.get('online');
   if (sala && !(os && os.code === sala)) onlineMenu(sala); // abriu o link de convite: confirma o nome e entra
   else if (os && Date.now() - os.at < 6 * 3600e3) { // recarregou a página no meio de uma sala online
-    app.online = { server: os.server || serverUrl(), code: os.code };
+    app.online = { server: os.server || serverUrl(), code: os.code, watch: !!os.watch };
     toast('Voltando à sala online ' + os.code + '…', 3500); onlineConnect();
   } else if (store.get('guest') && store.get('spare')) { toast('Procurando a partida em andamento…', 3500); autoLoop(true); } // recarregou a página: tenta voltar sem QR
 }

@@ -548,3 +548,30 @@ body.tall #home h1,body.tall #home .brand .tag{text-align:center}
 @media (orientation:landscape) and (max-height:520px){#home .mode{grid-column:2}#home .mdesc{display:none}#home .mode{padding:8px 10px;gap:6px}}
 body.big #home .mode{padding:14px}
 body.big #home .homeform{gap:12px}
+
+/* jogar online: navegador de salas */
+.ogrid{display:flex;flex-direction:column;gap:14px}
+.ocol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ocol .field .row{flex-wrap:nowrap}.ocol .field .row input{flex:1;min-width:0}.ocol .field .row .btn{flex:none}
+.rhead{display:flex;align-items:center;gap:8px;border-top:1px solid #2d4a72;padding-top:10px}
+.rhead b{font:700 16px Georgia,serif;letter-spacing:.03em;color:#fff3dc}
+.rhead span{flex:1;font-size:11.5px;color:var(--mute)}
+.rhead .btn{height:32px;width:36px;padding:0;font-size:17px;flex:none}
+.rlist{display:flex;flex-direction:column;gap:6px}
+.rsec{margin:6px 0 0!important;font:700 11px/1 system-ui,sans-serif!important;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.rempty{font-size:13px!important;padding:10px 12px;border:1px dashed #2d4a72;border-radius:12px}
+.room{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#0b16268c;border:1px solid #233c5e}
+.room .rmain{flex:1;min-width:0}
+.room b{font-size:14px}.room code{font:600 11px/1 ui-monospace,Menlo,monospace;color:var(--gold);margin-left:4px;letter-spacing:.06em}
+.room small{display:block;font-size:12px;color:var(--mute);margin:2px 0 5px;overflow-wrap:anywhere}
+.rdots{display:flex;align-items:center;gap:4px}.rdots i{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px #0008}
+.rdots em{font:600 11px/1 system-ui,sans-serif;font-style:normal;color:var(--mute);margin-left:8px}
+.room .btn{flex:none;min-width:84px}
+body.big #modal .sheet.wide{max-width:900px}
+body.big .sheet.wide .ogrid{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px}
+body.big .sheet.wide .ocol+.ocol .rhead{border-top:0;padding-top:0}
+body.big .sheet.wide .rlist{max-height:min(60vh,520px);overflow:auto;padding-right:4px}
+/* quem assiste */
+.watching{display:inline-flex;align-items:center;height:38px;padding:0 12px;border-radius:999px;border:1px solid #2f5385;background:#13284a;color:#a9cdfb;font:600 13px/1 system-ui,sans-serif;flex:none}
+body.wide #hud .watching{flex:3 1 0;justify-content:center;height:54px;border-radius:var(--r)}
+.you .wn{color:var(--mute);margin-left:4px}

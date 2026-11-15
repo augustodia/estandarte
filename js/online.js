@@ -59,3 +59,14 @@ export function connectOnline(server, query, h) {
   attempt();
   return link;
 }
+
+// Lista de salas públicas: { lobby: [...], play: [...], maxWatchers }. Com o servidor dormindo a resposta pode levar
+// até um minuto (o Render segura o pedido enquanto ele acorda).
+export async function listRooms(server, ms = 75000) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(server.replace(/^ws/, 'http') + '/rooms', { cache: 'no-store', signal: ctl.signal });
+    if (!r.ok) throw new Error('http ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}

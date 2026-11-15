@@ -43,12 +43,14 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 ## Jogar online
 
 1. Um jogador toca em **Jogar online → Criar sala online**. A sala ganha um código de 5 letras (ex.: `K7M2Q`).
-2. Ele toca em **Convidar** e manda o link (ou mostra o QR). Quem abrir o link entra direto; também dá para digitar o código em **Jogar online → Entrar na sala**.
+2. Ele toca em **Convidar** e manda o link (ou mostra o QR). Quem abrir o link entra direto; também dá para digitar o código em **Jogar online**.
+   Ou nem precisa de convite: **Jogar online** mostra as **salas abertas** (atualiza sozinho), com as que aguardam jogadores (**Entrar**) e as partidas em andamento (**Assistir**, até 5 espectadores por partida). Quem assiste vê o mapa, os dados e as jogadas ao vivo, mas não as cartas nem os objetivos de ninguém.
 3. Quem criou a sala escolhe o tempo por turno, as regras extras e os bots, e inicia a partida.
 
 - Cada um joga do próprio celular, de qualquer lugar com internet. As regras, os dados e os bots rodam no servidor, com o mesmo motor de regras (portado para Go e conferido jogada a jogada contra este).
 - Se a conexão cair ou a página recarregar, o jogo volta sozinho para o mesmo lugar (o aparelho é reconhecido).
-- Quem sai no meio da partida vira bot e pode voltar pelo link. Sem relógio, a vez de quem está desconectado passa depois de 1 min 30 s.
+- Quem sai no meio da partida vira bot e pode voltar pelo link. Se todos os humanos saírem, a partida é encerrada 1 minuto depois.
+- A sala é pública por padrão; quem a criou pode desligar **Sala pública**, e aí só entra quem tem o código. Sem relógio, a vez de quem está desconectado passa depois de 1 min 30 s.
 - O servidor gratuito dorme depois de 15 minutos sem ninguém jogando e leva até 1 minuto para acordar: a tela mostra "Acordando o servidor…".
 - As partidas vivem só na memória do servidor: se ele reiniciar (nova versão publicada, manutenção), as salas abertas se perdem.
 - Para testar com outro servidor: abra o jogo com `?server=ws://localhost:8080` (fica guardado no aparelho; `?server=` vazio volta ao padrão). O endereço padrão está em `js/online.js`.
