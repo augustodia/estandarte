@@ -35,7 +35,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '39'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '40'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -491,7 +491,7 @@ function guestScan() {
 function onlineStart(query, title, watch = false) {
   if (navigator.onLine === false) return toast('Sem internet: jogar online precisa de conexão. Na mesma rede, use “Criar partida”.', 5000);
   if (app.link) { const l = app.link; app.link = null; l.close(); }
-  app.online = { server: serverUrl(), code: null, query, watch };
+  app.online = { server: serverUrl(), code: null, query, watch, fromRooms: !$('#rooms').hidden };
   modal(`<h3>${esc(title)}</h3><p id="wake">Conectando ao servidor…</p><button class="btn ghost" data-m="cancel">Cancelar</button>`);
   $('#modal .sheet').onclick = (e) => { if (e.target.dataset.m === 'cancel') onlineGone(''); };
   onlineConnect();
@@ -527,6 +527,7 @@ function onlineGone(m) {
   o.gone = true; // não precisa avisar o servidor
   leave();
   if (m) toast(m, 6000);
+  if (o.fromRooms) onlineMenu(); // volta para a lista de salas
 }
 const roomLink = (code) => {
   const u = new URL(location.href); u.search = ''; u.hash = '';
@@ -534,63 +535,79 @@ const roomLink = (code) => {
   if (app.online && app.online.server !== DEFAULT_SERVER) u.searchParams.set('server', app.online.server);
   return u.href;
 };
+// Tela de salas online: criar, entrar por código e o navegador de salas públicas (as que aguardam jogadores e as
+// partidas em andamento, que aceitam até 5 espectadores). Busca, filtro e abas são locais; a lista vem do servidor
+// a cada 5 s enquanto a tela estiver aberta.
+const rf = { tab: 'lobby', q: '', vaga: false, data: null, html: '' };
 function onlineMenu(code) {
-  modal(`<div class="shead"><h3>Jogar online</h3><button class="x" data-m="close" aria-label="Fechar">✕</button></div>
-    <div class="ogrid"><div class="ocol">
-      <label class="field">Seu nome<input id="oname" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado" value="${esc($('#name').value)}"></label>
-      <button class="btn primary" data-m="create">Criar sala online</button>
-      <label class="field">Tem um código ou link?<span class="row"><input id="rcode" maxlength="80" autocomplete="off" autocapitalize="characters" placeholder="Ex.: K7M2Q" value="${esc(code || '')}"><button class="btn" data-m="enter">Entrar</button></span></label>
-    </div><div class="ocol">
-      <div class="rhead"><b>Salas abertas</b><span id="rstat"></span><button class="btn small ghost" data-m="refresh" aria-label="Atualizar">↻</button></div>
-      <div id="rlist" class="rlist"><p class="rempty">Procurando salas…</p></div>
-    </div></div>`);
-  $('#modal .sheet').classList.add('wide');
-  const keepName = () => { $('#name').value = $('#oname').value.trim().slice(0, 14); store.set('name', $('#name').value); };
-  $('#modal .sheet').onclick = (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    const m = b.dataset.m;
-    if (m === 'create' || m === 'enter' || b.dataset.join || b.dataset.watch) keepName();
-    if (m === 'create') onlineStart('create=1', 'Criando a sala…');
-    if (m === 'refresh') refreshRooms(true);
-    if (m === 'enter') {
-      const c = roomCode($('#rcode').value);
-      if (!c) return toast('Digite o código de 5 letras ou cole o link da sala.');
-      onlineStart('room=' + c, 'Entrando na sala ' + c + '…');
-    }
-    if (b.dataset.join) onlineStart('room=' + b.dataset.join, 'Entrando na sala ' + b.dataset.join + '…');
-    if (b.dataset.watch) onlineStart('room=' + b.dataset.watch + '&watch=1', 'Abrindo a partida ' + b.dataset.watch + '…', true);
-  };
+  if (app.link || app.online) return;
+  closeModal();
+  show('rooms');
+  $('#oname').value = $('#name').value;
+  $('#rcode').value = code || '';
+  rf.html = '';
+  renderRooms();
   refreshRooms(true);
+  if (code) $('#rcode').focus();
 }
-// Navegador de salas: as que aguardam jogadores e as partidas em andamento (que aceitam até 5 espectadores).
-// Atualiza sozinho a cada 5 s enquanto a janela estiver aberta.
+$('#rooms').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const d = b.dataset;
+  const keepName = () => { $('#name').value = $('#oname').value.trim().slice(0, 14); store.set('name', $('#name').value); };
+  if (d.tab) { rf.tab = d.tab; rf.html = ''; renderRooms(); }
+  else if (d.vaga != null) { rf.vaga = !rf.vaga; rf.html = ''; renderRooms(); }
+  else if (d.r === 'create') { keepName(); onlineStart('create=1', 'Criando a sala…'); }
+  else if (d.r === 'enter') {
+    const c = roomCode($('#rcode').value);
+    if (!c) return toast('Digite o código de 5 letras ou cole o link da sala.');
+    keepName(); onlineStart('room=' + c, 'Entrando na sala ' + c + '…');
+  } else if (d.join) { keepName(); onlineStart('room=' + d.join, 'Entrando na sala ' + d.join + '…'); }
+  else if (d.watch) { keepName(); onlineStart('room=' + d.watch + '&watch=1', 'Abrindo a partida ' + d.watch + '…', true); }
+});
+$('#rq').addEventListener('input', () => { rf.q = $('#rq').value; rf.html = ''; renderRooms(); });
+$('#rcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#rooms [data-r=enter]').click(); });
 let roomsTimer = null, roomsBusy = false;
-async function refreshRooms(now) {
+async function refreshRooms() {
   clearTimeout(roomsTimer);
-  const box = $('#rlist');
-  if (!box) return;
-  if (roomsBusy) return;
-  if (navigator.onLine === false) { box.innerHTML = '<p class="rempty">Sem internet.</p>'; return; }
+  if ($('#rooms').hidden || roomsBusy) return;
+  if (navigator.onLine === false) { $('#rstat').textContent = 'Sem internet: o jogo online precisa de conexão.'; roomsTimer = setTimeout(refreshRooms, 5000); return; }
   roomsBusy = true;
-  const t0 = Date.now(), slow = setTimeout(() => { if ($('#rstat')) $('#rstat').textContent = 'acordando o servidor… (até 1 min)'; }, 2500);
+  const t0 = Date.now(), slow = setTimeout(() => { $('#rstat').textContent = 'Acordando o servidor… quando ninguém joga por um tempo ele dorme e leva até 1 minuto para acordar.'; }, 2500);
   let data = null;
   try { data = await listRooms(serverUrl()); } catch {}
   clearTimeout(slow); roomsBusy = false;
-  if (!$('#rlist')) return;
-  if (!data) { $('#rstat').textContent = 'servidor sem resposta'; roomsTimer = setTimeout(refreshRooms, 6000); return; }
-  $('#rstat').textContent = 'atualiza sozinho';
-  const dots = (ps) => ps.map((p) => `<i style="background:${COLORS[p.color].c}" title="${esc(p.name)}${p.ctrl === 'bot' ? ' (bot)' : ''}"></i>`).join('');
-  const ex = (r) => [r.secs ? r.secs / 60 + ' min por turno' : 'tempo livre', ...EXTRAS.filter(([k]) => r[k]).map(([, n]) => n.toLowerCase())].join(' · ');
-  const humans = (r) => r.players.filter((p) => p.ctrl !== 'bot').length;
-  const card = (r, wait) => `<div class="room"><div class="rmain"><b>Sala de ${esc(r.host)}</b> <code>${esc(r.code)}</code>
-      <small>${wait ? `${r.players.length} de 6 jogadores` : `rodada ${r.round} · ${r.players.length} jogadores (${humans(r)} ${humans(r) === 1 ? 'pessoa' : 'pessoas'})`} · ${esc(ex(r))}</small>
-      <span class="rdots">${dots(r.players)}${wait ? '' : `<em>👁 ${r.watchers}/${data.maxWatchers}</em>`}</span></div>
-      ${wait ? `<button class="btn small primary" data-join="${esc(r.code)}" ${r.full ? 'disabled' : ''}>${r.full ? 'Cheia' : 'Entrar'}</button>`
-      : `<button class="btn small" data-watch="${esc(r.code)}" ${r.full ? 'disabled' : ''}>${r.full ? 'Lotada' : 'Assistir'}</button>`}</div>`;
-  box.innerHTML = `<p class="rsec">Aguardando jogadores</p>${data.lobby.length ? data.lobby.map((r) => card(r, true)).join('') : '<p class="rempty">Nenhuma sala esperando agora. Crie uma!</p>'}
-    <p class="rsec">Em andamento · dá para assistir</p>${data.play.length ? data.play.map((r) => card(r, false)).join('') : '<p class="rempty">Nenhuma partida em andamento.</p>'}`;
+  if ($('#rooms').hidden) return;
+  if (!data) { $('#rstat').textContent = 'O servidor não respondeu. Tentando de novo…'; roomsTimer = setTimeout(refreshRooms, 6000); return; }
+  rf.data = data; $('#rstat').textContent = '';
+  renderRooms();
   roomsTimer = setTimeout(refreshRooms, Math.max(1000, 5000 - (Date.now() - t0)));
+}
+function renderRooms() {
+  for (const b of document.querySelectorAll('#rooms [data-tab]')) { const on = b.dataset.tab === rf.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); }
+  const vb = $('#rooms [data-vaga]'); vb.classList.toggle('on', rf.vaga); vb.setAttribute('aria-pressed', rf.vaga);
+  vb.textContent = rf.tab === 'lobby' ? 'Com vaga' : 'Dá para assistir';
+  const data = rf.data;
+  if (!data) { $('#rlist').innerHTML = '<p class="rempty">Procurando salas…</p>'; return; }
+  $('#nlobby').textContent = data.lobby.length; $('#nplay').textContent = data.play.length;
+  const q = rf.q.trim().toLowerCase();
+  const wait = rf.tab === 'lobby';
+  const all = wait ? data.lobby : data.play;
+  const list = all.filter((r) => (!rf.vaga || !r.full) && (!q || r.code.toLowerCase().includes(q) || r.host.toLowerCase().includes(q) || r.players.some((p) => p.name.toLowerCase().includes(q))));
+  const humans = (r) => r.players.filter((p) => p.ctrl !== 'bot').length;
+  const ex = (r) => [r.secs ? r.secs / 60 + ' min/turno' : 'tempo livre', ...EXTRAS.filter(([k]) => r[k]).map(([, n]) => n.toLowerCase())].join(' · ');
+  const card = (r) => `<article class="room${r.full ? ' full' : ''}">
+      <div class="rmain"><b>Sala de ${esc(r.host)}</b><code>${esc(r.code)}</code></div>
+      <div class="rdots">${r.players.map((p) => `<span class="pd" title="${esc(p.name)}${p.ctrl === 'bot' ? ' (bot)' : ''}"><i style="background:${COLORS[p.color].c}"></i>${esc(p.name)}${p.ctrl === 'bot' ? '<small>bot</small>' : ''}</span>`).join('')}</div>
+      <small class="rmeta">${wait ? `${r.players.length} de 6 jogadores` : `rodada ${r.round} · ${humans(r)} ${humans(r) === 1 ? 'pessoa' : 'pessoas'}${r.players.length > humans(r) ? ` e ${r.players.length - humans(r)} bot${r.players.length - humans(r) === 1 ? '' : 's'}` : ''} · 👁 ${r.watchers}/${data.maxWatchers}`} · ${esc(ex(r))}</small>
+      ${wait ? `<button class="btn small primary" data-join="${esc(r.code)}" ${r.full ? 'disabled' : ''}>${r.full ? 'Cheia' : 'Entrar'}</button>`
+      : `<button class="btn small" data-watch="${esc(r.code)}" ${r.full ? 'disabled' : ''}>${r.full ? 'Lotada (5 assistindo)' : 'Assistir'}</button>`}</article>`;
+  const empty = all.length === 0
+    ? (wait ? 'Nenhuma sala esperando jogadores agora. Crie uma e chame a turma!' : 'Nenhuma partida em andamento agora.')
+    : 'Nenhuma sala com esse filtro.';
+  const html = list.length ? list.map(card).join('') : `<p class="rempty">${empty}</p>`;
+  const extra = list.length && list.length < all.length ? `<p class="rempty small">${all.length - list.length} sala${all.length - list.length === 1 ? '' : 's'} fora do filtro.</p>` : '';
+  if (html + extra !== rf.html) { rf.html = html + extra; $('#rlist').innerHTML = html + extra; }
 }
 function onlineInvite() {
   const code = app.online && app.online.code;
@@ -1770,6 +1787,7 @@ function showRules() {
 
 /* ---------- eventos globais ---------- */
 function leave() {
+  const backToRooms = !!(app.online && app.online.fromRooms && !app.online.gone); // saiu de uma sala que achou na lista: volta para a lista
   clearTimeout(app.botTimer);
   if (app.role === 'host') app.seats.forEach((s) => { dropSpare(s); s.link && s.link.close(); });
   clearTimeout(autoTimer); app.autoOn = false;
@@ -1782,12 +1800,14 @@ function leave() {
   Object.assign(app, { role: null, seats: [], game: null, view: null, me: null, lobby: null, sel: null, target: null, info: null, lastViewer: null, owner: false, onl: null, watch: false, watchers: 0 });
   refreshHome();
   closeModal(); show('home');
+  if (backToRooms) onlineMenu();
 }
 const actions = {
   host: hostStart,
   join: guestScan,
   rejoin: guestScan,
   online: () => onlineMenu(),
+  home() { clearTimeout(roomsTimer); show('home'); },
   rules: showRules,
   resume() {
     const sv = store.get('save3');

@@ -44,6 +44,21 @@
       <button class="btn ghost" data-do="rules">Como jogar</button>
     </div>
   </section>
+  <section id="rooms" class="screen" hidden>
+    <div class="rtop"><button class="btn ghost back" data-do="home" aria-label="Voltar ao início">←</button><h2>Jogar online</h2><span class="badge net">pela internet</span></div>
+    <div class="rbar">
+      <label class="field rname">Seu nome<input id="oname" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado"></label>
+      <button class="btn primary rcreate" data-r="create">Criar sala</button>
+      <label class="field rjoin">Tem um código ou link?<span class="row"><input id="rcode" maxlength="80" autocomplete="off" autocapitalize="characters" placeholder="Ex.: K7M2Q"><button class="btn" data-r="enter">Entrar</button></span></label>
+    </div>
+    <div class="rtools">
+      <div class="tabs" role="tablist"><button role="tab" data-tab="lobby">Aguardando <b id="nlobby">–</b></button><button role="tab" data-tab="play">Em andamento <b id="nplay">–</b></button></div>
+      <input id="rq" type="search" placeholder="Buscar sala ou jogador" autocomplete="off" aria-label="Buscar">
+      <button class="chip" data-vaga aria-pressed="false">Com vaga</button>
+    </div>
+    <p class="tag rstat" id="rstat"></p>
+    <div id="rlist" class="rgrid" aria-live="polite"></div>
+  </section>
   <section id="lobby" class="screen" hidden>
     <h2>Sala</h2>
     <p class="tag lobbysub">Jogadores</p>

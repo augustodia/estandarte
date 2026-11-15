@@ -549,29 +549,57 @@ body.tall #home h1,body.tall #home .brand .tag{text-align:center}
 body.big #home .mode{padding:14px}
 body.big #home .homeform{gap:12px}
 
-/* jogar online: navegador de salas */
-.ogrid{display:flex;flex-direction:column;gap:14px}
-.ocol{display:flex;flex-direction:column;gap:10px;min-width:0}
-.ocol .field .row{flex-wrap:nowrap}.ocol .field .row input{flex:1;min-width:0}.ocol .field .row .btn{flex:none}
-.rhead{display:flex;align-items:center;gap:8px;border-top:1px solid #2d4a72;padding-top:10px}
-.rhead b{font:700 16px Georgia,serif;letter-spacing:.03em;color:#fff3dc}
-.rhead span{flex:1;font-size:11.5px;color:var(--mute)}
-.rhead .btn{height:32px;width:36px;padding:0;font-size:17px;flex:none}
-.rlist{display:flex;flex-direction:column;gap:6px}
-.rsec{margin:6px 0 0!important;font:700 11px/1 system-ui,sans-serif!important;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
-.rempty{font-size:13px!important;padding:10px 12px;border:1px dashed #2d4a72;border-radius:12px}
-.room{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#0b16268c;border:1px solid #233c5e}
-.room .rmain{flex:1;min-width:0}
-.room b{font-size:14px}.room code{font:600 11px/1 ui-monospace,Menlo,monospace;color:var(--gold);margin-left:4px;letter-spacing:.06em}
-.room small{display:block;font-size:12px;color:var(--mute);margin:2px 0 5px;overflow-wrap:anywhere}
-.rdots{display:flex;align-items:center;gap:4px}.rdots i{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px #0008}
-.rdots em{font:600 11px/1 system-ui,sans-serif;font-style:normal;color:var(--mute);margin-left:8px}
-.room .btn{flex:none;min-width:84px}
-body.big #modal .sheet.wide{max-width:900px}
-body.big .sheet.wide .ogrid{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px}
-body.big .sheet.wide .ocol+.ocol .rhead{border-top:0;padding-top:0}
-body.big .sheet.wide .rlist{max-height:min(60vh,520px);overflow:auto;padding-right:4px}
+/* jogar online: tela de salas */
+#rooms{gap:10px;max-width:1240px;width:100%;margin:0 auto;padding-bottom:0}
+#rooms>*{flex:none}
+.rtop{display:flex;align-items:center;gap:8px}
+.rtop h2{margin:0;font-size:24px}
+.rtop .back{width:44px;padding:0;font-size:22px;color:var(--ink)}
+.rtop .badge{font:700 10px/1 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:999px;color:#a9cdfb;background:#13284a;border:1px solid #2f5385}
+.rbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 10px;align-items:end;padding:12px;border-radius:16px;background:var(--glass);border:1px solid #35557f;box-shadow:var(--edge)}
+.rbar .rjoin{grid-column:1/3}
+.rbar .row{flex-wrap:nowrap}.rbar .row input{flex:1;min-width:0}.rbar .row .btn{flex:none}
+.rtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;flex:1 1 100%;padding:3px;border-radius:12px;background:#0a1422;border:1px solid #233c5e}
+.tabs button{flex:1;height:38px;border:0;border-radius:9px;background:none;color:var(--mute);font:600 14px/1 system-ui,sans-serif;cursor:pointer}
+.tabs button b{display:inline-block;min-width:22px;margin-left:4px;padding:3px 6px;border-radius:999px;background:#ffffff12;font-size:12px;color:var(--ink)}
+.tabs button.on{background:var(--panel2);color:var(--ink);box-shadow:inset 0 1px 0 #ffffff14,0 1px 3px #0008}
+#rq{flex:1 1 160px;height:40px;padding:0 12px}
+.rtools .chip{flex:none}
+.rstat{min-height:0;font-size:12.5px}.rstat:empty{display:none}
+.rgrid{flex:1 1 auto!important;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));align-content:start;gap:8px;padding:2px 2px max(16px,env(safe-area-inset-bottom))}
+.rempty{grid-column:1/-1;margin:0;font-size:13px;color:var(--mute);text-align:center;padding:18px 12px;border:1px dashed #2d4a72;border-radius:12px}
+.rempty.small{padding:8px;border:0;font-size:12px}
+.room{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:14px;background:#0b16268c;border:1px solid #233c5e;animation:seatin .25s ease-out both}
+.room.full{opacity:.6}
+.room .rmain{display:flex;align-items:baseline;gap:8px;min-width:0}
+.room .rmain b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room code{flex:none;font:600 11px/1 ui-monospace,Menlo,monospace;color:var(--gold);letter-spacing:.06em}
+.rdots{display:flex;flex-wrap:wrap;gap:4px 10px}
+.pd{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pd i{flex:none;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px #0008}
+.pd small{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.rmeta{font-size:12px;color:var(--mute);overflow-wrap:anywhere}
+.room .btn{align-self:stretch;margin-top:2px}
+@media (hover:hover) and (pointer:fine){.room:hover{border-color:#35557f;background:#0f1d33}.tabs button:not(.on):hover{color:var(--ink)}}
+body.big #rooms{gap:14px}
+body.big .rtop h2{font-size:32px}
+body.big .rbar{grid-template-columns:minmax(0,240px) auto minmax(0,1fr);padding:16px}
+body.big .rbar .rjoin{grid-column:auto}
+body.big .rcreate{height:46px;align-self:end}
+body.wide .rtools{flex-wrap:nowrap}
+body.wide .tabs{flex:0 0 380px}
+@media (orientation:landscape) and (max-height:520px){#rooms .rbar{grid-template-columns:minmax(0,1fr) auto minmax(0,1.4fr);padding:8px}#rooms .rbar .rjoin{grid-column:auto}.rtop h2{font-size:20px}}
 /* quem assiste */
 .watching{display:inline-flex;align-items:center;height:38px;padding:0 12px;border-radius:999px;border:1px solid #2f5385;background:#13284a;color:#a9cdfb;font:600 13px/1 system-ui,sans-serif;flex:none}
 body.wide #hud .watching{flex:3 1 0;justify-content:center;height:54px;border-radius:var(--r)}
 .you .wn{color:var(--mute);margin-left:4px}
+/* celular: a tela inteira rola (o topo sai de cena) e abas/busca ficam presas no alto */
+body:not(.big) #rooms{overflow:auto}
+body:not(.big) #rooms .rgrid{flex:none!important;overflow:visible}
+body:not(.big) #rooms .rtools{position:sticky;top:calc(-1 * max(16px,env(safe-area-inset-top)));z-index:2;margin:0 -16px;padding:max(10px,env(safe-area-inset-top)) 16px 8px;background:linear-gradient(var(--deep) 85%,#0a142200)}
+@media (orientation:landscape) and (max-height:520px){body:not(.big) .tabs{flex:0 1 340px}body:not(.big) #rq{flex:1 1 120px}}
+/* cartão de sala compacto: informações à esquerda, botão à direita */
+.room{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:5px;align-items:center}
+.room>*:not(.btn){grid-column:1}
+.room .btn{grid-column:2;grid-row:1/4;align-self:center;margin:0;min-width:88px}

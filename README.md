@@ -44,7 +44,7 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 
 1. Um jogador toca em **Jogar online → Criar sala online**. A sala ganha um código de 5 letras (ex.: `K7M2Q`).
 2. Ele toca em **Convidar** e manda o link (ou mostra o QR). Quem abrir o link entra direto; também dá para digitar o código em **Jogar online**.
-   Ou nem precisa de convite: **Jogar online** mostra as **salas abertas** (atualiza sozinho), com as que aguardam jogadores (**Entrar**) e as partidas em andamento (**Assistir**, até 5 espectadores por partida). Quem assiste vê o mapa, os dados e as jogadas ao vivo, mas não as cartas nem os objetivos de ninguém.
+   Ou nem precisa de convite: **Jogar online** abre a tela de salas (atualiza sozinha), com duas abas: as que aguardam jogadores (**Entrar**) e as partidas em andamento (**Assistir**, até 5 espectadores por partida). Dá para buscar por nome de sala ou de jogador e mostrar só as com vaga. As com vaga e mais gente aparecem primeiro. Quem assiste vê o mapa, os dados e as jogadas ao vivo, mas não as cartas nem os objetivos de ninguém.
 3. Quem criou a sala escolhe o tempo por turno, as regras extras e os bots, e inicia a partida.
 
 - Cada um joga do próprio celular, de qualquer lugar com internet. As regras, os dados e os bots rodam no servidor, com o mesmo motor de regras (portado para Go e conferido jogada a jogada contra este).
