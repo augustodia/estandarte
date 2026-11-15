@@ -32,7 +32,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '34'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '35'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -542,10 +542,7 @@ const TREFOIL = [-90, 30, 150].map((a) => { const q = (r, deg) => `${(r * Math.c
     if (a != null) { r.dataset.a = a; r.dataset.b = b; seaRoutes.push(r); }
   };
   const port = (x, y) => { el('circle', { class: 'port', cx: x, cy: y, r: 3.1 }, routes); };
-  // ajustes finos de onde a travessia toca a costa (ponta da bota italiana até a Tunísia)
-  const FIX = { 'Itália e Bálcãs|Magrebe': [719, 304, 693, 329] };
   SEA.forEach(([a, b, x1, y1, x2, y2, wrap]) => {
-    const fx = FIX[TERR[a].n + '|' + TERR[b].n]; if (fx) [x1, y1, x2, y2] = fx;
     if (wrap) { // dá a volta no mapa: um trecho até cada borda, com setas indicando que continua do outro lado
       link(`M${x1} ${y1}H${-PAD - 20}`, a, b); link(`M${x2} ${y2}H${MAP_W + PAD + 20}`, a, b);
       el('path', { class: 'wrapmark', d: `M${-PAD + 8} ${y1 - 5}l-6 5 6 5M${-PAD + 16} ${y1 - 5}l-6 5 6 5` }, routes);
