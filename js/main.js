@@ -36,7 +36,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = 'alpha-1.2'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
+const VERSION = 'alpha-1.3'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -1628,7 +1628,7 @@ function renderGame() {
   // pactos: um botão à vista na sua vez (abre a janela onde se escolhe a quem propor)
   if (can && v.phase === 'play' && v.opts && v.opts.pacts && !app.nukeMode && !v.occupy && v.step !== 'move' && v.players.filter((p) => p.alive).length > 2 && !rng) {
     const busy = v.pacts.some((x) => x.a === v.turn || x.b === v.turn);
-    btns += `<button class="btn small pactbtn" data-do="extras">${ICON.pact}${busy ? 'Pacto ativo' : 'Propor pacto'}</button>`;
+    btns += `<button class="btn small pactbtn" data-do="pacts">${ICON.pact}${busy ? 'Pacto ativo' : 'Propor pacto'}</button>`;
   }
   if (app.role === 'host' && v.phase === 'play') {
     const off = app.seats.filter((s) => s.ctrl === 'remote' && (!s.link || s.lag));
@@ -1702,19 +1702,89 @@ function showWin(v) {
 }
 // Regras opcionais: evento da rodada e pactos (propor, responder, romper).
 const offerIsMine = (v) => !!v.offer && (app.role === 'guest' ? v.offer.to === app.me : v.players[v.offer.to].ctrl === 'local');
+const pactSide = (v, i) => `<span class="pside" style="--c:${COLORS[v.players[i].color].c}"><span class="pav">${esc(v.players[i].name.slice(0, 1).toUpperCase())}</span><b>${esc(v.players[i].name)}</b><small>${owned(v, i)} territórios · ${handSize(v.players[i])} carta${handSize(v.players[i]) === 1 ? '' : 's'}</small></span>`;
+const pactPair = (v, a, b, note) => `<div class="ppair">${pactSide(v, a)}<span class="plink">${ICON.pact}${note ? `<small>${note}</small>` : ''}</span>${pactSide(v, b)}</div>`;
 function showOffer(v) {
-  const of = v.offer, a = v.players[of.from], b = v.players[of.to];
-  modal(`<h3>Proposta de pacto</h3>
-    <p style="color:var(--ink);font-size:16px"><b style="color:${COLORS[a.color].c}">${esc(a.name)}</b> propõe um pacto de não agressão a <b style="color:${COLORS[b.color].c}">${esc(b.name)}</b>.</p>
-    <p>Até o fim da rodada ${v.round + PACT_ROUNDS + 1} nenhum dos dois ataca o outro. Cada jogador só pode ter um pacto por vez. Quem quiser romper antes só pode no início do próprio turno, antes de reforçar, e perde metade do reforço daquele turno (no mínimo ${PACT_PENALTY}).</p>
-    <div class="row"><button class="btn primary" data-m="yes">Aceitar</button><button class="btn" data-m="no">Recusar</button></div>`, () => { app.offerOpen = false; });
+  const of = v.offer;
+  modal(`<div class="pact-sheet"><p class="pkick">Proposta de pacto</p>
+    ${pactPair(v, of.from, of.to, `${PACT_ROUNDS} rodadas`)}
+    <p class="plead"><b style="color:${COLORS[v.players[of.from].color].c}">${esc(v.players[of.from].name)}</b> propõe que vocês não se ataquem até o fim da rodada ${v.round + PACT_ROUNDS + 1}.</p>
+    <ul class="pterms"><li>Nenhum dos dois pode atacar o outro enquanto o pacto valer.</li><li>Cada jogador só tem um pacto por vez.</li><li>Romper antes custa metade do reforço do turno (no mínimo ${PACT_PENALTY}) e só pode no início do próprio turno.</li></ul>
+    <div class="row"><button class="btn primary" data-m="yes">Aceitar pacto</button><button class="btn" data-m="no">Recusar</button></div></div>`, () => { app.offerOpen = false; });
+  $('#modal .sheet').classList.add('pact');
   app.offerOpen = true;
   $('#modal .sheet').onclick = (e) => {
-    const m = e.target.dataset.m;
+    const m = e.target.closest('button')?.dataset.m;
     if (m !== 'yes' && m !== 'no') return;
     closeModal(); actAs(of.to, { t: 'pactReply', accept: m === 'yes' });
   };
   buzz([60, 40, 60]); play('turn');
+}
+// Janela própria de pactos: o seu pacto (com romper), a proposta em andamento, a quem dá para propor (com o motivo
+// quando não dá) e os pactos dos outros. Na sua vez é onde se propõe; fora dela, só para consultar.
+function showPacts() {
+  const v = app.view;
+  if (!v || !v.opts || !v.opts.pacts) return;
+  const me = app.role === 'guest' ? app.me : viewer(), watching = !v.players[me];
+  const myTurn = !watching && canAct() && v.turn === me && v.phase === 'play';
+  const alive = v.players.filter((p) => p.alive).length;
+  const mine = watching ? null : v.pacts.find((x) => x.a === me || x.b === me);
+  const left = (x) => x.until - v.round + 1;
+  let h = `<div class="shead"><h3>${ICON.pact} Pactos</h3><button class="x" data-m="close" aria-label="Fechar">✕</button></div>
+    <p class="psub">Acordo de não agressão por ${PACT_ROUNDS} rodadas. Cada jogador tem no máximo um pacto por vez.</p>`;
+  // o seu pacto
+  if (mine) {
+    const other = mine.a === me ? mine.b : mine.a, canBreak = myTurn && v.step === 'reinforce' && !v.placed;
+    h += `<p class="psec">Seu pacto</p><div class="pcard on">${pactPair(v, me, other, left(mine) === 1 ? 'última rodada' : `até a rodada ${mine.until + 1}`)}
+      <p class="pnote">Vale até o fim da rodada ${mine.until + 1}. Nenhum dos dois pode atacar o outro.</p>
+      ${canBreak ? `<button class="btn warn" data-break="${other}">Romper o pacto (perde ${pactPenalty(v)} exércitos)</button>`
+        : `<p class="pnote dim">${myTurn ? 'Romper só no início do turno, antes de colocar reforços.' : 'Romper só no início da sua vez, antes de colocar reforços.'}</p>`}</div>`;
+  }
+  // proposta em andamento
+  if (v.offer) {
+    const of = v.offer;
+    if (offerIsMine(v)) h += `<p class="psec">Proposta para você</p><div class="pcard ask">${pactPair(v, of.from, of.to, 'proposta')}<div class="row"><button class="btn primary" data-reply="yes">Aceitar</button><button class="btn" data-reply="no">Recusar</button></div></div>`;
+    else h += `<p class="psec">Proposta em andamento</p><div class="pcard wait">${pactPair(v, of.from, of.to, 'aguardando')}<p class="pnote">${esc(v.players[of.to].name)} ainda não respondeu. A proposta vale até o fim deste turno.</p></div>`;
+  }
+  // a quem propor
+  if (!watching && !mine && alive > 2) {
+    const used = v.players[me].offered === v.round + ':' + v.turn;
+    const rows = v.players.map((p, i) => ({ p, i })).filter(({ p, i }) => i !== me && p.alive).map(({ i }) => {
+      const why = pactBlock(v, me, i);
+      const btn = !myTurn ? '' : why || used || v.offer ? '' : `<button class="btn small primary" data-offer="${i}">Propor</button>`;
+      const reason = why ? why.replace(/^Vocês acabaram de ter um pacto: só podem fazer outro a partir da rodada (\d+)\./, 'Pacto recente: de novo só a partir da rodada $1.') : '';
+      return `<li class="prow${why ? ' off' : ''}" style="--c:${COLORS[v.players[i].color].c}"><span class="pav">${esc(v.players[i].name.slice(0, 1).toUpperCase())}</span>
+        <span class="who"><b>${esc(v.players[i].name)}</b><small>${reason ? esc(reason) : `${owned(v, i)} territórios · ${handSize(v.players[i])} carta${handSize(v.players[i]) === 1 ? '' : 's'}${v.players[i].ctrl === 'bot' ? ' · bot' : ''}`}</small></span>${btn}</li>`;
+    }).join('');
+    const head = !myTurn ? 'Você propõe pactos na sua vez.' : used ? 'Você já fez a proposta deste turno (uma por turno).' : v.offer ? 'Espere a resposta da proposta em andamento.' : 'Escolha com quem quer um pacto. A outra pessoa decide se aceita.';
+    h += `<p class="psec">Propor pacto</p><p class="pnote">${head}</p><ul class="prows">${rows}</ul>`;
+  } else if (!watching && !mine) h += '<p class="pnote">Com só dois jogadores em jogo não há pactos.</p>';
+  // pactos dos outros
+  const others = v.pacts.filter((x) => x !== mine);
+  if (others.length || watching) h += `<p class="psec">${watching ? 'Pactos em vigor' : 'Outros pactos'}</p>${others.length ? others.map((x) => `<div class="pcard">${pactPair(v, x.a, x.b, left(x) === 1 ? 'última rodada' : `até a rodada ${x.until + 1}`)}</div>`).join('') : '<p class="pnote">Nenhum pacto em vigor.</p>'}`;
+  h += `<details class="prules"><summary>Como funcionam os pactos</summary><ul class="pterms">
+    <li>Quem está na vez pode propor um pacto a outro jogador (uma proposta por turno). A outra pessoa aceita ou recusa na hora.</li>
+    <li>Aceito, nenhum dos dois ataca o outro até o fim da rodada ${v.round + PACT_ROUNDS + 1} (o resto desta rodada e mais ${PACT_ROUNDS}).</li>
+    <li>Romper antes só no início do próprio turno, antes de colocar reforços, e custa metade do reforço daquele turno (no mínimo ${PACT_PENALTY}). Todos ficam sabendo.</li>
+    <li>Depois de um pacto (cumprido ou rompido) os mesmos dois esperam 2 rodadas para fazer outro.</li>
+    <li>Lançar uma ogiva desfaz o pacto de quem lançou.</li></ul></details>`;
+  modal(h);
+  $('#modal .sheet').classList.add('pact');
+  $('#modal .sheet').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const d = b.dataset;
+    if (d.offer != null) { closeModal(); act({ t: 'pactOffer', to: +d.offer }); }
+    if (d.reply) { const of = app.view.offer; closeModal(); if (of) actAs(of.to, { t: 'pactReply', accept: d.reply === 'yes' }); }
+    if (d.break != null) {
+      const w = +d.break, vv = app.view;
+      modal(`<div class="pact-sheet"><p class="pkick warn">Romper o pacto?</p>${pactPair(vv, me, w, 'rompendo')}
+        <p class="plead">Você perde <b>${pactPenalty(vv)}</b> exércitos, metade do reforço deste turno, e volta a poder atacar ${esc(vv.players[w].name)} (e vice-versa). Vocês só poderão fazer outro pacto depois de 2 rodadas. Todos ficam sabendo.</p>
+        <div class="row"><button class="btn warn" data-m="sure">Romper</button><button class="btn" data-m="close">Manter o pacto</button></div></div>`);
+      $('#modal .sheet').classList.add('pact');
+      $('#modal .sheet').onclick = (ev) => { if (ev.target.closest('button')?.dataset.m === 'sure') { closeModal(); act({ t: 'pactBreak', with: w }); } };
+    }
+  };
 }
 function showExtras() {
   const v = app.view, me = app.role === 'guest' ? app.me : viewer();
@@ -1727,23 +1797,8 @@ function showExtras() {
       <ul class="evlist">${Object.values(EVENTS).map((x) => `<li><b>${x.n}:</b> ${esc(x.cont ? x.d(0).replace(CONTINENTS[0].n, 'um continente sorteado') : x.d())}</li>`).join('')}</ul>`;
   }
   if (v.opts.pacts) {
-    h += `<h3>Pactos</h3><p>Dois jogadores combinam não se atacar por ${PACT_ROUNDS} rodadas. Cada jogador só pode ter um pacto por vez, e os mesmos dois esperam 2 rodadas para fazer outro. Proponha na sua vez (uma proposta por turno). Romper antes só no início do seu turno, antes de reforçar, e custa metade do reforço do turno (no mínimo ${PACT_PENALTY}).</p>`;
-    h += `<ul class="plist">${v.pacts.map((x) => {
-      const mineP = x.a === me || x.b === me, other = x.a === me ? x.b : x.a;
-      return `<li><span class="who">${tag(x.a)} e ${tag(x.b)} · até o fim da rodada ${x.until + 1}</span>${mineP && myTurn && v.step === 'reinforce' && !v.placed ? `<button class="btn small warn" data-break="${other}">Romper</button>` : ''}</li>`;
-    }).join('') || '<li><span class="who">Nenhum pacto em vigor.</span></li>'}</ul>`;
-    if (offerIsMine(v)) h += `<button class="btn primary" data-m="answer">Responder à proposta de ${esc(v.players[v.offer.from].name)}</button>`;
-    else if (v.offer) h += `<p>${tag(v.offer.from)} aguarda a resposta de ${tag(v.offer.to)}.</p>`;
-    if (myTurn) {
-      const used = v.players[me].offered === v.round + ':' + v.turn;
-      const cand = v.players.map((p, i) => i).filter((i) => i !== me && v.players[i].alive && !pactBlock(v, me, i));
-      const mineNow = v.pacts.some((x) => x.a === me || x.b === me);
-      h += alive <= 2 ? '<p>Com só dois jogadores em jogo não há pactos.</p>'
-        : mineNow ? '<p>Você já tem um pacto: só pode ter um por vez.</p>'
-        : used ? '<p>Você já fez a proposta deste turno.</p>'
-        : !cand.length ? '<p>Ninguém disponível para um pacto agora (já têm pacto ou estão no prazo de espera).</p>'
-        : `<div class="row wrap">${cand.map((i) => `<button class="btn small" data-offer="${i}"${v.offer ? ' disabled' : ''}><span class="dot" style="background:${COLORS[v.players[i].color].c}"></span>Propor a ${esc(v.players[i].name)}</button>`).join('')}</div>`;
-    } else h += '<p>Você propõe ou rompe pactos na sua vez.</p>';
+    h += `<h3>Pactos</h3><p>${v.pacts.length ? v.pacts.map((x) => `${tag(x.a)} e ${tag(x.b)} até o fim da rodada ${x.until + 1}`).join('; ') + '.' : 'Nenhum pacto em vigor.'}${v.offer ? ` ${tag(v.offer.from)} propôs um pacto a ${tag(v.offer.to)}.` : ''}</p>
+      <button class="btn pactbtn" data-m="pacts">${ICON.pact}${offerIsMine(v) ? 'Responder à proposta' : myTurn ? 'Abrir pactos (propor ou romper)' : 'Ver pactos'}</button>`;
   }
   if (v.opts.nukes) {
     const why = myTurn ? nukeBlock(v, me) : null;
@@ -1757,14 +1812,7 @@ function showExtras() {
     const b = e.target.closest('button');
     if (!b) return;
     const d = b.dataset;
-    if (d.m === 'answer') return showOffer(app.view);
-    if (d.offer != null) { closeModal(); act({ t: 'pactOffer', to: +d.offer }); }
-    if (d.break != null) {
-      const w = +d.break;
-      modal(`<h3>Romper o pacto?</h3><p>Você perde <b>${pactPenalty(app.view)}</b> exércitos, metade do reforço deste turno, e volta a poder atacar ${tag(w)}. Vocês dois só poderão fazer outro pacto depois de 2 rodadas. Todos ficam sabendo.</p>
-        <div class="row"><button class="btn warn" data-m="sure">Romper</button><button class="btn" data-m="close">Manter</button></div>`);
-      $('#modal .sheet').onclick = (ev) => { if (ev.target.dataset.m === 'sure') { closeModal(); act({ t: 'pactBreak', with: w }); } };
-    }
+    if (d.m === 'pacts') return offerIsMine(app.view) ? showOffer(app.view) : showPacts();
   };
 }
 // Encerrar ataques ou o turno pede confirmação numa janela. O botão que confirma fica do lado oposto ao que abriu a janela
@@ -1910,6 +1958,7 @@ const actions = {
   nukeAim() { app.nukeMode = true; app.sel = app.target = null; renderGame(); },
   nukeCancel() { app.nukeMode = false; renderGame(); },
   extras: showExtras,
+  pacts: showPacts,
   land() { store.set('forceLand', store.get('forceLand') === false); applyLayout(); applyCam(); showMenu(); },
   winMap() { $('#win').hidden = true; },
   sound() { setSound(!soundOn()); store.set('sound', soundOn()); if (soundOn()) { unlock(); play('turn'); } showMenu(); },

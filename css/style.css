@@ -606,3 +606,40 @@ body:not(.big) #rooms .rtools{position:sticky;top:calc(-1 * max(16px,env(safe-ar
 .room{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:5px;align-items:center}
 .room>*:not(.btn){grid-column:1}
 .room .btn{grid-column:2;grid-row:1/4;align-self:center;margin:0;min-width:88px}
+
+/* ===== pactos: janela própria ===== */
+#modal .sheet.pact{background:radial-gradient(120% 60% at 50% 0%,#3a2f1466,transparent 60%),var(--glass)}
+.sheet.pact .shead h3{display:flex;align-items:center;gap:8px}
+.sheet.pact .shead h3 svg{width:22px;height:22px;fill:none;stroke:var(--gold);stroke-width:1.6;stroke-linejoin:round}
+.psub{margin:4px 0 2px!important;font-size:13px}
+.psec{margin:14px 0 6px!important;font:700 11px/1 system-ui,sans-serif!important;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.pnote{margin:6px 0 0!important;font-size:13px;color:var(--mute)}.pnote.dim{opacity:.8}
+.pcard{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;background:#0b16268c;border:1px solid #233c5e;margin-bottom:6px}
+.pcard.on{border-color:#e2b04a88;box-shadow:inset 0 0 0 1px #e2b04a22,0 0 24px #e2b04a14}
+.pcard.ask{border-color:#e2b04a;animation:pask 1.6s ease-in-out infinite}
+@keyframes pask{50%{box-shadow:0 0 0 3px #e2b04a33}}
+.pcard.wait{border-style:dashed}
+.ppair{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
+.pside{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;min-width:0}
+.pside b{font-size:14px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pside small{font-size:11px;color:var(--mute)}
+.pav{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--c);color:#0b1626;font:800 17px/1 system-ui,sans-serif;box-shadow:0 0 0 3px #0b1626,0 0 0 4px var(--c),0 0 16px color-mix(in srgb,var(--c) 50%,transparent);flex:none}
+.plink{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--gold)}
+.plink svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
+.plink small{font:600 10.5px/1.1 system-ui,sans-serif;color:#ffe2a3;white-space:nowrap}
+.prows{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.prow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:#0b16268c;border:1px solid #233c5e}
+.prow .pav{width:32px;height:32px;font-size:14px;box-shadow:0 0 0 2px #0b1626,0 0 0 3px var(--c)}
+.prow .who{flex:1;min-width:0}.prow .who b{display:block;font-size:14px}.prow .who small{display:block;font-size:12px;color:var(--mute)}
+.prow.off{opacity:.62}.prow .btn{flex:none;min-width:84px}
+.pact-sheet{display:flex;flex-direction:column;gap:12px;padding-top:4px}
+.pkick{margin:0!important;text-align:center;font:700 12px/1 system-ui,sans-serif!important;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.pkick.warn{color:#ff8f7a}
+.plead{margin:0!important;text-align:center;font-size:15px;color:var(--ink)!important}
+.pterms{margin:0;padding-left:18px;font-size:13px;color:var(--mute)}.pterms li{margin:3px 0}
+.pact-sheet .ppair .pav{width:52px;height:52px;font-size:22px}
+.pact-sheet .plink svg{width:40px;height:40px;animation:pshake 2.4s ease-in-out infinite}
+@keyframes pshake{0%,80%,100%{transform:none}86%{transform:rotate(-8deg)}92%{transform:rotate(8deg)}}
+.prules{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.prules summary{cursor:pointer;font-size:13px;color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion:reduce){.pcard.ask,.pact-sheet .plink svg{animation:none}}
