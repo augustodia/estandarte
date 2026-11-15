@@ -9,6 +9,7 @@ import { createInvite, joinInvite, initCert, myFingerprint, armSpare, useSpare }
 import { play, unlock, soundOn, setSound } from './sound.js';
 import { createSmoke } from './smoke.js';
 import { connectOnline, serverUrl, roomCode, DEFAULT_SERVER, listRooms } from './online.js';
+import { cleanName, uniqueName } from './names.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -35,7 +36,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = 'alpha-1.0'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
+const VERSION = 'alpha-1.1'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -118,7 +119,7 @@ async function openCamera() {
 }
 const guestId = () => {
   let id = store.get('gid');
-  if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('gid', id); }
+  if (!id) { id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''); store.set('gid', id); }
   return id;
 };
 
@@ -179,28 +180,34 @@ function hostHandlers(targetSeat) {
       if (msg.t === 'sync') return sync(); // o convidado percebeu que está defasado e pediu o estado de novo
       if (msg.t === 'hello') {
         if (known >= 0) return sync(); // "olá" repetido (o convidado insiste até ouvir resposta): só reenvia o estado
-        const name = String(msg.name || 'Convidado').slice(0, 14);
-        const gid = String(msg.gid || '').slice(0, 40), fp = String(msg.fp || '').slice(0, 80);
-        // quem já tinha assento (mesmo aparelho) volta para ele, inclusive no meio da partida
+        const name = cleanName(msg.name);
+        const gid = typeof msg.gid === 'string' ? msg.gid.slice(0, 40) : '';
+        // Quem volta é reconhecido pela impressão digital do aparelho, conferida pela própria conexão (não pelo que
+        // ele diz de si). O id que o aparelho manda só vale para lugares de aparelhos sem certificado fixo.
+        const fp = link.peerFp;
         let si = targetSeat;
-        if (si == null && gid) { const k = app.seats.findIndex((s) => s.gid === gid && s.ctrl !== 'local'); if (k >= 0) si = k; }
+        if (si == null && fp) { const k = app.seats.findIndex((s) => s.fp === fp && s.ctrl !== 'local'); if (k >= 0) si = k; }
+        if (si == null && !fp && gid) { const k = app.seats.findIndex((s) => !s.fp && s.gid === gid && s.ctrl !== 'local'); if (k >= 0) si = k; }
         if (si != null && app.seats[si]) {
           const st = app.seats[si];
           if (st.link && st.link !== link) { const old = st.link; st.link = null; old.close(); }
-          st.link = link; st.ctrl = 'remote'; st.seen = Date.now(); st.lag = false; if (gid) st.gid = gid; if (fp) st.fp = fp;
+          st.link = link; st.ctrl = 'remote'; st.seen = Date.now(); st.lag = false; st.gid = gid; st.fp = fp;
+          if (!app.game) st.name = uniqueName(name, app.seats, st);
           const pi = playerOfSeat(si);
           if (pi >= 0) app.game.players[pi].ctrl = 'remote';
           toast(`${st.name} ${app.game ? 'voltou à partida' : 'conectou'}.`);
         } else if (!app.game && app.seats.length < 6) {
-          app.seats.push({ name, color: freeColor(), ctrl: 'remote', link, gid, fp, seen: Date.now() });
-          toast(`${name} conectou.`);
+          const nm = uniqueName(name, app.seats);
+          app.seats.push({ name: nm, color: freeColor(), ctrl: 'remote', link, gid, fp, seen: Date.now() });
+          toast(`${nm} conectou.`);
         } else return link.send({ t: 'err', m: app.game ? 'A partida já começou. Peça ao anfitrião o QR do seu jogador (menu ☰).' : 'A sala está cheia.' });
         if ($('#qrbox')) closeModal(); // fecha só a janela do convite; quem voltou sozinho não interrompe nada
         sync();
         armSpareFor(app.seats[seatOfLink(link)]);
       } else if (msg.t === 'peek' && app.game) {
         if (playerOfSeat(seatOfLink(link)) !== app.game.turn) return;
-        app.peek = { n: msg.n | 0, sel: msg.sel, target: msg.target };
+        const terr = (x) => (Number.isInteger(x) && x >= 0 && x < TERR.length ? x : null);
+        app.peek = { n: msg.n | 0, sel: terr(msg.sel), target: terr(msg.target) };
         app.seats.forEach((s) => s.link && s.link !== link && s.link.send({ t: 'peek', ...app.peek }));
         renderGame();
       } else if (msg.t === 'act' && app.game) {
@@ -374,7 +381,8 @@ const guestHandlers = {
     if (!app.online) store.set('guest', true);
     // A primeira mensagem pode se perder se chegar antes de o canal abrir do outro lado:
     // repete o "olá" até ouvir qualquer resposta do anfitrião.
-    const hello = () => link.send({ t: 'hello', name: myName(), gid: guestId(), fp: myFingerprint() });
+    // Online, o lugar é reconhecido só pelo segredo que o servidor entregou a este aparelho (nada que outro possa saber).
+    const hello = () => link.send(app.online ? { t: 'hello', name: myName(), token: onlineToken() } : { t: 'hello', name: myName(), gid: guestId(), fp: myFingerprint() });
     hello();
     let tries = 0;
     const iv = setInterval(() => { if (app.link !== link || app.heard || ++tries > 40) return clearInterval(iv); hello(); }, 500);
@@ -391,10 +399,12 @@ const guestHandlers = {
       return;
     }
     if (msg.t === 'gone') return onlineGone(msg.m); // online: a sala acabou, fui removido ou entrei por outra janela
+    if (msg.t === 'seat' && app.online && typeof msg.token === 'string') { app.online.token = msg.token; return; }
     if (app.online && (msg.t === 'lobby' || msg.t === 'state') && msg.code) {
       app.online.code = msg.code; app.owner = !!msg.owner; app.onl = msg.on || null;
       app.watch = !!msg.watch; app.watchers = msg.watchers || 0; app.online.watch = app.watch;
       store.set('online', { code: msg.code, server: app.online.server, watch: app.watch, at: Date.now() });
+      if (app.online.token) saveToken(msg.code, app.online.token);
     }
     if (msg.t === 'spare') { app.spare = { code: msg.code, gu: msg.gu, gp: msg.gp }; store.set('spare', app.spare); return; }
     if (msg.t === 'lobby') { app.lobby = msg; app.view = null; app.winShown = false; $('#win').hidden = true; show('lobby'); renderLobby(); }
@@ -487,6 +497,22 @@ function guestScan() {
 }
 
 /* ---------- online ---------- */
+// Segredo de cada lugar online, por sala, guardado neste aparelho (só os mais recentes).
+const tokenKey = (o) => (o.server || '') + '|' + o.code;
+function saveToken(code, token) {
+  const all = store.get('tokens') || {};
+  all[tokenKey({ server: app.online.server, code })] = { token, at: Date.now() };
+  const keep = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 20);
+  store.set('tokens', Object.fromEntries(keep));
+}
+function onlineToken() {
+  const o = app.online;
+  if (!o) return null;
+  if (o.token) return o.token;
+  const code = o.code || (/room=([A-Z0-9]{5})/.exec(o.query || '') || [])[1];
+  const t = code && (store.get('tokens') || {})[tokenKey({ server: o.server, code })];
+  return t ? t.token : null;
+}
 // Online o servidor é o anfitrião: este aparelho se comporta como convidado, com as mesmas mensagens da rede local.
 function onlineStart(query, title, watch = false) {
   if (navigator.onLine === false) return toast('Sem internet: jogar online precisa de conexão. Na mesma rede, use “Criar partida”.', 5000);
@@ -1820,13 +1846,16 @@ const actions = {
   },
   invite: () => (app.online ? onlineInvite() : hostInvite()),
   addBot() {
-    if (app.online) return onlineSend({ t: 'addBot' }); const n = app.seats.filter((s) => s.ctrl === 'bot').length + 1; app.seats.push({ name: 'Bot ' + n, color: freeColor(), ctrl: 'bot' }); sync(); },
+    if (app.online) return onlineSend({ t: 'addBot' });
+    let n = app.seats.filter((s) => s.ctrl === 'bot').length + 1;
+    while (uniqueName('Bot ' + n, app.seats, null, true) !== 'Bot ' + n) n++;
+    app.seats.push({ name: 'Bot ' + n, color: freeColor(), ctrl: 'bot' }); sync(); },
   addLocal() {
     modal(`<h3>Jogador neste aparelho</h3><label class="field">Nome<input id="lname" maxlength="14"></label>
       <div class="row"><button class="btn primary" data-m="add">Adicionar</button><button class="btn" data-m="close">Cancelar</button></div>`);
     $('#modal .sheet').onclick = (e) => {
       if (e.target.dataset.m !== 'add') return;
-      app.seats.push({ name: ($('#lname').value.trim() || 'Jogador ' + (app.seats.length + 1)).slice(0, 14), color: freeColor(), ctrl: 'local' });
+      app.seats.push({ name: uniqueName(cleanName($('#lname').value) || 'Jogador ' + (app.seats.length + 1), app.seats), color: freeColor(), ctrl: 'local' });
       closeModal(); sync();
     };
   },
@@ -1912,6 +1941,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------- inicialização ---------- */
+// O jogo não roda dentro de outro site (evita que uma página esconda o jogo e engane cliques).
+if (window.top !== window.self) { try { window.top.location = location.href; } catch { document.body.innerHTML = '<p style="padding:24px">Abra o Estandarte direto no navegador.</p>'; } }
 $('#name').value = store.get('name') || '';
 if (store.get('sound') === false) setSound(false);
 // o navegador só libera áudio depois de um toque do usuário

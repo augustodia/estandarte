@@ -128,6 +128,12 @@ function gathered(pc) {
 function wrap(pc, dc, h) {
   const link = {
     open: false,
+    // Impressão digital do certificado do outro aparelho, verificada pela própria conexão (DTLS): quem não tem a
+    // chave daquele aparelho não consegue completar a conexão com ela. É a identidade que não dá para falsificar.
+    get peerFp() {
+      const m = /a=fingerprint:sha-256 ([0-9A-Fa-f:]+)/.exec(pc.remoteDescription?.sdp || '');
+      return m ? b64u(m[1].split(':').map((h) => parseInt(h, 16))) : null;
+    },
     send(msg) { if (dc.readyState === 'open') dc.send(JSON.stringify(msg)); },
     close() { try { dc.close(); pc.close(); } catch {} },
   };

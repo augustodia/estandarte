@@ -53,7 +53,14 @@ Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto pa
 - A sala é pública por padrão; quem a criou pode desligar **Sala pública**, e aí só entra quem tem o código. Sem relógio, a vez de quem está desconectado passa depois de 1 min 30 s.
 - O servidor gratuito dorme depois de 15 minutos sem ninguém jogando e leva até 1 minuto para acordar: a tela mostra "Acordando o servidor…".
 - As partidas vivem só na memória do servidor: se ele reiniciar (nova versão publicada, manutenção), as salas abertas se perdem.
-- Para testar com outro servidor: abra o jogo com `?server=ws://localhost:8080` (fica guardado no aparelho; `?server=` vazio volta ao padrão). O endereço padrão está em `js/online.js`.
+- Para testar com um servidor no computador ou na rede de casa: abra o jogo com `?server=ws://localhost:8080` (fica guardado no aparelho; `?server=` vazio volta ao padrão). Outros endereços são ignorados, para que um link de golpe não consiga trocar o servidor. O endereço padrão está em `js/online.js` (e no `connect-src` da política de segurança em `index.html`).
+
+## Segurança
+
+- **Online, ninguém assume o lugar de outro:** o servidor entrega a cada jogador um segredo do lugar, que fica só no aparelho dele; nome, código da sala ou id do aparelho não dão acesso a nada. Nomes que se confundem na tela com o de outro jogador da sala (acentos, maiúsculas, letras parecidas de outros alfabetos, caracteres invisíveis) ganham um número, e pessoas não podem usar nome de bot. Detalhes no README do servidor.
+- **Na rede local**, quem volta para a partida é reconhecido pela impressão digital do certificado do aparelho, conferida pela própria conexão (não pelo que o aparelho diz de si). O anfitrião guarda a partida inteira no aparelho dele: para jogo valendo, prefira o online.
+- **Dados, cartas e objetivos** são sorteados com o gerador criptográfico do navegador (com `Math.random` daria para prever os próximos sorteios a partir dos dados já rolados).
+- **Política de segurança de conteúdo** (`index.html`): só roda código do próprio site, só conecta ao próprio site e ao servidor do jogo (ou ao computador/rede de casa, em testes), e o jogo não abre dentro de outro site.
 
 ## Regras em resumo
 
@@ -120,6 +127,7 @@ Sem build e sem dependências em tempo de execução além de duas bibliotecas d
 | `tools/gen-map.mjs` | Gera `js/map.js` a partir do Natural Earth 1:110m: recorta os territórios, amplia regiões pequenas e simplifica as formas numa grade |
 | `js/net.js` | WebRTC DataChannel e compactação do SDP para caber no QR |
 | `js/online.js` | Conexão com o servidor das partidas online (WebSocket, espera o servidor acordar) |
+| `js/names.js` | Nomes limpos e únicos (as mesmas regras do servidor) |
 | `js/main.js` | Interface, pareamento, câmera/leitor de QR, pan e zoom do mapa |
 | `sw.js` | Cache offline |
 

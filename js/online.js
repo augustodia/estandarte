@@ -1,19 +1,32 @@
 // Partidas online: um servidor na internet faz o papel do celular anfitrião (guarda a partida, aplica as regras e
 // joga pelos bots). Aqui fica só a conexão; as mensagens são as mesmas do jogo pela rede local.
 
-// Endereço do servidor publicado no Render. Para testar outro: abra o jogo com ?server=ws://localhost:8080
-// (fica guardado neste aparelho; ?server= vazio volta ao padrão).
+// Endereço do servidor publicado no Render. Para testar um servidor no computador ou na rede de casa: abra o jogo
+// com ?server=ws://localhost:8080 (fica guardado neste aparelho; ?server= vazio volta ao padrão). Outros endereços
+// são ignorados. Se mudar este endereço, mude também o connect-src da Content-Security-Policy em index.html.
 export const DEFAULT_SERVER = 'wss://estandarte-backend.onrender.com';
 
 const KEY = 'estandarte.server';
+// Só aceita trocar o servidor por um de teste no próprio computador ou na rede de casa. Sem isso, um link
+// malicioso (…?server=wss://site-do-golpista) faria o jogo conversar com outro servidor e guardar isso no aparelho.
+export function allowedServer(v) {
+  try {
+    const u = new URL(String(v).replace(/^http/, 'ws'));
+    if (u.protocol !== 'ws:' && u.protocol !== 'wss:') return false;
+    if (u.origin === new URL(DEFAULT_SERVER).origin) return true;
+    const h = u.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local') ||
+      /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h);
+  } catch { return false; }
+}
 export function serverUrl() {
   const q = new URLSearchParams(location.search);
   if (q.has('server')) {
     const v = q.get('server').trim();
-    try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch {}
+    try { if (!v) localStorage.removeItem(KEY); else if (allowedServer(v)) localStorage.setItem(KEY, v); } catch {}
   }
   let s = DEFAULT_SERVER;
-  try { s = localStorage.getItem(KEY) || DEFAULT_SERVER; } catch {}
+  try { const saved = localStorage.getItem(KEY); if (saved && allowedServer(saved)) s = saved; } catch {}
   return s.replace(/^http/, 'ws').replace(/\/+$/, '');
 }
 

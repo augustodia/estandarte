@@ -141,7 +141,11 @@ const pname = (s, i) => s.players[i].name;
 
 // seats: [{name, color, ctrl}]
 // opts: { events, pacts, nukes } ligam as regras opcionais; sem elas o jogo é o clássico.
-export function newGame(seats, rng = Math.random, opts = {}) {
+// Sorteio criptográfico do navegador: com Math.random alguém que visse alguns dados rolados poderia deduzir o
+// estado do gerador e prever os próximos dados, as cartas e os objetivos. Os testes passam um gerador próprio.
+export const secureRandom = () => { const b = crypto.getRandomValues(new Uint32Array(2)); return (b[0] * 2 ** 21 + (b[1] >>> 11)) / 2 ** 53; };
+
+export function newGame(seats, rng = secureRandom, opts = {}) {
   const n = seats.length;
   const pool = OBJECTIVES.map((_, i) => i).filter((i) => {
     const o = OBJECTIVES[i];
@@ -360,7 +364,7 @@ export function invariant(s) {
 // Aplica a ação do jogador p. Retorna null se ok, ou mensagem de erro.
 // É transacional: uma jogada recusada, ou que deixaria o jogo num estado que quebra as regras,
 // não muda nada no estado.
-export function apply(s, p, a, rng = Math.random) {
+export function apply(s, p, a, rng = secureRandom) {
   const snap = JSON.stringify(s);
   let err;
   try { err = applyAction(s, p, a || {}, rng) || invariant(s); } catch (e) { err = 'Jogada inválida.'; }
