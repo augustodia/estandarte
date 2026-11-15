@@ -89,7 +89,9 @@ Ligadas pelo anfitrião na sala, na seção recolhível **Regras extras**, antes
 - **Reforço:** toque num território seu, ajuste a quantidade com − e + (ou "Máx") e toque em "Colocar". Tocar de novo no mesmo território soma 1.
 - **Ataque:** toque direto no inimigo (a origem passa a ser o seu vizinho com mais exércitos) ou toque antes na origem; linhas mostram os alvos possíveis. Escolha de 1 a 3 dados com − e + e toque em "Atacar", ou toque de novo no alvo. "Auto" repete o ataque com o máximo de dados até conquistar ou não poder mais.
 - **Conquista e remanejamento:** − e + definem quantos exércitos mover.
-- **Sempre deitado:** durante a partida a tela fica deitada mesmo com o celular em pé (ela gira 90° e você vira o aparelho); o mapa ocupa a tela e os controles ficam numa faixa no rodapé. Dá para voltar ao modo automático no menu ☰.
+- **Sempre deitado (celular):** durante a partida a tela fica deitada mesmo com o celular em pé (ela gira 90° e você vira o aparelho); o mapa ocupa a tela e os controles ficam numa faixa no rodapé. Dá para voltar ao modo automático no menu ☰.
+- **Tablet e PC:** a tela não gira. Em tela larga o mapa inteiro fica à esquerda e um painel à direita mostra quem joga, o domínio de cada um (com cartas, pactos e quem está offline), o registro e as ações; tablet em pé fica com o mapa em cima e o painel embaixo.
+- **Mouse e teclado:** clique para escolher, arraste para mover o mapa, roda para o zoom, botão direito desfaz a seleção e passar o mouse num território mostra os dados dele no rodapé. Atalhos: **Enter** confirma a ação principal, **+**/**−** (ou setas) mudam a quantidade, **Esc** cancela, **F** ajusta o zoom, **C** cartas, **O** objetivo, **M** menu.
 
 Encerrar os ataques e encerrar o turno pedem confirmação numa janela, para um toque sem querer não passar a vez.
 

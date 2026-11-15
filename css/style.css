@@ -422,3 +422,117 @@ body.land #modal .sheet{animation-name:sheetin2}
 
 /* sala online */
 .roomurl{word-break:break-all;font-size:12px;user-select:all}
+
+/* ===== tela inicial: grupos (no celular se comportam como antes) e o mapa ao fundo ===== */
+#home .brand,#home .homeform{display:contents}
+#home #offline,#home #ver{order:2}
+#home .pitch{display:none}
+#homeart{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;opacity:.1;stroke:#0a1422;stroke-width:1.2;-webkit-mask:radial-gradient(75% 70% at 50% 45%,#000 30%,transparent 100%);mask:radial-gradient(75% 70% at 50% 45%,#000 30%,transparent 100%);animation:artdrift 60s ease-in-out infinite alternate}
+@keyframes artdrift{to{transform:scale(1.06) translate(-1%,1%)}}
+#home .brand>*,#home .homeform>*{position:relative;z-index:1}
+@media (prefers-reduced-motion:reduce){#homeart{animation:none}}
+
+/* ===== tablet e PC (lado menor da tela ≥ 600 px): nada gira, tudo um pouco maior e com cara de mesa ===== */
+body.big{--sl:max(16px,env(safe-area-inset-left));--sr:max(16px,env(safe-area-inset-right));--sb:max(12px,env(safe-area-inset-bottom));--side:clamp(310px,25vw,390px)}
+body.big .screen{padding:max(28px,env(safe-area-inset-top)) 28px max(28px,env(safe-area-inset-bottom))}
+body.big #game{padding:0}
+/* início: marca à esquerda, formulário num cartão à direita */
+body.big #home:not([hidden]){max-width:none;display:grid;grid-template-columns:minmax(0,440px) minmax(0,380px);justify-content:center;align-content:safe center;column-gap:clamp(32px,6vw,96px);background:radial-gradient(60% 50% at 30% 30%,#22406a99 0,transparent 70%),radial-gradient(50% 45% at 75% 70%,#1b2f4d66,transparent 70%)}
+body.big #homeart{opacity:.16}
+body.big #home .brand{display:flex;flex-direction:column;align-items:flex-start;gap:12px;position:relative;z-index:1}
+body.big #home .brand .crest{margin:0;width:84px}
+body.big #home h1{font-size:clamp(48px,5.4vw,72px);text-align:left;letter-spacing:.08em;line-height:1}
+body.big #home .brand .tag{text-align:left}
+body.big #home .lead{font-size:19px;color:var(--ink);margin:0}
+body.big #home .pitch{display:block;font-size:15px;line-height:1.5;max-width:400px}
+body.big #home #offline{margin-top:10px}
+body.big #home .homeform{display:flex;flex-direction:column;gap:10px;padding:26px;border-radius:20px;background:var(--glass);border:1px solid #35557f;box-shadow:var(--edge),0 30px 80px #0008;position:relative;z-index:1}
+body.big #home .homeform .btn{height:50px;font-size:16px}
+body.big #home .homeform input{padding:13px 14px;font-size:16px}
+/* sala: jogadores à esquerda, configuração à direita */
+.lobbysub{display:none}
+body.big #lobby:not([hidden]){max-width:1000px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto 1fr;column-gap:32px;row-gap:12px;align-content:safe center}
+body.big #lobby h2{grid-column:1/3;font-size:34px;margin:0}
+body.big .lobbysub{display:block;grid-column:1;text-align:left;font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+body.big #seats{grid-column:1;grid-row:3;align-self:start}
+body.big #lobbyActions{grid-column:2;grid-row:2/4;align-self:start;padding:20px;border-radius:18px;background:var(--glass);border:1px solid #35557f;box-shadow:var(--edge);gap:12px}
+body.big .seats li{min-height:60px;padding:10px 14px}
+/* janelas: centralizadas, como diálogos */
+body.big #modal,body.big .closing{align-items:center;padding:24px}
+body.big #modal .sheet,body.big .closing .sheet{border-radius:18px;max-width:560px;max-height:88%;padding:20px 20px 20px}
+body.big #modal .sheet{animation-name:sheetin2}
+body.big .shead{margin:-20px -20px 0;padding:12px 12px 12px 20px;top:-20px}
+body.big .wincard{max-width:500px;padding:28px 24px 22px}
+body.big #toast{top:18px}
+body.big #flash{max-width:440px}
+
+/* ===== partida em tela larga: mapa inteiro à esquerda, painel à direita ===== */
+#side{display:none}
+body.wide #game:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) var(--side);grid-template-rows:auto minmax(0,1fr) auto}
+body.wide #mapwrap{grid-column:1;grid-row:1/4}
+body.wide #hud,body.wide #side,body.wide #bar{grid-column:2;border:0;border-left:1px solid #2d4a72;background:linear-gradient(180deg,#152741,#0f1d33)}
+body.wide #hud{grid-row:1;flex-wrap:wrap;gap:8px;padding:16px 16px 12px;box-shadow:inset 1px 0 0 #2d4a72}
+body.wide #hud .turn{flex:1 1 100%;padding-bottom:4px}
+body.wide #hud .turn .dot{width:22px;height:22px}
+body.wide #hud .turn b{font:700 20px/1.2 Georgia,serif;letter-spacing:.03em}
+body.wide #hud .phase{font-size:13px}
+body.wide #hud .icon{flex:1 1 0;flex-direction:column;height:54px;gap:3px;min-width:0;position:relative}
+body.wide #hud .icon em{display:block}
+body.wide #hud .icon>span{position:absolute;top:5px;right:8px;font-size:12px;color:var(--gold)}
+.icon em{display:none;font:600 11px/1 system-ui,sans-serif;font-style:normal;color:var(--mute)}
+body.wide #side{display:flex;grid-row:2;flex-direction:column;min-height:0;padding:4px 16px 8px;gap:6px;overflow:hidden}
+body.wide #bar{grid-row:3;padding:14px 16px max(14px,var(--sb));gap:10px;border-top:1px solid #2d4a72;box-shadow:0 -10px 24px #0006}
+body.wide #bar .msg{font-size:15px;line-height:1.4}
+body.wide #bar .actions{flex-wrap:wrap}
+body.wide #bar .actions .btn{flex:1 1 auto;height:44px}
+body.wide #bar .foot{flex-direction:column;align-items:stretch;gap:4px}
+body.wide #bar .info{white-space:normal}
+body.wide .you{max-width:none}
+body.wide #ring{left:20px;bottom:20px;width:84px;height:84px}
+body.wide #fit{left:45px;bottom:118px}
+body.wide #evchip{left:120px;bottom:30px}
+body.wide #mapwrap::before{background:radial-gradient(120% 100% at 50% 46%,transparent 58%,#04080fb3 100%)}
+/* lista de jogadores e registro no painel */
+.shd{display:flex;justify-content:space-between;font:700 11px/1 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:10px 2px 4px}
+.splayers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sp{position:relative;display:flex;align-items:center;gap:10px;padding:9px 12px 12px;border-radius:12px;background:#0b162680;border:1px solid #233c5e;overflow:hidden}
+.sp::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:var(--p);background:var(--c);box-shadow:0 0 8px var(--c);transition:width .6s cubic-bezier(.2,.9,.3,1)}
+.sp .dot{width:14px;height:14px;background:var(--c);box-shadow:0 0 0 2px #0008,0 0 10px var(--c)}
+.sp .who{flex:1;min-width:0}
+.sp .who b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp .who small{display:block;font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp .who small.me{display:inline;font:600 10px/1 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-left:4px}
+.sp .sn{font:700 15px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)}
+.sp.now{background:linear-gradient(90deg,color-mix(in srgb,var(--c) 24%,#0b1626),#0b1626cc);border-color:color-mix(in srgb,var(--c) 70%,#fff0)}
+.sp.now::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.sp.dead{opacity:.45}.sp.won{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 18px #e2b04a55}
+.slog{flex:1;min-height:60px;overflow:auto;font-size:12.5px;line-height:1.4;color:var(--mute);padding:2px 2px 6px;-webkit-mask:linear-gradient(#000 80%,transparent);mask:linear-gradient(#000 80%,transparent)}
+.slog p{margin:0 0 5px}.slog p.new{color:var(--ink)}
+
+/* ===== tablet em pé: mapa em cima; jogadores, registro e ações embaixo ===== */
+body.tall #game:not([hidden]){display:flex}
+body.tall #mapwrap{flex:0 1 68vw;min-height:40%}
+body.tall #side{display:grid;grid-auto-flow:column;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);column-gap:18px;flex:1 1 0;min-height:0;order:3;background:linear-gradient(180deg,#152741,#0f1d33);border-top:1px solid #2d4a72;padding:6px 16px 6px;overflow:hidden}
+body.tall .splayers{overflow:auto;min-height:0;gap:5px}
+body.tall .sp{padding:7px 10px 10px}
+body.tall #bar{order:4;border-top:1px solid #2d4a72;padding:10px 16px max(14px,var(--sb))}
+body.tall #hud{padding:12px 16px}
+body.tall #bar .actions .btn{height:46px}
+
+/* ===== mouse: retorno ao passar por cima ===== */
+@media (hover:hover) and (pointer:fine){
+  .btn:hover,.icon:hover,.chip:hover{filter:brightness(1.15)}
+  .btn.ghost:hover{color:var(--ink)}
+  .opt:hover,details.extras summary:hover{background:#ffffff08}
+  .seats .dot:not([disabled]):hover{transform:scale(1.15)}
+  #map{cursor:grab}#map:active{cursor:grabbing}
+  .terr{cursor:pointer}
+  .terr:not(.dim):not(.sel):not(.lit):hover{filter:brightness(1.18)}
+  .card{cursor:pointer}.card:not(.on):hover{transform:translateY(-3px)}
+  .mapbtn:hover,#ring:hover{filter:brightness(1.2)}
+  ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#2b4466;border-radius:5px;border:2px solid transparent;background-clip:padding-box}::-webkit-scrollbar-track{background:transparent}
+}
+/* tablet em pé: marca em cima, cartão embaixo */
+body.tall #home:not([hidden]){grid-template-columns:minmax(0,460px);row-gap:28px}
+body.tall #home .brand{align-items:center;text-align:center}
+body.tall #home h1,body.tall #home .brand .tag{text-align:center}

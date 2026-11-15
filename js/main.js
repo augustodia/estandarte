@@ -31,11 +31,11 @@ const app = {
   sel: null, target: null, n: 1, nKey: '', info: null, // n: quantidade no seletor − / +
   lastRoll: 0, lastViewer: null, botTimer: null,
   cfg: { secs: 120, events: false, pacts: false, nukes: false }, // tempo por turno em segundos (0 = livre) e regras opcionais
-  spare: null, autoOn: false, offerKey: null, offerOpen: false, nukeMode: false, fogKey: null, extrasOpen: false, // convidado: conexão reserva; proposta de pacto em aberto
+  spare: null, autoOn: false, offerKey: null, offerOpen: false, nukeMode: false, fogKey: null, extrasOpen: null, // convidado: conexão reserva; proposta de pacto em aberto
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '36'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '37'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -70,9 +70,16 @@ function show(id) {
 // Jogo sempre deitado: na partida, se o celular estiver em pé, o palco gira 90° (o jogador vira o aparelho).
 // Com o aparelho deitado de verdade nada gira. Dá para desligar no menu.
 const rotated = () => document.body.classList.contains('rot');
+// Telas grandes (tablet e PC, lado menor de 600 px ou mais) nunca giram. Largas (1000 px ou mais) ganham painel
+// lateral na partida; tablet em pé fica com o mapa em cima e o painel embaixo.
+const bigScreen = () => Math.min(innerWidth, innerHeight) >= 600;
 function applyLayout() {
-  const inGame = !$('#game').hidden, portrait = innerHeight > innerWidth;
-  const rot = inGame && portrait && store.get('forceLand') !== false;
+  const inGame = !$('#game').hidden, portrait = innerHeight > innerWidth, big = bigScreen();
+  const wide = big && innerWidth >= 1000 && innerWidth >= innerHeight * 0.9;
+  document.body.classList.toggle('big', big);
+  document.body.classList.toggle('wide', wide);
+  document.body.classList.toggle('tall', big && !wide);
+  const rot = inGame && portrait && !big && store.get('forceLand') !== false;
   const st = $('#stage').style;
   document.body.classList.toggle('rot', rot);
   if (rot) { st.left = innerWidth + 'px'; st.width = innerHeight + 'px'; st.height = innerWidth + 'px'; }
@@ -571,6 +578,7 @@ document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.
 function renderOnlineLobby() {
   const L = app.lobby, own = !!L.owner;
   $('#lobby h2').textContent = 'Sala ' + L.code;
+  $('.lobbysub').textContent = `Jogadores · ${L.seats.length} de 6`;
   $('#seats').innerHTML = L.seats.map((s, i) => `<li>
     <button class="dot" style="background:${COLORS[s.color].c}" ${own || i === L.you ? `data-color="${i}"` : 'disabled'} aria-label="Trocar cor"></button>
     <span class="who"><b>${esc(s.name)}</b>${i === L.you ? ' (você)' : ''}<small>${COLORS[s.color].n} · ${s.ctrl === 'bot' ? 'bot' : s.on ? 'online' : '<span class="off">desconectado</span>'}</small></span>
@@ -579,17 +587,18 @@ function renderOnlineLobby() {
   const conn = app.link ? '' : '<p class="tag off">Sem conexão com o servidor. Reconectando…</p>';
   $('#lobbyActions').innerHTML = conn + (own
     ? `<div class="setting">Tempo por turno<span class="chips">${[[0, 'Livre'], [60, '1 min'], [120, '2 min'], [180, '3 min']].map(([v, l]) => `<button class="chip${L.secs === v ? ' on' : ''}" data-secs="${v}">${l}</button>`).join('')}</span></div>
-       <details class="extras"${app.extrasOpen ? ' open' : ''}><summary>Regras extras<span>${EXTRAS.filter(([k]) => L[k]).map(([, n]) => n).join(', ') || 'nenhuma ligada'}</span></summary>
+       <details class="extras"${app.extrasOpen ?? bigScreen() ? ' open' : ''}><summary>Regras extras<span>${EXTRAS.filter(([k]) => L[k]).map(([, n]) => n).join(', ') || 'nenhuma ligada'}</span></summary>
          ${EXTRAS.map(([k, n, d]) => `<button class="opt${L[k] ? ' on' : ''}" data-opt="${k}" aria-pressed="${!!L[k]}"><span class="sw"></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</details>
        <div class="row"><button class="btn" data-do="invite" ${full ? 'disabled' : ''}>Convidar</button><button class="btn" data-do="addBot" ${full ? 'disabled' : ''}>+ Bot</button></div>
        <button class="btn primary" data-do="begin" ${L.seats.length < 2 ? 'disabled' : ''}>Iniciar partida (${L.seats.length} jogadores)</button>
        <button class="btn ghost" data-do="leave">Sair da sala</button>`
-    : `<p class="tag">Tempo por turno: ${L.secs ? L.secs / 60 + ' min' : 'livre'}.${EXTRAS.some(([k]) => L[k]) ? ` Regras extras: ${EXTRAS.filter(([k]) => L[k]).map(([, n]) => n.toLowerCase()).join(', ')}.` : ''} Aguardando quem criou a sala iniciar… Toque na sua bolinha para trocar de cor.</p>
+    : `<p class="tag">Tempo por turno: ${L.secs ? L.secs / 60 + ' min' : 'livre'}.${EXTRAS.some(([k]) => L[k]) ? ` Regras extras: ${EXTRAS.filter(([k]) => L[k]).map(([, n]) => n.toLowerCase()).join(', ')}.` : ''} Aguardando quem criou a sala iniciar… ${tapText('Toque')} na sua bolinha para trocar de cor.</p>
        <div class="row"><button class="btn" data-do="invite">Convidar (link ou QR)</button></div><button class="btn ghost" data-do="leave">Sair da sala</button>`);
 }
 function renderLobby() {
   if (app.online && app.lobby) return renderOnlineLobby();
   $('#lobby h2').textContent = 'Sala';
+  $('.lobbysub').textContent = `Jogadores · ${(app.role === 'host' ? app.seats : app.lobby.seats).length} de 6`;
   const host = app.role === 'host';
   const seats = host ? app.seats.map((s) => ({ ...s, on: s.ctrl !== 'remote' || !!s.link })) : app.lobby.seats;
   const kind = { local: 'neste aparelho', remote: 'outro aparelho', bot: 'bot' };
@@ -600,7 +609,7 @@ function renderLobby() {
   const full = seats.length >= 6;
   $('#lobbyActions').innerHTML = host
     ? `<div class="setting">Tempo por turno<span class="chips">${[[0, 'Livre'], [60, '1 min'], [120, '2 min'], [180, '3 min']].map(([v, l]) => `<button class="chip${app.cfg.secs === v ? ' on' : ''}" data-secs="${v}">${l}</button>`).join('')}</span></div>
-       <details class="extras"${app.extrasOpen ? ' open' : ''}><summary>Regras extras<span>${EXTRAS.filter(([k]) => app.cfg[k]).map(([, n]) => n).join(', ') || 'nenhuma ligada'}</span></summary>
+       <details class="extras"${app.extrasOpen ?? bigScreen() ? ' open' : ''}><summary>Regras extras<span>${EXTRAS.filter(([k]) => app.cfg[k]).map(([, n]) => n).join(', ') || 'nenhuma ligada'}</span></summary>
          ${EXTRAS.map(([k, n, d]) => `<button class="opt${app.cfg[k] ? ' on' : ''}" data-opt="${k}" aria-pressed="${!!app.cfg[k]}"><span class="sw"></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</details>
        <div class="row"><button class="btn" data-do="invite" ${full ? 'disabled' : ''}>Convidar por QR</button></div>
        <div class="row"><button class="btn small" data-do="addLocal" ${full ? 'disabled' : ''}>+ Jogador neste aparelho</button><button class="btn small" data-do="addBot" ${full ? 'disabled' : ''}>+ Bot</button></div>
@@ -771,7 +780,7 @@ function fitView(toggle) {
   const mid = Math.min(cover, contain * 2.4);
   if (toggle === true) cam.z = Math.abs(cam.z - contain) < 0.01 ? mid : contain;
   else if (camReady) return applyCam();
-  else cam.z = mid;
+  else cam.z = document.body.classList.contains('wide') ? contain : document.body.classList.contains('tall') ? Math.min(cover, contain * 1.2) : mid;
   camReady = true;
   cam.x = (MAP_W - r.width / cam.z) / 2; cam.y = (MAP_H - r.height / cam.z) / 2;
   applyCam();
@@ -831,7 +840,7 @@ svg.addEventListener('wheel', (e) => {
   cam.z *= e.deltaY < 0 ? 1.15 : 1 / 1.15; applyCam();
   cam.x = wx - mx / cam.z; cam.y = wy - my / cam.z; applyCam();
 }, { passive: false });
-addEventListener('resize', () => { applyLayout(); if (!$('#game').hidden) applyCam(); });
+addEventListener('resize', () => { applyLayout(); if (!$('#game').hidden) { applyCam(); if (app.view) renderSide(app.view); } });
 $('#fit').onclick = () => fitView(true);
 
 /* ---------- alertas, efeitos e relógio ---------- */
@@ -841,8 +850,11 @@ const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch {
 const flashQ = [];
 let flashCur = null, flashTimer = null;
 // mini = aviso discreto no topo, para o que os outros fazem: não cobre o mapa.
+// Com mouse, os textos falam em clicar em vez de tocar.
+const mouse = matchMedia('(hover: hover) and (pointer: fine)').matches;
+const tapText = (s) => (mouse ? String(s).replace(/\b([Tt])oque\b/g, (_, t) => (t === 'T' ? 'Clique' : 'clique')) : s);
 function flash(text, color, sub = '', ms = 1000, urgent = false, mini = false) {
-  const f = { text, color, sub, ms, urgent, mini };
+  const f = { text, color, sub: tapText(sub), ms, urgent, mini };
   if (urgent) { for (let i = flashQ.length - 1; i >= 0; i--) if (!flashQ[i].urgent) flashQ.splice(i, 1); }
   else { const i = flashQ.findIndex((q) => !q.urgent); if (i >= 0) flashQ.splice(i, 1); }
   flashQ.push(f);
@@ -1394,10 +1406,11 @@ function renderGame() {
   const meP = v.players[vw], extras = !!(v.opts && (v.opts.events || v.opts.pacts || v.opts.nukes));
   $('#hud').innerHTML = `<div class="turn"><span class="dot" style="background:${COLORS[cur.color].c}"></span>
     <span><b>${esc(cur.name)}</b><span class="phase">${v.phase === 'over' ? 'Fim de jogo' : `${STEP[v.step]} · rodada ${v.round + 1}`}</span></span></div>
-    <button class="icon" data-do="objective" aria-label="Objetivo">${ICON.goal}</button>
-    <button class="icon" data-do="cards" aria-label="Cartas">${ICON.cards}<span>${handSize(meP)}</span></button>
-    ${extras ? `<button class="icon${of && offerIsMine(v) ? ' call' : ''}" data-do="extras" aria-label="Regras extras">${ICON.extras}${v.opts.pacts && v.pacts.length ? `<span>${v.pacts.length}</span>` : ''}</button>` : ''}
-    <button class="icon" data-do="menu" aria-label="Menu">${ICON.menu}</button>`;
+    <button class="icon" data-do="objective" aria-label="Objetivo" title="Objetivo (O)">${ICON.goal}<em>Objetivo</em></button>
+    <button class="icon" data-do="cards" aria-label="Cartas" title="Cartas (C)">${ICON.cards}<span>${handSize(meP)}</span><em>Cartas</em></button>
+    ${extras ? `<button class="icon${of && offerIsMine(v) ? ' call' : ''}" data-do="extras" aria-label="Regras extras" title="Regras extras">${ICON.extras}${v.opts.pacts && v.pacts.length ? `<span>${v.pacts.length}</span>` : ''}<em>Extras</em></button>` : ''}
+    <button class="icon" data-do="menu" aria-label="Menu" title="Menu (M)">${ICON.menu}<em>Menu</em></button>`;
+  renderSide(v);
 
   // anel de jogada: uma fatia por jogador, na ordem em que jogam (sentido horário a partir do topo,
   // onde começa a de quem joga agora, marcada por uma seta no meio dela); todas com a mesma espessura, e o comprimento segue o número de territórios
@@ -1445,7 +1458,7 @@ function renderGame() {
   }
 
   // rodapé
-  const info = app.info != null ? `${TERR[app.info].n} · ${CONTINENTS[TERR[app.info].c].n} · ${esc(v.players[T[app.info].o].name)} · ${T[app.info].a} exérc.${v.fog && v.fog.t === app.info ? ' · <b class="rad">radioativo: não pode ser atacado</b>' : ''}`
+  const info = app.info != null ? terrInfo(v, app.info)
     : v.event && v.phase === 'play' ? `<b class="evt">${EVENTS[v.event.k].n}</b> · ${esc(eventText(v.event))}` : esc(v.log[v.log.length - 1] || '');
   let msg = '', btns = '', warn = '';
   if (v.phase === 'over') {
@@ -1508,10 +1521,40 @@ function renderGame() {
     }
   }
   const you = `<span class="you"><span class="dot" style="background:${COLORS[meP.color].c}"></span><span>Você: ${esc(meP.name)}</span></span>`;
-  $('#bar').innerHTML = `<div class="msg">${msg}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
+  $('#bar').innerHTML = `<div class="msg">${tapText(msg)}</div>${btns ? `<div class="actions">${btns}</div>` : ''}${warn}<div class="foot"><span class="info">${info}</span>${you}</div>`;
   if (app.endAsk != null && (app.endAsk !== v.n || !can)) closeModal(); // a janela de confirmação some se a jogada deixou de valer (tempo esgotado, por exemplo)
 }
 
+const terrInfo = (v, i) => `${TERR[i].n} · ${CONTINENTS[TERR[i].c].n} · ${esc(v.players[v.terr[i].o].name)} · ${v.terr[i].a} exérc.${v.fog && v.fog.t === i ? ' · <b class="rad">radioativo: não pode ser atacado</b>' : ''}`;
+// Com mouse, passar por cima de um território mostra os dados dele no rodapé (sem redesenhar a tela).
+svg.addEventListener('pointerover', (e) => {
+  if (e.pointerType !== 'mouse' || !app.view) return;
+  const t = e.target.closest && e.target.closest('.terr');
+  const el = $('#bar .info');
+  if (!el) return;
+  if (!t) { el.innerHTML = el.dataset.base ?? el.innerHTML; return; }
+  if (el.dataset.base == null) el.dataset.base = el.innerHTML;
+  el.innerHTML = terrInfo(app.view, +t.dataset.t);
+});
+svg.addEventListener('pointerleave', () => { const el = $('#bar .info'); if (el && el.dataset.base != null) { el.innerHTML = el.dataset.base; delete el.dataset.base; } });
+// Painel lateral (tablet e PC): jogadores com domínio do mapa, quem está na vez, cartas, pactos e conexão; e o registro.
+function renderSide(v) {
+  const side = $('#side');
+  if (!document.body.classList.contains('big')) { if (side.innerHTML) side.innerHTML = ''; app.sideKey = ''; return; }
+  const host = app.role === 'host';
+  const rows = v.players.map((p, i) => {
+    const n = owned(v, i), seat = host ? app.seats[p.seat] : null;
+    const off = p.alive && p.ctrl === 'remote' && (host ? !seat || !seat.link || seat.lag : !!(app.onl && !app.onl[i]));
+    const pact = v.opts && v.opts.pacts ? (v.pacts || []).find((x) => x.a === i || x.b === i) : null;
+    const tags = [p.ctrl === 'bot' ? 'bot' : '', `${n} terr.`, `${handSize(p)} carta${handSize(p) === 1 ? '' : 's'}`, pact ? `pacto com ${esc(v.players[pact.a === i ? pact.b : pact.a].name)}` : '', off ? '<span class="off">offline</span>' : ''].filter(Boolean).join(' · ');
+    return `<li class="sp${i === v.turn && v.phase === 'play' ? ' now' : ''}${p.alive ? '' : ' dead'}${v.phase === 'over' && i === v.winner ? ' won' : ''}" style="--c:${COLORS[p.color].c};--p:${(100 * n / TERR.length).toFixed(1)}%">
+      <span class="dot"></span><span class="who"><b>${p.alive ? '' : '☠ '}${esc(p.name)}${(app.role === 'guest' ? i === app.me : p.ctrl === 'local' && v.players.filter((q) => q.ctrl === 'local').length === 1) ? ' <small class="me">você</small>' : ''}</b><small>${tags}</small></span>
+      <span class="sn">${Math.round(100 * n / TERR.length)}%</span></li>`;
+  }).join('');
+  const html = `<div class="shd"><span>Jogadores</span><span>domínio</span></div><ul class="splayers">${rows}</ul>
+    <div class="shd"><span>Registro</span></div><div class="slog">${v.log.slice(-40).reverse().map((l, k) => `<p${k ? '' : ' class="new"'}>${esc(l)}</p>`).join('')}</div>`;
+  if (html !== app.sideKey) { app.sideKey = html; side.innerHTML = html; }
+}
 // Tela de vitória: ocupa a tela toda, na cor do vencedor, com o objetivo cumprido e a classificação final.
 function showWin(v) {
   const w = v.players[v.winner], col = COLORS[w.color].c;
@@ -1650,7 +1693,7 @@ function showMenu() {
   ${app.online && app.online.code ? `<p class="tag">Sala online <b>${esc(app.online.code)}</b> · <button class="btn small" data-do="invite">Convidar de volta</button></p>` : ''}
   <div class="log">${v.log.slice().reverse().map(esc).join('<br>')}</div>
   ${host && v.players.some((p) => p.ctrl === 'remote' || app.seats[p.seat].gid) ? '<button class="btn small" data-do="invite">Reconectar por QR</button>' : ''}
-  <div class="row"><button class="btn small" data-do="land">Tela deitada: ${store.get('forceLand') !== false ? 'sempre' : 'automática'}</button><button class="btn small" data-do="sound">Som: ${soundOn() ? 'ligado' : 'desligado'}</button></div>
+  <div class="row">${bigScreen() ? '' : `<button class="btn small" data-do="land">Tela deitada: ${store.get('forceLand') !== false ? 'sempre' : 'automática'}</button>`}<button class="btn small" data-do="sound">Som: ${soundOn() ? 'ligado' : 'desligado'}</button></div>
   <div class="row"><button class="btn small" data-do="rules">Regras</button><button class="btn small" data-do="quit">Sair</button><button class="btn small primary" data-m="close">Voltar</button></div>`);
   $('#modal .sheet').onclick = (e) => {
     const d = e.target.dataset;
@@ -1671,6 +1714,8 @@ function showRules() {
   <ul><li><b>Eventos de rodada:</b> da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: ${Object.values(EVENTS).map((x) => x.n).join(', ')}. O raio no painel mostra o evento em vigor.</li>
   <li><b>Pactos:</b> na sua vez, proponha a outro jogador um pacto de não agressão de ${PACT_ROUNDS} rodadas. Enquanto valer, um não ataca o outro. Cada jogador só pode ter um pacto por vez. Para romper antes, só no início do seu turno, antes de reforçar, ao custo de metade do reforço (no mínimo ${PACT_PENALTY}). Com dois jogadores em jogo os pactos acabam.</li></ul>
   <ul><li><b>Ogiva nuclear:</b> no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sempre sobra 1) e fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você, mas o dono joga normalmente. Você recebe 75% dos exércitos da troca e segue o turno normalmente, atacando em outros lugares. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.</li></ul>
+  ${mouse ? `<h3>Mouse e teclado</h3>
+  <p>Clique para escolher, arraste para mover o mapa, roda do mouse para o zoom e botão direito para desfazer a seleção. <b>Enter</b> confirma a ação principal, <b>+</b> e <b>−</b> (ou as setas) mudam a quantidade, <b>Esc</b> cancela, <b>F</b> ajusta o zoom, <b>C</b> cartas, <b>O</b> objetivo, <b>M</b> menu.</p>` : ''}
   <h3>Conexão</h3>
   <p>Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.</p>
   <p><b>Online:</b> em “Jogar online”, um cria a sala e manda o link ou o código; cada um joga do próprio celular, de qualquer lugar com internet. Se a conexão cair, o jogo volta sozinho para o mesmo lugar. Quem sai no meio da partida vira bot (e pode voltar pelo link). Sem relógio, a vez de quem está desconectado passa depois de um minuto e meio.</p>
@@ -1770,12 +1815,48 @@ document.addEventListener('click', (e) => {
   }
 });
 
+/* ---------- mouse e teclado ---------- */
+svg.addEventListener('contextmenu', (e) => { // botão direito desfaz a seleção
+  e.preventDefault();
+  if (app.nukeMode) return actions.nukeCancel();
+  if (app.sel != null || app.target != null) { app.sel = app.target = null; renderGame(); }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || (e.target.closest && e.target.closest('input,textarea'))) return;
+  if (e.key === 'Escape') {
+    if (!$('#modal').hidden) return closeModal();
+    if (!$('#win').hidden) return void ($('#win').hidden = true);
+    if (app.nukeMode) return actions.nukeCancel();
+    if (app.sel != null || app.target != null) { app.sel = app.target = null; renderGame(); }
+    return;
+  }
+  if ($('#game').hidden || !$('#modal').hidden || !app.view) return;
+  const k = e.key.toLowerCase(), step = (d) => { const r = stepRange(app.view); if (r && canAct()) { app.n = Math.max(r[0], Math.min(r[1], app.n + d)); renderGame(); } };
+  if (k === 'f') fitView(true);
+  else if (k === 'm') showMenu();
+  else if (k === 'c') showCards();
+  else if (k === 'o') showObjective();
+  else if (k === '+' || k === '=' || k === 'arrowup' || k === 'arrowright') { e.preventDefault(); step(1); }
+  else if (k === '-' || k === 'arrowdown' || k === 'arrowleft') { e.preventDefault(); step(-1); }
+  else if (k === 'enter' && (!document.activeElement || document.activeElement === document.body)) {
+    const b = $('#bar .actions .btn.primary:not([disabled])');
+    if (b) { e.preventDefault(); b.click(); }
+  } else return;
+});
+
 /* ---------- inicialização ---------- */
 $('#name').value = store.get('name') || '';
 if (store.get('sound') === false) setSound(false);
 // o navegador só libera áudio depois de um toque do usuário
 for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, unlock, { passive: true });
 $('#ver').textContent = 'versão ' + VERSION;
+applyLayout();
+{
+  const art = $('#homeart');
+  art.setAttribute('viewBox', `${-PAD} ${-PAD} ${MAP_W + 2 * PAD} ${MAP_H + 2 * PAD}`);
+  art.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  art.innerHTML = TERR.map((t) => `<path d="${t.d}" fill="${CONTINENTS[t.c].color}" fill-rule="evenodd"/>`).join('');
+}
 // estilos alternativos do destaque de continente, para comparar: ?estilo=2 ou ?estilo=3
 const estilo = new URLSearchParams(location.search).get('estilo');
 if (estilo === '2' || estilo === '3') svg.classList.add('st' + estilo);
