@@ -35,7 +35,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '37'; // manter igual ao sufixo do cache em sw.js
+const VERSION = '38'; // manter igual ao sufixo do cache em sw.js
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -263,7 +263,7 @@ async function hostInvite(targetSeat = null) {
     }, 15000);
   };
   modal(`<h3>${targetSeat != null ? 'Reconectar ' + esc(app.seats[targetSeat].name) : app.game ? 'Reconectar jogador' : 'Convidar jogador'}</h3>
-    <ol><li>O convidado abre o jogo, toca em “${app.game ? 'Reconectar à partida' : 'Entrar em partida'}” e lê este QR (a câmera do celular também serve).</li>
+    <ol><li>O convidado abre o jogo, toca em “${app.game ? 'Reconectar à partida' : 'Rede local → Entrar por QR'}” e lê este QR (a câmera do celular também serve).</li>
     <li>O celular dele mostra um QR de resposta: aponte a câmera deste aparelho para ele${camStream ? '. A leitura é automática' : ''}.</li></ol>
     <div class="qr" id="qrbox"></div>
     <div id="scanbox" class="scan-mini"></div>

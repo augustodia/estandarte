@@ -536,3 +536,15 @@ body.tall #bar .actions .btn{height:46px}
 body.tall #home:not([hidden]){grid-template-columns:minmax(0,460px);row-gap:28px}
 body.tall #home .brand{align-items:center;text-align:center}
 body.tall #home h1,body.tall #home .brand .tag{text-align:center}
+
+/* tela inicial: modos de jogo separados (rede local x online) */
+.mode{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #2d4a72;border-radius:14px;background:#0b16268c;flex:none}
+.mhead{display:flex;align-items:center;gap:8px;margin:0;font-size:15px;color:var(--ink)}
+.mhead .badge{font:700 10px/1 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:999px;color:#9fe6b4;background:#12301a;border:1px solid #2f6b41}
+.mhead .badge.net{color:#a9cdfb;background:#13284a;border-color:#2f5385}
+.mdesc{margin:0;font-size:12.5px;line-height:1.35;color:var(--mute)}
+.mode .row>.btn{min-width:0}
+.mode .btn[hidden]{display:none}
+@media (orientation:landscape) and (max-height:520px){#home .mode{grid-column:2}#home .mdesc{display:none}#home .mode{padding:8px 10px;gap:6px}}
+body.big #home .mode{padding:14px}
+body.big #home .homeform{gap:12px}

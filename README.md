@@ -6,8 +6,8 @@ Jogo de estratégia por turnos para 2 a 6 jogadores: distribua exércitos, conqu
 
 ## Como conectar os aparelhos
 
-1. O anfitrião toca em **Criar partida** e depois em **Convidar por QR**.
-2. O convidado abre o jogo, toca em **Entrar em partida** e lê o QR do anfitrião (a câmera do celular também abre o link).
+1. O anfitrião toca em **Rede local → Criar partida** e depois em **Convidar por QR**.
+2. O convidado abre o jogo, toca em **Rede local → Entrar por QR** e lê o QR do anfitrião (a câmera do celular também abre o link).
 3. O celular do convidado mostra um QR de resposta; o anfitrião aponta a câmera para ele (a leitura é automática).
 
    O segundo QR existe porque uma conexão WebRTC precisa de dados dos dois lados (endereço e impressão digital do certificado de cada aparelho). Sem servidor para levar a resposta de volta, ela volta pela câmera.
@@ -36,7 +36,7 @@ Se um convidado cair (tela bloqueada, app fechado, página recarregada), o anfit
 
 Depois do primeiro acesso o jogo fica em cache (a tela inicial mostra "Pronto para jogar sem internet") e não precisa mais de rede externa: basta todos estarem no mesmo Wi-Fi ou no hotspot de um dos celulares.
 
-- No iPhone, o app instalado na tela de início e o Safari têm caches separados. Sem internet, abra o app instalado e use **Entrar em partida** em vez da câmera do sistema.
+- No iPhone, o app instalado na tela de início e o Safari têm caches separados. Sem internet, abra o app instalado e use **Entrar por QR** em vez da câmera do sistema.
 - Redes com isolamento entre clientes (comum em Wi-Fi público) bloqueiam a conexão direta.
 - Em redes diferentes a conexão depende de STUN público e pode falhar em algumas operadoras de 4G/5G. Não há servidor TURN.
 

@@ -29,11 +29,18 @@
     </div>
     <div class="homeform">
       <label class="field">Seu nome<input id="name" maxlength="14" autocomplete="off" placeholder="Como quer ser chamado"></label>
-      <button class="btn primary" data-do="host">Criar partida</button>
-      <button class="btn" data-do="join">Entrar em partida</button>
-      <button class="btn" data-do="online">Jogar online</button>
-      <button class="btn" data-do="rejoin" id="rejoin" hidden>Reconectar à partida</button>
-      <button class="btn" data-do="resume" id="resume" hidden>Continuar partida salva</button>
+      <div class="mode" role="group" aria-labelledby="m-local">
+        <p class="mhead" id="m-local"><b>Rede local</b><span class="badge">sem internet</span></p>
+        <p class="mdesc">Celulares no mesmo Wi-Fi ou no hotspot de um deles, conectados por QR.</p>
+        <div class="row"><button class="btn primary" data-do="host">Criar partida</button><button class="btn" data-do="join">Entrar por QR</button></div>
+        <button class="btn" data-do="rejoin" id="rejoin" hidden>Reconectar à partida</button>
+        <button class="btn" data-do="resume" id="resume" hidden>Continuar partida salva</button>
+      </div>
+      <div class="mode" role="group" aria-labelledby="m-online">
+        <p class="mhead" id="m-online"><b>Online</b><span class="badge net">pela internet</span></p>
+        <p class="mdesc">Cada um no próprio celular, de qualquer lugar: crie uma sala e mande o link.</p>
+        <button class="btn" data-do="online">Jogar online</button>
+      </div>
       <button class="btn ghost" data-do="rules">Como jogar</button>
     </div>
   </section>
