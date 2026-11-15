@@ -35,7 +35,7 @@ const app = {
   tEnd: null, tLimit: 0, // relógio local do turno
   evN: null, peek: null, peekKey: '', turnKey: null, pausedAt: null, lastSec: null,
 };
-const VERSION = '40'; // manter igual ao sufixo do cache em sw.js
+const VERSION = 'alpha-1.0'; // manter igual ao sufixo do cache em sw.js (estandarte-<versão>)
 if (new URLSearchParams(location.search).has('debug')) window.__app = app;
 
 /* ---------- utilidades de interface ---------- */
@@ -1956,7 +1956,7 @@ document.addEventListener('click', () => !wake && keepAwake(), { once: true });
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   const hadCtl = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
-  navigator.serviceWorker.ready.then(() => caches.has('estandarte-v' + VERSION)).then((ok) => { $('#offline').hidden = !ok; }).catch(() => {});
+  navigator.serviceWorker.ready.then(() => caches.has('estandarte-' + VERSION)).then((ok) => { $('#offline').hidden = !ok; }).catch(() => {});
   // versão nova instalada: recarrega sozinho, desde que ninguém esteja no meio de uma partida
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtl && !$('#home').hidden && $('#modal').hidden) location.reload(); });
 }
