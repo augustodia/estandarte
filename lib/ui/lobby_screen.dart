@@ -18,6 +18,11 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyScreenState extends State<LobbyScreen> {
   static const _extrasMeta = [
     (
+      'hq',
+      'Quartel',
+      'Troca as cartas por medalhas: ganhe conquistando e gaste em Mobilização e ordens táticas. Tudo à vista, sem sorte na compra.',
+    ),
+    (
       'events',
       'Eventos de rodada',
       'De vez em quando, um evento surpresa muda as regras para todos por uma rodada.',
@@ -30,7 +35,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     (
       'nukes',
       'Ogiva nuclear',
-      'No lugar de uma troca de cartas, arrasa um território inimigo, que fica radioativo: ninguém o ataca por uma rodada.',
+      'No lugar de uma troca de cartas (ou como ordem do Quartel), arrasa um território inimigo, que fica radioativo: ninguém o ataca por uma rodada.',
     ),
   ];
 
@@ -38,6 +43,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         'events' => widget.ctrl.optEvents,
         'pacts' => widget.ctrl.optPacts,
         'nukes' => widget.ctrl.optNukes,
+        'hq' => widget.ctrl.optHq,
         _ => false,
       };
 
@@ -50,6 +56,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
         c.updateLobbyConfig(pacts: !c.optPacts);
       case 'nukes':
         c.updateLobbyConfig(nukes: !c.optNukes);
+      case 'hq':
+        c.updateLobbyConfig(hq: !c.optHq);
     }
   }
 

@@ -61,7 +61,7 @@ class _EstandarteBootstrapState extends State<EstandarteBootstrap> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Estandarte',
+      title: 'Ultimato',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: _initError != null
@@ -85,7 +85,7 @@ class _BootLoadingScreen extends StatelessWidget {
           children: [
             CircularProgressIndicator(color: AppColors.gold),
             SizedBox(height: 14),
-            Text('Carregando Estandarte…', style: TextStyle(color: AppColors.muted)),
+            Text('Carregando Ultimato…', style: TextStyle(color: AppColors.muted)),
           ],
         ),
       ),

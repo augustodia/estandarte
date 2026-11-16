@@ -25,6 +25,93 @@ class EventCatalogEntry {
   final String desc;
 }
 
+/// Ordem tática do Quartel (catálogo fixo do motor).
+class OrderCatalogEntry {
+  const OrderCatalogEntry({
+    required this.key,
+    required this.name,
+    required this.cost,
+    required this.desc,
+  });
+
+  final String key;
+  final String name;
+  final int cost;
+  final String desc;
+}
+
+/// Ordem aberta na vitrine do Quartel, com o motivo de não poder comprar agora (vazio se pode).
+class HqOrder {
+  const HqOrder({
+    required this.key,
+    required this.name,
+    required this.cost,
+    required this.desc,
+    required this.block,
+  });
+
+  final String key;
+  final String name;
+  final int cost;
+  final String desc;
+  final String block;
+}
+
+/// O que o motor diz sobre o Quartel para quem está olhando a partida.
+class HqEval {
+  const HqEval({
+    required this.effort,
+    required this.medalMax,
+    required this.mobilizeCost,
+    required this.mobilizeBlock,
+    required this.orders,
+    required this.spyBlocks,
+    required this.sabotageBlocks,
+    required this.trenchBlocks,
+    required this.airliftBlocks,
+  });
+
+  final int effort;
+  final int medalMax;
+  final int mobilizeCost;
+  final String mobilizeBlock;
+  final List<HqOrder> orders;
+  final Map<int, String> spyBlocks;
+  final Map<int, String> sabotageBlocks;
+  final Map<int, String> trenchBlocks;
+  final Map<int, String> airliftBlocks;
+
+  static HqEval? fromJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    Map<int, String> strMap(String key) {
+      final m = raw[key] as Map<String, dynamic>? ?? const {};
+      return {for (final e in m.entries) int.parse(e.key): e.value.toString()};
+    }
+
+    final orders = (raw['orders'] as List<dynamic>? ?? const []).map((e) {
+      final m = e as Map<String, dynamic>;
+      return HqOrder(
+        key: m['k'] as String? ?? '',
+        name: m['n'] as String? ?? '',
+        cost: (m['cost'] as num?)?.toInt() ?? 0,
+        desc: m['desc'] as String? ?? '',
+        block: m['block'] as String? ?? '',
+      );
+    }).toList();
+    return HqEval(
+      effort: (raw['effort'] as num?)?.toInt() ?? 4,
+      medalMax: (raw['medalMax'] as num?)?.toInt() ?? 6,
+      mobilizeCost: (raw['mobilizeCost'] as num?)?.toInt() ?? 3,
+      mobilizeBlock: raw['mobilizeBlock'] as String? ?? '',
+      orders: orders,
+      spyBlocks: strMap('spyBlocks'),
+      sabotageBlocks: strMap('sabotageBlocks'),
+      trenchBlocks: strMap('trenchBlocks'),
+      airliftBlocks: strMap('airliftBlocks'),
+    );
+  }
+}
+
 class EngineConstants {
   const EngineConstants({
     required this.colors,
@@ -33,6 +120,9 @@ class EngineConstants {
     required this.pactPenalty,
     required this.pactCool,
     required this.events,
+    required this.orders,
+    required this.medalMax,
+    required this.mobilizeCost,
   });
 
   final List<EngineColor> colors;
@@ -41,6 +131,9 @@ class EngineConstants {
   final int pactPenalty;
   final int pactCool;
   final List<EventCatalogEntry> events;
+  final List<OrderCatalogEntry> orders;
+  final int medalMax;
+  final int mobilizeCost;
 
   factory EngineConstants.fromJson(Map<String, dynamic> j) {
     final cols = (j['colors'] as List<dynamic>? ?? const [])
@@ -62,6 +155,15 @@ class EngineConstants {
           );
         })
         .toList();
+    final ords = (j['orders'] as List<dynamic>? ?? const []).map((e) {
+      final m = e as Map<String, dynamic>;
+      return OrderCatalogEntry(
+        key: m['k'] as String? ?? '',
+        name: m['n'] as String? ?? '',
+        cost: (m['cost'] as num?)?.toInt() ?? 0,
+        desc: m['desc'] as String? ?? '',
+      );
+    }).toList();
     return EngineConstants(
       colors: cols,
       nt: (j['nt'] as num?)?.toInt() ?? 42,
@@ -69,6 +171,9 @@ class EngineConstants {
       pactPenalty: (j['pactPenalty'] as num?)?.toInt() ?? 3,
       pactCool: (j['pactCool'] as num?)?.toInt() ?? 2,
       events: evs,
+      orders: ords,
+      medalMax: (j['medalMax'] as num?)?.toInt() ?? 6,
+      mobilizeCost: (j['mobilizeCost'] as num?)?.toInt() ?? 3,
     );
   }
 }
@@ -92,8 +197,11 @@ class EvalViewResult {
     required this.nukeTargetDamages,
     required this.pactBlocks,
     required this.objectiveTexts,
+    this.hq,
   });
 
+  /// Só vem em partidas com Quartel.
+  final HqEval? hq;
   final int tradeValue;
   final int nukeDamage;
   final int nukeRefund;
@@ -151,6 +259,7 @@ class EvalViewResult {
       nukeTargetDamages: parseIntMap('nukeTargetDamages'),
       pactBlocks: parseStrMap('pactBlocks'),
       objectiveTexts: parseStrMap('objectiveTexts'),
+      hq: HqEval.fromJson(j['hq']),
     );
   }
 }

@@ -725,6 +725,26 @@ class _WorldMapPainter extends CustomPainter {
       _drawHazardOutline(canvas, md.territories[fogTerr].path);
     }
 
+    // 11b. Trincheiras do Quartel: contorno tracejado dourado, parado
+    if (v != null && v['phase'] == 'play') {
+      for (final x in v['trenches'] as List<dynamic>? ?? const []) {
+        final t = ((x as Map<String, dynamic>)['t'] as num).toInt();
+        if (t < 0 || t >= md.territories.length) continue;
+        _drawDashedPath(
+          canvas,
+          md.territories[t].path,
+          Paint()
+            ..color = const Color(0xF0F3CD78)
+            ..style = PaintingStyle.stroke
+            ..strokeJoin = StrokeJoin.round
+            ..strokeWidth = 2.2 / camZ,
+          dash: 3,
+          gap: 3,
+          phase: 0,
+        );
+      }
+    }
+
     // 12. Continent names (.cname)
     for (final c in md.continents) {
       _drawContinentLabel(canvas, c);

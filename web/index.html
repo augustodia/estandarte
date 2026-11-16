@@ -6,13 +6,13 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
-  <title>Estandarte</title>
+  <title>Ultimato</title>
   <meta name="description" content="Jogo de estratégia e conquista de territórios para jogar entre celulares, sem servidor, ou online.">
   <meta name="theme-color" content="#0f1c2e">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Estandarte">
+  <meta name="apple-mobile-web-app-title" content="Ultimato">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
@@ -50,14 +50,14 @@
 </head>
 <body>
   <div id="boot-splash">
-    <h1>ESTANDARTE</h1>
+    <h1>ULTIMATO</h1>
     <small>Carregando motor de regras…</small>
   </div>
   <script src="engine/wasm_exec.js"></script>
   <script>
     if (window.top !== window.self) {
       try { window.top.location = location.href; }
-      catch (e) { document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">Abra o Estandarte direto no navegador.</p>'; }
+      catch (e) { document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">Abra o Ultimato direto no navegador.</p>'; }
     }
     window.__estandarteEngineReady = (async function () {
       if (window.estandarteEngine) return true;

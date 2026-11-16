@@ -18,7 +18,7 @@ import 'smoke_sim.dart';
 const int alarmMs = 900;
 const int flightMs = 2900;
 const int impactMs = alarmMs + flightMs;
-const String appVersion = 'alpha-1.3';
+const String appVersion = 'alpha-1.4';
 
 const Map<String, String> stepLabels = {
   'reinforce': 'Reforço',
@@ -60,6 +60,7 @@ class AppController extends ChangeNotifier {
   bool optEvents = false;
   bool optPacts = false;
   bool optNukes = false;
+  bool optHq = false; // Quartel: medalhas e ordens no lugar das cartas
   bool optPublic = true;
   bool? extrasOpen;
   String? lobbyCode;
@@ -182,6 +183,7 @@ class AppController extends ChangeNotifier {
       optEvents = savedCfg['events'] == true;
       optPacts = savedCfg['pacts'] == true;
       optNukes = savedCfg['nukes'] == true;
+      optHq = savedCfg['hq'] == true;
     }
 
     _unsubConn = WebEnv.listenConnectivity((on) {
@@ -538,6 +540,7 @@ class AppController extends ChangeNotifier {
     bool? events,
     bool? pacts,
     bool? nukes,
+    bool? hq,
     bool? isPublic,
   }) {
     if (online != null) {
@@ -548,6 +551,7 @@ class AppController extends ChangeNotifier {
           'events': ?events,
           'pacts': ?pacts,
           'nukes': ?nukes,
+          'hq': ?hq,
           'public': ?isPublic,
         });
       }
@@ -557,6 +561,7 @@ class AppController extends ChangeNotifier {
     if (events != null) optEvents = events;
     if (pacts != null) optPacts = pacts;
     if (nukes != null) optNukes = nukes;
+    if (hq != null) optHq = hq;
     AppStorage.instance.setString(
       'estandarte.cfg',
       jsonEncode({
@@ -564,6 +569,7 @@ class AppController extends ChangeNotifier {
         'events': optEvents,
         'pacts': optPacts,
         'nukes': optNukes,
+        'hq': optHq,
       }),
     );
     _broadcastLobby();
@@ -585,7 +591,7 @@ class AppController extends ChangeNotifier {
     _dropEngineGame();
     _engineId = engine.newGame(
       seats: seats.map((s) => s.toEngineSeat()).toList(),
-      opts: {'events': optEvents, 'pacts': optPacts, 'nukes': optNukes},
+      opts: {'events': optEvents, 'pacts': optPacts, 'nukes': optNukes, 'hq': optHq},
     );
     _hasEvN = false;
     _lastRollN = 0;
@@ -619,6 +625,7 @@ class AppController extends ChangeNotifier {
           'events': optEvents,
           'pacts': optPacts,
           'nukes': optNukes,
+          'hq': optHq,
         });
       }
     }
@@ -1314,6 +1321,7 @@ class AppController extends ChangeNotifier {
       optEvents = msg['events'] == true;
       optPacts = msg['pacts'] == true;
       optNukes = msg['nukes'] == true;
+      optHq = msg['hq'] == true;
       optPublic = msg['public'] == true;
       lobbyCode = msg['code'] as String?;
       lobbyOwner = msg['owner'] == true;
@@ -1788,6 +1796,96 @@ class AppController extends ChangeNotifier {
             floats.add(MapFloatText(terr: t, text: '+2', color: Colors.white, startMs: now));
           }
           SoundPlayer.play('trade');
+        case 'medal':
+          final p = (e['p'] as num).toInt();
+          final k = (e['k'] as num).toInt();
+          const why = {
+            'conquest': 'primeira conquista do turno',
+            'continent': 'continente fechado',
+            'kill': 'adversário eliminado',
+          };
+          if (mine(p)) {
+            showFlash(
+              k > 0 ? '+$k medalha${k == 1 ? '' : 's'}' : 'Limite de medalhas',
+              const Color(0xFFE2B04A),
+              sub: k > 0 ? (why[e['why']] ?? '') : 'Gaste no Quartel no início do seu turno',
+              ms: 1000,
+              top: true,
+            );
+            if (k > 0) SoundPlayer.play('card');
+          }
+        case 'mobilize':
+          final p = (e['p'] as num).toInt();
+          final val = (e['v'] as num).toInt();
+          if (mine(p)) {
+            showFlash('+$val exércitos', col(p), sub: 'Mobilização', ms: 1000, big: true);
+          } else {
+            showFlash('${nm(p)} mobilizou: +$val', col(p), ms: 1000, top: true);
+          }
+          SoundPlayer.play('trade');
+        case 'airlift':
+          final p = (e['p'] as num).toInt();
+          final from = (e['from'] as num).toInt();
+          final to = (e['to'] as num).toInt();
+          final k = (e['k'] as num).toInt();
+          pulses.add(MapPulse(terr: to, color: col(p), startMs: now));
+          floats.add(MapFloatText(terr: to, text: '+$k', color: Colors.white, startMs: now));
+          showFlash(
+            mine(p) ? 'Ponte aérea' : '${nm(p)}: ponte aérea',
+            col(p),
+            sub: '$k de ${mapData.territories[from].name} para ${mapData.territories[to].name}',
+            ms: 1300,
+            top: true,
+          );
+          if (!mine(p)) _spotlight({from, to});
+          SoundPlayer.play('move');
+        case 'trench':
+          final p = (e['p'] as num).toInt();
+          final to = (e['to'] as num).toInt();
+          pulses.add(MapPulse(terr: to, color: col(p), startMs: now));
+          showFlash(
+            mine(p) ? 'Trincheira' : '${nm(p)}: trincheira',
+            col(p),
+            sub: '${mapData.territories[to].name} não pode ser atacado até a próxima vez de ${nm(p)}',
+            ms: 1500,
+            top: true,
+          );
+          if (!mine(p)) _spotlight({to});
+          SoundPlayer.play('place');
+        case 'spy':
+          final p = (e['p'] as num).toInt();
+          final q = (e['q'] as num).toInt();
+          showFlash(
+            mine(p)
+                ? 'Espionagem'
+                : mine(q)
+                    ? '${nm(p)} espionou você!'
+                    : '${nm(p)} espionou ${nm(q)}',
+            col(p),
+            sub: mine(p)
+                ? 'O objetivo de ${nm(q)} está no Quartel'
+                : mine(q)
+                    ? 'Ele agora conhece o seu objetivo'
+                    : '',
+            ms: 1500,
+            big: mine(p) || mine(q),
+            top: !mine(p) && !mine(q),
+          );
+          if (mine(q) && !mine(p)) WebEnv.vibrate(120);
+          SoundPlayer.play('phase');
+        case 'sabotage':
+          final p = (e['p'] as num).toInt();
+          final q = (e['q'] as num).toInt();
+          showFlash(
+            mine(q) && !mine(p) ? '${nm(p)} sabotou você!' : '${nm(p)} sabotou ${nm(q)}',
+            col(p),
+            sub: 'Sem bônus de continente no próximo turno',
+            ms: 1500,
+            big: mine(q) && !mine(p),
+            top: !(mine(q) && !mine(p)),
+          );
+          if (mine(q) && !mine(p)) WebEnv.vibrate(160);
+          SoundPlayer.play('lost');
         case 'move':
           final p = (e['p'] as num).toInt();
           final from = (e['from'] as num).toInt();
@@ -2426,7 +2524,44 @@ class AppController extends ChangeNotifier {
     _reeval();
   }
 
+  /// Partida com Quartel: medalhas e ordens no lugar das cartas.
+  bool get hqOn => (view?['opts'] as Map<String, dynamic>?)?['hq'] == true;
+
+  /// Medalhas do jogador [p] (0 em partidas sem Quartel).
+  int medalsOf(int p) {
+    final players = view?['players'] as List<dynamic>?;
+    if (players == null || p < 0 || p >= players.length) return 0;
+    return ((players[p] as Map<String, dynamic>)['medals'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Quem entrincheirou o território [t] (null se ninguém).
+  int? trenchOwner(int t) {
+    for (final x in view?['trenches'] as List<dynamic>? ?? const []) {
+      final m = x as Map<String, dynamic>;
+      if ((m['t'] as num).toInt() == t) return (m['by'] as num).toInt();
+    }
+    return null;
+  }
+
+  void mobilize() => _sendAction({'t': 'mobilize'});
+
+  void orderAirlift(int from, int to, int n) =>
+      _sendAction({'t': 'order', 'k': 'airlift', 'from': from, 'to': to, 'n': n});
+
+  void orderTrench(int t) => _sendAction({'t': 'order', 'k': 'trench', 'to': t});
+
+  void orderSpy(int q) => _sendAction({'t': 'order', 'k': 'spy', 'with': q});
+
+  void orderSabotage(int q) => _sendAction({'t': 'order', 'k': 'sabotage', 'with': q});
+
   void confirmNukeLaunch(int t) {
+    if (hqOn) {
+      // no Quartel a ogiva é uma ordem: custa medalhas, não cartas
+      pendingNukeTerr = null;
+      nukeMode = false;
+      _sendAction({'t': 'nuke', 'to': t});
+      return;
+    }
     final tr = eval?.nukeTrade;
     pendingNukeTerr = null;
     nukeMode = false;

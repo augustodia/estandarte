@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.augustodia" "\0"
-            VALUE "FileDescription", "estandarte" "\0"
+            VALUE "FileDescription", "Ultimato" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "estandarte" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.augustodia. All rights reserved." "\0"
             VALUE "OriginalFilename", "estandarte.exe" "\0"
-            VALUE "ProductName", "estandarte" "\0"
+            VALUE "ProductName", "Ultimato" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

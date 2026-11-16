@@ -246,9 +246,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Text.rich(
               TextSpan(
                 children: [
-                  const TextSpan(text: 'E'),
+                  const TextSpan(text: 'U'),
                   TextSpan(
-                    text: 'STANDARTE',
+                    text: 'LTIMATO',
                     style: TextStyle(fontSize: titleSize * 0.78),
                   ),
                 ],

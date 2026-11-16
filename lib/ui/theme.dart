@@ -726,28 +726,34 @@ class _EstIconPainter extends CustomPainter {
           ..lineTo(15, 20);
         canvas.drawPath(p, stroke);
       case EstIconKind.crest:
-        // Pole M14 6v52 + Red banner M16 10h34l-8 11 8 11H16z
-        canvas.drawLine(
-          const Offset(14, 6),
-          const Offset(14, 58),
+        // Lacre de cera vermelho com uma mira: a marca do Ultimato
+        const c = Offset(32, 32);
+        final seal = Path();
+        for (var i = 0; i < 12; i++) {
+          final a = i * pi / 6;
+          seal.addOval(Rect.fromCircle(center: c + Offset(cos(a), sin(a)) * 21.5, radius: 7.5));
+        }
+        seal.addOval(Rect.fromCircle(center: c, radius: 23));
+        canvas.drawPath(seal, Paint()..color = const Color(0xFFB8322F));
+        canvas.drawCircle(c, 21, Paint()..color = const Color(0xFFD64545));
+        canvas.drawCircle(
+          c,
+          17.5,
           Paint()
-            ..color = AppColors.ink
-            ..strokeWidth = 4
-            ..strokeCap = StrokeCap.round,
+            ..color = const Color(0x55701A18)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
         );
-        final banner = Path()
-          ..moveTo(16, 10)
-          ..lineTo(50, 10)
-          ..lineTo(42, 21)
-          ..lineTo(50, 32)
-          ..lineTo(16, 32)
-          ..close();
-        canvas.drawPath(
-          banner,
-          Paint()
-            ..color = const Color(0xFFD64545)
-            ..style = PaintingStyle.fill,
-        );
+        final mark = Paint()
+          ..color = AppColors.ink
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round;
+        canvas.drawCircle(c, 10.5, mark);
+        for (final d in const [Offset(0, -1), Offset(0, 1), Offset(-1, 0), Offset(1, 0)]) {
+          canvas.drawLine(c + d * 5.5, c + d * 15.5, mark);
+        }
+        canvas.drawCircle(c, 1.8, Paint()..color = AppColors.ink);
       case EstIconKind.cup:
         final cupBody = Path()
           ..moveTo(20, 10)

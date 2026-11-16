@@ -10,6 +10,7 @@ import '../platform/p2p.dart';
 import '../platform/qr_scanner.dart';
 import '../platform/sound.dart';
 import '../platform/web_env.dart';
+import 'quartel_modal.dart';
 import 'theme.dart';
 
 int _ownedCount(Map<String, dynamic> v, int playerIdx) {
@@ -26,6 +27,16 @@ int _handSize(Map<String, dynamic> p) {
   if (raw is List) return raw.length;
   if (raw is num) return raw.toInt();
   return 0;
+}
+
+/// "3 cartas" ou, nas partidas com Quartel, "3 medalhas".
+String _handLabel(Map<String, dynamic> v, Map<String, dynamic> p) {
+  if ((v['opts'] as Map<String, dynamic>?)?['hq'] == true) {
+    final m = (p['medals'] as num?)?.toInt() ?? 0;
+    return '$m medalha${m == 1 ? '' : 's'}';
+  }
+  final c = _handSize(p);
+  return '$c carta${c == 1 ? '' : 's'}';
 }
 
 // ---------- 1. Objective Modal ----------
@@ -111,6 +122,11 @@ class _DomainMeter extends StatelessWidget {
 // ---------- 2. Playing Cards Modal ----------
 
 void showCardsModal(BuildContext context, AppController ctrl) {
+  if (ctrl.hqOn) {
+    // partida com Quartel: não há cartas, a mesma tecla e o mesmo botão abrem o Quartel
+    showQuartelModal(context, ctrl);
+    return;
+  }
   final v = ctrl.view;
   final ev = ctrl.eval;
   if (v == null || ev == null) return;
@@ -478,6 +494,35 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
           ),
           const SizedBox(height: 12),
         ],
+        if (opts['hq'] == true) ...[
+          Text('Quartel', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
+          const SizedBox(height: 6),
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(fontSize: 14, color: AppColors.mute),
+              children: [
+                const TextSpan(
+                  text:
+                      'Esta partida não tem cartas. Você ganha medalhas conquistando e gasta no início do turno: a Mobilização vale hoje ',
+                ),
+                TextSpan(
+                  text: '${ev.tradeValue}',
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+                ),
+                const TextSpan(text: ' exércitos, e há ordens táticas abertas para todos.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          EstButton(
+            label: 'Abrir o Quartel',
+            onPressed: () {
+              Navigator.pop(ctx);
+              showQuartelModal(context, ctrl);
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
         if (opts['nukes'] == true) ...[
           Text('Ogiva nuclear', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
           const SizedBox(height: 6),
@@ -502,29 +547,38 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
             TextSpan(
               style: const TextStyle(fontSize: 14, color: AppColors.mute),
               children: [
-                const TextSpan(
-                  text:
-                      'No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói ',
+                TextSpan(
+                  text: opts['hq'] == true
+                      ? 'A ogiva é uma das ordens do Quartel: quando está aberta, custa 4 medalhas e pode ser lançada em qualquer território inimigo. Hoje ela destrói '
+                      : 'No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói ',
                 ),
                 TextSpan(
                   text: '${ev.nukeDamage}',
                   style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
-                const TextSpan(
-                  text:
-                      ' exércitos, o dobro do valor da troca, sempre sobrando 1 no alvo. Não há sorteio.',
+                TextSpan(
+                  text: opts['hq'] == true
+                      ? ' exércitos, o dobro do valor da Mobilização, sempre sobrando 1 no alvo. Não há sorteio.'
+                      : ' exércitos, o dobro do valor da troca, sempre sobrando 1 no alvo. Não há sorteio.',
                 ),
               ],
             ),
           ),
           const SizedBox(height: 6),
           for (final b in [
-            'Você recebe 75% dos exércitos da troca (hoje ${ev.nukeRefund}) e joga o resto do turno normalmente.',
+            if (opts['hq'] == true)
+              'Ela conta como a sua ordem tática do turno e você joga o resto do turno normalmente.'
+            else
+              'Você recebe 75% dos exércitos da troca (hoje ${ev.nukeRefund}) e joga o resto do turno normalmente.',
             'O território atingido fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você. O dono joga normalmente: reforça, ataca a partir dele e recebe o bônus do continente.',
             'Quando a névoa some, você é o primeiro a poder atacar ali.',
             'Só uma névoa no mapa por vez.',
-            'A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.',
-            'O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.',
+            if (opts['hq'] == true)
+              'Antes da primeira ogiva, e entre uma ogiva e outra, é preciso ter feito uma Mobilização.'
+            else ...[
+              'A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.',
+              'O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.',
+            ],
             'O pacto de quem lança acaba na hora.',
           ])
             Padding(
@@ -576,7 +630,6 @@ class _PactPairWidget extends StatelessWidget {
       final name = '${p['name'] ?? ''}';
       final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
       final terrs = _ownedCount(v, idx);
-      final cards = _handSize(p);
       final avSize = large ? 52.0 : 40.0;
       return Expanded(
         child: Column(
@@ -612,7 +665,7 @@ class _PactPairWidget extends StatelessWidget {
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
             ),
             Text(
-              '$terrs territórios · $cards carta${cards == 1 ? '' : 's'}',
+              '$terrs territórios · ${_handLabel(v, p)}',
               style: const TextStyle(fontSize: 11, color: AppColors.mute),
             ),
           ],
@@ -1201,7 +1254,6 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                   final p = players[i] as Map<String, dynamic>;
                   final col = parseHexColor(colors[(p['color'] as num).toInt()].hex);
                   final owned = _ownedCount(v!, i);
-                  final cards = _handSize(p);
                   final seatIdx = (p['seat'] as num?)?.toInt() ?? i;
                   final seat = host && seatIdx < ctrl.seats.length ? ctrl.seats[seatIdx] : null;
                   final offline = p['ctrl'] == 'remote' &&
@@ -1246,7 +1298,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                                     ),
                                     TextSpan(
                                       text:
-                                          ' · $owned terr. · $cards ${cards == 1 ? 'carta' : 'cartas'}${p['ctrl'] == 'bot' ? ' · bot' : ''}',
+                                          ' · $owned terr. · ${_handLabel(v, p)}${p['ctrl'] == 'bot' ? ' · bot' : ''}',
                                     ),
                                     if (offline)
                                       TextSpan(
@@ -1520,6 +1572,10 @@ void showRulesModal(BuildContext context, AppController ctrl) {
           'na sua vez, proponha a outro jogador um pacto de não agressão de ${c.pactRounds} rodadas. Enquanto valer, um não ataca o outro. Cada jogador só pode ter um pacto por vez. Para romper antes, só no início do seu turno, antes de reforçar, ao custo de metade do reforço (no mínimo ${c.pactPenalty}). Com dois jogadores em jogo os pactos acabam.',
         ),
         const _RuleBullet(
+          'Quartel (regra extra)',
+          'troca as cartas por medalhas. Você ganha 1 na primeira conquista do turno, +1 ao fechar um continente e +2 ao eliminar alguém, e guarda até 6. No início do turno, 3 medalhas pagam uma Mobilização, que rende o esforço de guerra: 4 exércitos na rodada 2 e mais 1 a cada rodada. Três ordens táticas ficam abertas para todos (ponte aérea, trincheira, espionagem, sabotagem e, se a partida tiver, a ogiva); cada jogador compra uma por turno e outra entra no lugar. Nada é sorteado na mão de ninguém e todos veem as medalhas de todos.',
+        ),
+        _RuleBullet(
           'Ogiva nuclear',
           'no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sempre sobra 1) e fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você, mas o dono joga normalmente. Você recebe 75% dos exércitos da troca e segue o turno normalmente, atacando em outros lugares. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.',
         ),
@@ -1634,8 +1690,8 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
                 label: 'Compartilhar',
                 onPressed: () async {
                   await WebEnv.shareOrCopy(
-                    title: 'Estandarte',
-                    text: 'Vem jogar Estandarte comigo! Sala $code',
+                    title: 'Ultimato',
+                    text: 'Vem jogar Ultimato comigo! Sala $code',
                     url: url,
                   );
                 },

@@ -8,10 +8,10 @@ void main() {
       MaterialApp(
         theme: buildAppTheme(),
         home: const Scaffold(
-          body: Center(child: Text('ESTANDARTE')),
+          body: Center(child: Text('ULTIMATO')),
         ),
       ),
     );
-    expect(find.text('ESTANDARTE'), findsOneWidget);
+    expect(find.text('ULTIMATO'), findsOneWidget);
   });
 }

@@ -9,6 +9,7 @@ import '../game/app_controller.dart';
 import '../game/fx_models.dart';
 import 'map_view.dart';
 import 'modals.dart';
+import 'quartel_modal.dart';
 import 'theme.dart';
 
 class GameScreen extends StatefulWidget {
@@ -429,7 +430,7 @@ class _HudPanel extends StatelessWidget {
         ? players[ctrl.me] as Map<String, dynamic>
         : null;
     final opts = v['opts'] as Map<String, dynamic>? ?? const {};
-    final extras = opts['events'] == true || opts['pacts'] == true || opts['nukes'] == true;
+    final extras = opts['events'] == true || opts['pacts'] == true || opts['nukes'] == true || opts['hq'] == true;
     final pactsCount = opts['pacts'] == true ? (v['pacts'] as List<dynamic>? ?? const []).length : 0;
     final offer = v['offer'] as Map<String, dynamic>?;
     final offerIsMine = offer != null &&
@@ -437,7 +438,13 @@ class _HudPanel extends StatelessWidget {
             ? (offer['to'] as num).toInt() == ctrl.me
             : players[(offer['to'] as num).toInt()]['ctrl'] == 'local');
     final rawCards = meP?['cards'];
-    final handSize = rawCards is List ? rawCards.length : (rawCards is num ? rawCards.toInt() : 0);
+    final hqOn = opts['hq'] == true;
+    final handSize = hqOn
+        ? ((meP?['medals'] as num?)?.toInt() ?? 0)
+        : rawCards is List
+            ? rawCards.length
+            : (rawCards is num ? rawCards.toInt() : 0);
+    final handLabel = hqOn ? 'Quartel' : 'Cartas';
     final phaseLabel = v['phase'] == 'over' ? 'Fim de jogo' : '${stepLabels[step] ?? step} · rodada ${round + 1}';
 
     Widget dot(double sz) => Container(
@@ -609,8 +616,8 @@ class _HudPanel extends StatelessWidget {
                   const SizedBox(width: 8),
                   iconBtn(
                     kind: EstIconKind.cards,
-                    label: 'Cartas',
-                    tooltip: 'Cartas (C)',
+                    label: handLabel,
+                    tooltip: '$handLabel (C)',
                     badge: '$handSize',
                     expanded: true,
                     onTap: () => showCardsModal(context, ctrl),
@@ -728,8 +735,8 @@ class _HudPanel extends StatelessWidget {
             const SizedBox(width: 6),
             iconBtn(
               kind: EstIconKind.cards,
-              label: 'Cartas',
-              tooltip: 'Cartas (C)',
+              label: handLabel,
+              tooltip: '$handLabel (C)',
               badge: '$handSize',
               onTap: () => showCardsModal(context, ctrl),
             ),
@@ -858,7 +865,11 @@ class _SidePanel extends StatelessWidget {
       final tags = [
         if (p['ctrl'] == 'bot') 'bot',
         '$owned terr.',
-        '$cards carta${cards == 1 ? '' : 's'}',
+        if (ctrl.hqOn)
+          '${ctrl.medalsOf(i)} medalha${ctrl.medalsOf(i) == 1 ? '' : 's'}'
+        else
+          '$cards carta${cards == 1 ? '' : 's'}',
+        if (p['sabotaged'] == true) 'sabotado',
         if (pactOtherName != null) 'pacto com $pactOtherName',
       ].join(' · ');
 
@@ -1487,6 +1498,14 @@ class _BottomActionBar extends StatelessWidget {
           ),
         );
       }
+      if (ctrl.trenchOwner(t) != null) {
+        infoSpans.add(
+          const TextSpan(
+            text: ' · entrincheirado: não pode ser atacado',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+          ),
+        );
+      }
     } else if (v['event'] != null && v['phase'] == 'play') {
       final k = v['event']['k'];
       infoSpans.add(
@@ -1611,7 +1630,7 @@ class _BottomActionBar extends StatelessWidget {
         msgSpans.add(
           TextSpan(
             text:
-                'toque no território inimigo que será o alvo. Destrói ${ev.nukeDamage} exércitos dele (sempre sobra 1) e ninguém, nem você, poderá atacá-lo nesta rodada. Você recebe ${ev.nukeRefund} em vez dos ${ev.tradeValue} da troca.',
+                'toque no território inimigo que será o alvo. Destrói ${ev.nukeDamage} exércitos dele (sempre sobra 1) e ninguém, nem você, poderá atacá-lo nesta rodada. ${ctrl.hqOn ? 'Custa 4 medalhas.' : 'Você recebe ${ev.nukeRefund} em vez dos ${ev.tradeValue} da troca.'}',
           ),
         );
         btns.add(actionBtn('Cancelar', () => ctrl.toggleNukeMode(false)));
@@ -1659,6 +1678,19 @@ class _BottomActionBar extends StatelessWidget {
               variant: rng == null ? EstButtonVariant.primary : EstButtonVariant.normal,
             ),
           );
+        }
+        final hq = ev.hq;
+        if (hq != null && hq.mobilizeBlock.isEmpty) {
+          btns.add(
+            actionBtn(
+              'Mobilizar +${hq.effort}',
+              ctrl.mobilize,
+              variant: rng == null ? EstButtonVariant.primary : EstButtonVariant.normal,
+            ),
+          );
+        }
+        if (hq != null && hq.orders.any((o) => o.block.isEmpty)) {
+          btns.add(actionBtn('Quartel', () => showQuartelModal(context, ctrl)));
         }
         if (canNuke) {
           btns.add(
@@ -2223,11 +2255,17 @@ class _ConfirmNukeOverlay extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           for (final b in [
-            'Você entrega 3 cartas e recebe ${ev.nukeRefund} exércitos em vez dos ${ev.tradeValue} da troca.',
+            if (ctrl.hqOn)
+              'Custa 4 medalhas e conta como a sua ordem tática deste turno.'
+            else
+              'Você entrega 3 cartas e recebe ${ev.nukeRefund} exércitos em vez dos ${ev.tradeValue} da troca.',
             '$name fica radioativo: ninguém pode atacá-lo até a sua vez voltar, nem você. O dono joga normalmente.',
             'O resto do seu turno segue normal: você reforça, ataca em outros lugares e remaneja.',
             if (hasPact) 'Seu pacto acaba.',
-            'Sua próxima troca terá de ser normal.',
+            if (ctrl.hqOn)
+              'Antes de outra ogiva você terá de fazer uma Mobilização.'
+            else
+              'Sua próxima troca terá de ser normal.',
           ])
             Padding(
               padding: const EdgeInsets.only(left: 8, bottom: 3),

@@ -1,0 +1,29 @@
+name: Conferir (branches e PRs)
+
+# O deploy do GitHub Pages só roda na main (deploy.yml). Este aqui confere as outras branches e os PRs:
+# análise, testes e a compilação web, sem publicar nada.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - run: flutter build web --release --base-href "/estandarte/"
