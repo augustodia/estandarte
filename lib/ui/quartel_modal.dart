@@ -59,18 +59,27 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
               });
 
           Widget sectionTitle(String text) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(text, style: AppText.serif(size: 19, color: _title)),
+                padding: const EdgeInsets.only(bottom: 8, top: 4),
+                child: EstSectionTag(text),
               );
 
           Widget note(String text) => Text(text, style: const TextStyle(fontSize: 13.5, color: AppColors.mute));
+
+          EstIconKind orderIcon(String key) => switch (key) {
+                'airlift' => EstIconKind.airlift,
+                'trench' => EstIconKind.shield,
+                'spy' => EstIconKind.spy,
+                'sabotage' => EstIconKind.sabotage,
+                'nuke' => EstIconKind.nuke,
+                _ => EstIconKind.extras,
+              };
 
           Widget card({required List<Widget> children, Color border = AppColors.line}) => Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.deep,
-                  borderRadius: BorderRadius.circular(10),
+                  gradient: AppColors.glassGradient,
+                  borderRadius: BorderRadius.circular(5),
                   border: Border.all(color: border),
                 ),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
@@ -79,13 +88,25 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
           Widget costTag(int cost) => Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0x33E2B04A),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0x88E2B04A)),
+                  color: AppColors.obsidian,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.brassDim),
                 ),
-                child: Text(
-                  '$cost medalha${cost == 1 ? '' : 's'}',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFFFE2A3)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const EstIcon(EstIconKind.medal, size: 12, color: AppColors.gold),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$cost',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.gold,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
                 ),
               );
 
@@ -111,11 +132,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(color: colorOf(q), shape: BoxShape.circle),
-                          ),
+                          EstFactionSeal(color: colorOf(q), size: 12),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -188,12 +205,13 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                           margin: const EdgeInsets.only(right: 8, top: 1),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0x88E2B04A)),
+                            color: AppColors.obsidian,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.brass),
                           ),
                           child: Text(
                             String.fromCharCode(65 + i),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFFE2A3)),
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.gold),
                           ),
                         ),
                         Expanded(
@@ -255,6 +273,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
 
           return EstSheetBody(
             title: 'Quartel',
+            titleIcon: const EstIcon(EstIconKind.medal, size: 22, color: AppColors.gold),
             onClose: () => Navigator.pop(ctx),
             children: [
               if (hasMe) ...[
@@ -327,11 +346,17 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                   children: [
                     Row(
                       children: [
+                        EstIcon(
+                          orderIcon(o.key),
+                          size: 17,
+                          color: o.key == 'nuke' ? AppColors.rad : AppColors.gold,
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             o.name,
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 15.5,
                               fontWeight: FontWeight.w700,
                               color: o.key == 'nuke' ? AppColors.rad : AppColors.ink,
                             ),
@@ -340,7 +365,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                         costTag(o.cost),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     note(
                       o.key == 'nuke'
                           ? '${o.desc} Hoje destrói ${ev.nukeDamage} exércitos (sempre sobra 1).'
@@ -350,6 +375,9 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                       const SizedBox(height: 8),
                       EstButton(
                         small: true,
+                        icon: (o.key == 'nuke' || o.key == 'trench' || o.key == 'airlift')
+                            ? EstIconKind.goal
+                            : orderIcon(o.key),
                         variant: o.key == 'nuke' ? EstButtonVariant.rad : EstButtonVariant.normal,
                         label: (o.key == 'nuke' || o.key == 'trench' || o.key == 'airlift')
                             ? 'Escolher no mapa'
@@ -383,24 +411,69 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
               ],
               const SizedBox(height: 4),
               sectionTitle('Na mesa'),
-              Text.rich(
-                TextSpan(
-                  style: const TextStyle(fontSize: 14, color: AppColors.mute),
-                  children: [
-                    for (var p = 0; p < players.length; p++)
-                      if ((players[p] as Map<String, dynamic>)['alive'] == true) ...[
-                        TextSpan(
-                          text: nameOf(p),
-                          style: TextStyle(fontWeight: FontWeight.w700, color: colorOf(p)),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (var p = 0; p < players.length; p++)
+                    if ((players[p] as Map<String, dynamic>)['alive'] == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.obsidian,
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(
+                            color: p == me ? const Color(0xFF7D663D) : AppColors.line,
+                          ),
                         ),
-                        TextSpan(
-                          text: ' ${ctrl.medalsOf(p)}'
-                              '${(players[p] as Map<String, dynamic>)['sabotaged'] == true ? ' (sabotado)' : ''}'
-                              '   ',
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            EstFactionSeal(color: colorOf(p), size: 9, highlighted: p == me),
+                            const SizedBox(width: 6),
+                            Text(
+                              nameOf(p),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            EstMedalBadge(earned: ctrl.medalsOf(p) > 0, size: 15),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${ctrl.medalsOf(p)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: ctrl.medalsOf(p) > 0 ? AppColors.gold : AppColors.mute,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                            if ((players[p] as Map<String, dynamic>)['sabotaged'] == true) ...[
+                              const SizedBox(width: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0x33D65E52),
+                                  borderRadius: BorderRadius.circular(3),
+                                  border: Border.all(color: AppColors.bad.withValues(alpha: 0.6)),
+                                ),
+                                child: const Text(
+                                  'SABOTADO',
+                                  style: TextStyle(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFFFFB2A8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
-                  ],
-                ),
+                      ),
+                ],
               ),
               if (trenches.isNotEmpty) ...[
                 const SizedBox(height: 6),

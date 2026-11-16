@@ -78,14 +78,27 @@ class _BootLoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
+      backgroundColor: AppColors.deep,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: AppColors.gold),
-            SizedBox(height: 14),
-            Text('Carregando Ultimato…', style: TextStyle(color: AppColors.muted)),
+            const EstIcon(EstIconKind.crest, size: 54),
+            const SizedBox(height: 14),
+            Text(
+              'ULTIMATO',
+              style: AppText.serif(size: 22, letterSpacing: 0.14),
+            ),
+            const SizedBox(height: 14),
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: AppColors.brass,
+              ),
+            ),
           ],
         ),
       ),
@@ -216,55 +229,231 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
     return AnimatedBuilder(
       animation: widget.ctrl,
       builder: (context, _) {
-        final Widget screen;
-        switch (widget.ctrl.screen) {
-          case AppScreen.home:
-            screen = HomeScreen(ctrl: widget.ctrl);
-          case AppScreen.rooms:
-            screen = RoomsScreen(ctrl: widget.ctrl);
-          case AppScreen.lobby:
-            screen = LobbyScreen(ctrl: widget.ctrl);
-          case AppScreen.game:
-            screen = GameScreen(ctrl: widget.ctrl);
-        }
+        final Widget screen = KeyedSubtree(
+          key: ValueKey(widget.ctrl.screen),
+          child: switch (widget.ctrl.screen) {
+            AppScreen.home => HomeScreen(ctrl: widget.ctrl),
+            AppScreen.rooms => RoomsScreen(ctrl: widget.ctrl),
+            AppScreen.lobby => LobbyScreen(ctrl: widget.ctrl),
+            AppScreen.game => GameScreen(ctrl: widget.ctrl),
+          },
+        );
+
+        final pageStage = AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: ScaleTransition(
+              scale: Tween(begin: 0.985, end: 1.0).animate(anim),
+              child: child,
+            ),
+          ),
+          child: screen,
+        );
 
         final showGlobalToast =
             widget.ctrl.screen != AppScreen.game && widget.ctrl.toastMessage != null;
-        if (!showGlobalToast) return screen;
+        final passPrompt = widget.ctrl.passPrompt;
+        if (!showGlobalToast && passPrompt == null) return pageStage;
 
         final layout = EstLayout.of(context);
         return Stack(
           children: [
-            screen,
-            Positioned(
-              top: layout.big ? 18 : 62,
-              left: 20,
-              right: 20,
-              child: IgnorePointer(
-                child: Material(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xF00A1422),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.glassBorder),
-                        boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 24)],
-                      ),
-                      child: Text(
-                        widget.ctrl.toastMessage!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, color: Colors.white),
+            pageStage,
+            if (showGlobalToast)
+              Positioned(
+                top: layout.big ? 18 : 62,
+                left: 20,
+                right: 20,
+                child: IgnorePointer(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.obsidian.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: AppColors.brass),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const EstIcon(EstIconKind.compass, size: 14, color: AppColors.gold),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                widget.ctrl.toastMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            if (passPrompt != null)
+              _RoomPasswordOverlay(
+                key: ValueKey('${passPrompt.code}:${passPrompt.wrong}'),
+                ctrl: widget.ctrl,
+                prompt: passPrompt,
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+class _RoomPasswordOverlay extends StatefulWidget {
+  const _RoomPasswordOverlay({
+    super.key,
+    required this.ctrl,
+    required this.prompt,
+  });
+
+  final AppController ctrl;
+  final ({String code, bool wrong, bool isLan}) prompt;
+
+  @override
+  State<_RoomPasswordOverlay> createState() => _RoomPasswordOverlayState();
+}
+
+class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
+  final _passCtrl = TextEditingController();
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final p = _passCtrl.text.trim();
+    if (p.isEmpty) return;
+    widget.ctrl.submitRoomPassword(p);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xD802050A),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: EstGlassCard(
+              highlight: true,
+              ornate: true,
+              borderRadius: 6,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const EstIcon(EstIconKind.lock, size: 19, color: AppColors.gold),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Sala Protegida',
+                          style: AppText.serif(size: 20, color: const Color(0xFFF9EFD7)),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.obsidian,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.line),
+                        ),
+                        child: Text(
+                          widget.prompt.isLan ? widget.prompt.code : '#${widget.prompt.code}',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const EstRuleDivider(diamond: false),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.prompt.wrong
+                        ? 'Senha incorreta. Confira com o anfitrião e tente novamente.'
+                        : 'Digite a senha definida pelo anfitrião para entrar na mesa.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.35,
+                      color: widget.prompt.wrong ? AppColors.bad : AppColors.mute,
+                      fontWeight: widget.prompt.wrong ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  EstTextField(
+                    controller: _passCtrl,
+                    height: 42,
+                    obscureText: _obscure,
+                    autofocus: true,
+                    maxLength: 24,
+                    hintText: 'Senha da sala',
+                    onSubmitted: (_) => _submit(),
+                    suffix: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                      icon: Icon(
+                        _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        size: 18,
+                        color: AppColors.mute,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: EstButton(
+                          label: 'Entrar',
+                          variant: EstButtonVariant.primary,
+                          onPressed: _submit,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: EstButton(
+                          label: 'Cancelar',
+                          variant: EstButtonVariant.ghost,
+                          onPressed: widget.ctrl.cancelPasswordPrompt,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

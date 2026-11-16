@@ -22,6 +22,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   VoidCallback? _fitZoom;
+  void Function(double factor)? _zoomBy;
   final FocusNode _focusNode = FocusNode();
 
   @override
@@ -154,12 +155,12 @@ class _GameScreenState extends State<GameScreen> {
       final evt = v?['event'] as Map<String, dynamic>?;
       final showEvt = evt != null && v?['phase'] == 'play';
       final ringLeft = layout.wide ? 20.0 : 16.0;
-      final ringBottom = layout.wide ? 20.0 : (layout.land ? 12.0 : 10.0);
-      final ringSize = layout.wide ? 84.0 : 68.0;
-      final fitLeft = layout.wide ? 45.0 : 33.0;
-      final fitBottom = layout.wide ? 118.0 : (layout.land ? 90.0 : 88.0);
-      final evLeft = layout.wide ? 120.0 : 92.0;
-      final evBottom = layout.wide ? 30.0 : (layout.land ? 12.0 : 16.0);
+      final ringBottom = layout.wide ? 18.0 : (layout.land ? 12.0 : 10.0);
+      final ringSize = layout.wide ? 82.0 : 68.0;
+      final fitLeft = layout.wide ? 45.0 : 34.0;
+      final fitBottom = layout.wide ? 110.0 : (layout.land ? 88.0 : 86.0);
+      final evLeft = layout.wide ? 16.0 : 92.0;
+      final evBottom = layout.land ? 12.0 : 16.0;
 
       String evtLabel = '';
       if (showEvt) {
@@ -176,7 +177,9 @@ class _GameScreenState extends State<GameScreen> {
         children: [
           WorldMapView(
             ctrl: c,
+            bottomReserve: layout.wide ? 96.0 : 0.0,
             onControllerReady: (fitFn) => _fitZoom = fitFn,
+            onZoomControllerReady: (zoomFn) => _zoomBy = zoomFn,
           ),
 
           // #ring: Floating bottom-left turn order + countdown timer button (tap -> menu)
@@ -191,69 +194,84 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-          // #fit: Floating fit/zoom toggle button above #ring
+          // #fit / zoom strip above #ring
           Positioned(
             left: fitLeft,
             bottom: fitBottom,
-            child: Tooltip(
-              message: 'Ajustar zoom (F)',
-              child: GestureDetector(
-                onTap: () => _fitZoom?.call(),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: const Color(0xD915263D),
-                    borderRadius: BorderRadius.circular(17),
-                    border: Border.all(color: AppColors.line),
+            child: layout.land
+                ? EstIconButton(
+                    icon: EstIconKind.fit,
+                    size: 32,
+                    iconSize: 15,
+                    color: AppColors.ink,
+                    tooltip: 'Ajustar zoom (F)',
+                    onPressed: () => _fitZoom?.call(),
+                  )
+                : _MapLensBar(
+                    onZoomIn: () => _zoomBy?.call(1.28),
+                    onFit: () => _fitZoom?.call(),
+                    onZoomOut: () => _zoomBy?.call(1 / 1.28),
                   ),
-                  alignment: Alignment.center,
-                  child: const EstIcon(EstIconKind.fit, size: 16),
-                ),
-              ),
-            ),
           ),
 
-          // #evchip: Floating active event pill right of #ring
+          // #evchip: Floating active event pill
           if (showEvt)
             Positioned(
               left: evLeft,
-              bottom: evBottom,
+              top: layout.wide ? (c.tutorialGuide != null ? 92.0 : 14.0) : null,
+              bottom: layout.wide ? null : evBottom,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: max(120, layout.size.width * 0.45),
+                  maxWidth: max(120, layout.size.width * 0.42),
                 ),
-                child: GestureDetector(
-                  onTap: () => showExtrasModal(context, c),
-                  child: Container(
-                    height: 28,
-                    padding: const EdgeInsets.only(left: 7, right: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xD90A1422),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: const Color(0x99E2B04A)),
-                      boxShadow: const [BoxShadow(color: Color(0x88000000), blurRadius: 14)],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const EstIcon(EstIconKind.extras, size: 14, color: AppColors.gold),
-                        const SizedBox(width: 5),
-                        Flexible(
-                          child: Text(
-                            evtLabel,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.gold,
-                              height: 1.0,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => showExtrasModal(context, c),
+                    child: Container(
+                      height: 28,
+                      padding: const EdgeInsets.only(left: 8, right: 11),
+                      decoration: BoxDecoration(
+                        color: AppColors.obsidian.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(color: const Color(0xFF7D663D)),
+                        boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 12)],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const EstIcon(EstIconKind.extras, size: 13, color: AppColors.gold),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              evtLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.gold,
+                                height: 1.0,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
+                ),
+              ),
+            ),
+
+          // Floating Command Dock in desktop wide mode (keeps action right below the map)
+          if (layout.wide && v != null)
+            Positioned(
+              left: 118,
+              right: 16,
+              bottom: 14,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: _BottomActionBar(ctrl: c, layout: layout, floatingDock: true),
                 ),
               ),
             ),
@@ -263,8 +281,8 @@ class _GameScreenState extends State<GameScreen> {
             Positioned(
               left: 12,
               right: 12,
-              top: c.diceBanner!.low ? null : 10,
-              bottom: c.diceBanner!.low ? 10 : null,
+              top: c.diceBanner!.low ? null : (c.tutorialGuide != null ? 96 : 12),
+              bottom: c.diceBanner!.low ? (layout.wide ? 112 : 12) : null,
               child: Center(child: _DiceTray(banner: c.diceBanner!)),
             ),
 
@@ -286,7 +304,7 @@ class _GameScreenState extends State<GameScreen> {
 
     Widget gameBody() {
       if (layout.wide) {
-        final sideW = (layout.size.width * 0.25).clamp(310.0, 390.0);
+        final sideW = (layout.size.width * 0.25).clamp(320.0, 390.0);
         return Row(
           children: [
             Expanded(child: mapArea()),
@@ -294,14 +312,14 @@ class _GameScreenState extends State<GameScreen> {
               width: sideW,
               decoration: const BoxDecoration(
                 gradient: AppColors.wideHudGradient,
-                border: Border(left: BorderSide(color: Color(0xFF2D4A72))),
+                border: Border(left: BorderSide(color: AppColors.line)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _HudPanel(ctrl: c, layout: layout),
                   Expanded(child: _SidePanel(ctrl: c, wide: true)),
-                  _BottomActionBar(ctrl: c, layout: layout),
+                  _SidebarTelemetryFooter(ctrl: c),
                 ],
               ),
             ),
@@ -378,17 +396,32 @@ class _GameScreenState extends State<GameScreen> {
                   child: IgnorePointer(
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                         decoration: BoxDecoration(
-                          color: const Color(0xF00A1422),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.glassBorder),
-                          boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 24)],
+                          color: AppColors.obsidian.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: AppColors.brass),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
+                          ],
                         ),
-                        child: Text(
-                          c.toastMessage!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 13, color: Colors.white),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const EstIcon(EstIconKind.compass, size: 14, color: AppColors.gold),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                c.toastMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -463,19 +496,7 @@ class _HudPanel extends StatelessWidget {
     final handLabel = hqOn ? 'Quartel' : 'Cartas';
     final phaseLabel = v['phase'] == 'over' ? 'Fim de jogo' : '${stepLabels[step] ?? step} · rodada ${round + 1}';
 
-    Widget dot(double sz) => Container(
-          width: sz,
-          height: sz,
-          decoration: BoxDecoration(
-            color: curCol,
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0x88000000), width: 2),
-            boxShadow: [
-              const BoxShadow(color: Color(0x88000000), spreadRadius: 2),
-              BoxShadow(color: curCol.withValues(alpha: 0.7), blurRadius: 10),
-            ],
-          ),
-        );
+    Widget dot(double sz) => EstFactionSeal(color: curCol, size: sz - 5, highlighted: true);
 
     Widget iconBtn({
       required EstIconKind kind,
@@ -490,28 +511,28 @@ class _HudPanel extends StatelessWidget {
         message: tooltip,
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(5),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(5),
             child: Ink(
-              height: layout.wide ? 54 : (layout.land ? 36 : 38),
+              height: layout.wide ? 50 : (layout.land ? 36 : 38),
               padding: EdgeInsets.symmetric(horizontal: layout.wide ? 6 : (layout.land ? 6 : 8)),
               decoration: BoxDecoration(
                 gradient: callPulse
                     ? const LinearGradient(
-                        colors: [Color(0xFF4A3A14), Color(0xFF2B210B)],
+                        colors: [Color(0xFF3E3012), Color(0xFF231A09)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       )
                     : const LinearGradient(
-                        colors: [Color(0xFF14243B), Color(0xFF0B1626)],
+                        colors: [Color(0xFF1A283E), Color(0xFF101928)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: callPulse ? AppColors.gold : AppColors.line),
-                boxShadow: const [BoxShadow(color: Color(0x10FFFFFF), blurRadius: 1)],
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: callPulse ? AppColors.gold : const Color(0xFF2D405C)),
+                boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 4, offset: Offset(0, 2))],
               ),
               child: layout.wide
                   ? Stack(
@@ -642,20 +663,27 @@ class _HudPanel extends StatelessWidget {
                   Expanded(
                     flex: 3,
                     child: Container(
-                      height: 54,
+                      height: 50,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF13284A),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF2F5385)),
+                        color: const Color(0xFF102037),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(color: const Color(0xFF2D4B73)),
                       ),
                       alignment: Alignment.center,
-                      child: const Text(
-                        '👁 Assistindo',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFA9CDFB),
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.visibility_outlined, size: 15, color: Color(0xFFA9CDFB)),
+                          SizedBox(width: 6),
+                          Text(
+                            'Assistindo',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFA9CDFB),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -759,16 +787,23 @@ class _HudPanel extends StatelessWidget {
           ] else
             Container(
               height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF13284A),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFF2F5385)),
+                color: const Color(0xFF102037),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: const Color(0xFF2D4B73)),
               ),
               alignment: Alignment.center,
-              child: const Text(
-                '👁 Assistindo',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFA9CDFB)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.visibility_outlined, size: 14, color: Color(0xFFA9CDFB)),
+                  SizedBox(width: 5),
+                  Text(
+                    'Assistindo',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFA9CDFB)),
+                  ),
+                ],
               ),
             ),
           if (extras) ...[
@@ -817,30 +852,20 @@ class _SidePanel extends StatelessWidget {
     final totalTerr = max(1, ctrl.mapData.territories.length);
 
     Widget sectionHeader(String left, [String? right]) => Padding(
-          padding: const EdgeInsets.fromLTRB(2, 10, 2, 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                left.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.3,
-                  color: AppColors.mute,
-                ),
-              ),
-              if (right != null)
-                Text(
-                  right.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.3,
-                    color: AppColors.mute,
-                  ),
-                ),
-            ],
+          padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
+          child: EstSectionTag(
+            left,
+            trailing: right != null
+                ? Text(
+                    right.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                      color: AppColors.mute,
+                    ),
+                  )
+                : null,
           ),
         );
 
@@ -879,47 +904,38 @@ class _SidePanel extends StatelessWidget {
       final dead = p['alive'] != true;
 
       final tags = [
-        if (p['ctrl'] == 'bot') 'bot',
-        '$owned terr.',
-        if (ctrl.hqOn)
-          '${ctrl.medalsOf(i)} medalha${ctrl.medalsOf(i) == 1 ? '' : 's'}'
-        else
-          '$cards carta${cards == 1 ? '' : 's'}',
+        if (dead) 'eliminado',
+        if (!dead && p['ctrl'] == 'bot') 'bot',
+        if (!dead) '$owned terr.',
+        if (!dead && !ctrl.hqOn) '$cards carta${cards == 1 ? '' : 's'}',
         if (p['sabotaged'] == true) 'sabotado',
-        if (pactOtherName != null) 'pacto com $pactOtherName',
+        if (pactOtherName != null) 'pacto: $pactOtherName',
       ].join(' · ');
 
       return Opacity(
-        opacity: dead ? 0.45 : 1.0,
+        opacity: dead ? 0.42 : 1.0,
         child: Container(
           margin: const EdgeInsets.only(bottom: 5),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: isNow ? null : const Color(0x800B1626),
+            color: isNow ? null : const Color(0x88070E18),
             gradient: isNow
                 ? LinearGradient(
                     colors: [
-                      Color.lerp(const Color(0xFF0B1626), col, 0.24)!,
-                      const Color(0xCC0B1626),
+                      Color.lerp(const Color(0xFF0A121E), col, 0.22)!,
+                      const Color(0xD80A121E),
                     ],
                   )
                 : null,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(5),
             border: Border.all(
               color: isWon
                   ? AppColors.gold
-                  : (isNow ? col.withValues(alpha: 0.7) : const Color(0xFF233C5E)),
+                  : (isNow ? col.withValues(alpha: 0.72) : AppColors.line),
             ),
           ),
           child: Stack(
             children: [
-              if (isNow)
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Container(width: 4, color: col),
-                ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -929,30 +945,22 @@ class _SidePanel extends StatelessWidget {
                   child: FractionallySizedBox(
                     widthFactor: pct,
                     child: Container(
-                      height: 3,
+                      height: 2.2,
                       decoration: BoxDecoration(
-                        color: col,
-                        boxShadow: [BoxShadow(color: col, blurRadius: 8)],
+                        gradient: LinearGradient(
+                          colors: [col, Color.lerp(col, Colors.white, 0.25)!],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
               Padding(
-                padding: EdgeInsets.fromLTRB(12, wide ? 9 : 7, 12, wide ? 12 : 10),
+                padding: EdgeInsets.fromLTRB(10, wide ? 8 : 7, 11, wide ? 10 : 9),
                 child: Row(
                   children: [
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: col,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0x88000000), width: 2),
-                        boxShadow: [BoxShadow(color: col, blurRadius: 10)],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                    EstFactionSeal(color: col, size: 12, highlighted: isNow),
+                    const SizedBox(width: 9),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -961,24 +969,33 @@ class _SidePanel extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  '${dead ? '☠ ' : ''}${p['name'] ?? ''}',
+                                  '${p['name'] ?? ''}',
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
+                                    decoration: dead ? TextDecoration.lineThrough : null,
                                     color: AppColors.ink,
                                   ),
                                 ),
                               ),
                               if (isMe) ...[
-                                const SizedBox(width: 4),
-                                const Text(
-                                  'VOCÊ',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.6,
-                                    color: AppColors.gold,
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0x28E6B652),
+                                    borderRadius: BorderRadius.circular(3),
+                                    border: Border.all(color: AppColors.brassDim),
+                                  ),
+                                  child: const Text(
+                                    'VOCÊ',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.6,
+                                      color: AppColors.gold,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -986,7 +1003,7 @@ class _SidePanel extends StatelessWidget {
                           ),
                           Text.rich(
                             TextSpan(
-                              style: const TextStyle(fontSize: 12, color: AppColors.mute),
+                              style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
                               children: [
                                 TextSpan(text: tags),
                                 if (off)
@@ -1002,13 +1019,37 @@ class _SidePanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${(100 * owned / totalTerr).round()}%',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
+                    if (!dead && ctrl.hqOn) ...[
+                      const SizedBox(width: 6),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          EstMedalBadge(earned: ctrl.medalsOf(i) > 0, size: 15),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${ctrl.medalsOf(i)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: ctrl.medalsOf(i) > 0 ? AppColors.gold : AppColors.mute,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        '${(100 * owned / totalTerr).round()}%',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
                   ],
@@ -1025,45 +1066,70 @@ class _SidePanel extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [Colors.white, Colors.white, Colors.transparent],
-            stops: [0.0, 0.80, 1.0],
+            stops: [0.0, 0.82, 1.0],
           ).createShader(bounds),
           blendMode: BlendMode.dstIn,
           child: ListView.builder(
             padding: const EdgeInsets.only(bottom: 10),
             itemCount: log.length,
-            itemBuilder: (_, k) => Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: Text(
-                '${log[k]}',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.4,
-                  color: k == 0 ? AppColors.ink : AppColors.mute,
-                ),
+            itemBuilder: (_, k) => Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: k == 0 ? const EdgeInsets.symmetric(horizontal: 8, vertical: 5) : EdgeInsets.zero,
+              decoration: k == 0
+                  ? BoxDecoration(
+                      color: AppColors.obsidian.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF2E3D52)),
+                    )
+                  : null,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (k == 0) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5, right: 7),
+                      child: Transform.rotate(
+                        angle: pi / 4,
+                        child: Container(width: 4.5, height: 4.5, color: AppColors.brass),
+                      ),
+                    ),
+                  ],
+                  Expanded(
+                    child: Text(
+                      '${log[k]}',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.38,
+                        fontWeight: k == 0 ? FontWeight.w600 : FontWeight.w400,
+                        color: k == 0 ? AppColors.ink : AppColors.mute,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         );
 
     final playersHeader =
-        'Jogadores${(ctrl.watchersCount ?? 0) > 0 ? ' · 👁 ${ctrl.watchersCount} assistindo' : ''}';
+        'Forças em campo${(ctrl.watchersCount ?? 0) > 0 ? ' · ${ctrl.watchersCount} assistindo' : ''}';
 
     if (wide) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             sectionHeader(playersHeader, 'domínio'),
             ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.42),
+              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.44),
               child: ListView.builder(
                 shrinkWrap: true,
                 itemCount: players.length,
                 itemBuilder: (_, i) => playerRow(i),
               ),
             ),
-            sectionHeader('Registro'),
+            sectionHeader('Crônica'),
             Expanded(child: logList()),
           ],
         ),
@@ -1167,11 +1233,15 @@ class _TurnRingButton extends StatelessWidget {
       subText = 'terr.';
     }
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
+    return Tooltip(
+      message: 'Ordem dos turnos e relógio · Abrir mesa (M)',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: size,
+            height: size,
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
           boxShadow: [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 4))],
@@ -1209,6 +1279,8 @@ class _TurnRingButton extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
         ),
       ),
     );
@@ -1387,14 +1459,10 @@ class _DiceTray extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xF214253E), Color(0xF20A1422)],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF37557F)),
-        boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 30, offset: Offset(0, 10))],
+        gradient: AppColors.glassGradient,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.glassBorder),
+        boxShadow: AppColors.edgeShadows,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1433,8 +1501,8 @@ class _FlashOverlay extends StatelessWidget {
                 : const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
               gradient: AppColors.glassGradient,
-              borderRadius: BorderRadius.circular(isMini ? 999 : 16),
-              border: Border.all(color: banner.color, width: isMini ? 1 : 2),
+              borderRadius: BorderRadius.circular(isMini ? 5 : 6),
+              border: Border.all(color: banner.color, width: isMini ? 1 : 1.5),
               boxShadow: [
                 const BoxShadow(color: Color(0xBB000000), blurRadius: 36, offset: Offset(0, 10)),
                 if (!isMini) BoxShadow(color: banner.color.withValues(alpha: 0.30), blurRadius: 30),
@@ -1467,13 +1535,231 @@ class _FlashOverlay extends StatelessWidget {
   }
 }
 
-// ---------- Bottom Bar (#bar) ----------
+class _SidebarTelemetryFooter extends StatelessWidget {
+  const _SidebarTelemetryFooter({required this.ctrl});
+  final AppController ctrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = ctrl.view;
+    final ev = ctrl.eval;
+    if (v == null || ev == null) return const SizedBox.shrink();
+
+    final players = v['players'] as List<dynamic>;
+    final terrs = v['terr'] as List<dynamic>;
+    final colors = ctrl.engine.constants.colors;
+    final meP = (ctrl.me >= 0 && ctrl.me < players.length)
+        ? players[ctrl.me] as Map<String, dynamic>
+        : null;
+    final meColor = meP != null
+        ? parseHexColor(colors[(meP['color'] as num).toInt()].hex)
+        : AppColors.mute;
+
+    final activeInfoTerr = ctrl.hoverInfoTerr ?? ctrl.infoTerr;
+    final infoSpans = <InlineSpan>[];
+    if (activeInfoTerr != null) {
+      final t = activeInfoTerr;
+      final tr = ctrl.mapData.territories[t];
+      final cont = ctrl.mapData.continents[tr.continent];
+      final ownerIdx = (terrs[t]['o'] as num).toInt();
+      final ownerName = '${players[ownerIdx]['name'] ?? ''}';
+      final armies = (terrs[t]['a'] as num).toInt();
+      final isFog = v['fog'] != null && (v['fog']['t'] as num).toInt() == t;
+      infoSpans.add(TextSpan(
+        text: tr.name,
+        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+      ));
+      infoSpans.add(TextSpan(text: ' · ${cont.name} · $ownerName · $armies exérc.'));
+      if (isFog) {
+        infoSpans.add(const TextSpan(
+          text: ' · radioativo',
+          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.rad),
+        ));
+      }
+      if (ctrl.trenchOwner(t) != null) {
+        infoSpans.add(const TextSpan(
+          text: ' · entrincheirado',
+          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+        ));
+      }
+    } else if (v['event'] != null && v['phase'] == 'play') {
+      final k = v['event']['k'];
+      infoSpans.add(TextSpan(
+        text: '${eventTitles[k] ?? k}',
+        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+      ));
+      infoSpans.add(TextSpan(text: ' · ${ev.eventText}'));
+    } else {
+      infoSpans.add(const TextSpan(text: 'Passe o cursor sobre um território para ver detalhes.'));
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: const BoxDecoration(
+        color: AppColors.obsidian,
+        border: Border(top: BorderSide(color: AppColors.line)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(fontSize: 12, height: 1.3, color: AppColors.mute),
+              children: infoSpans,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          _YouChip(meP: meP, meColor: meColor, watchers: ctrl.watchersCount ?? 0),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhaseTrack extends StatelessWidget {
+  const _PhaseTrack({
+    required this.step,
+    required this.occupy,
+    required this.nukeMode,
+    required this.trenchMode,
+    required this.airliftMode,
+    required this.accent,
+  });
+
+  final String step;
+  final bool occupy;
+  final bool nukeMode;
+  final bool trenchMode;
+  final bool airliftMode;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    if (nukeMode || trenchMode || airliftMode) {
+      final (icon, title, col) = nukeMode
+          ? (EstIconKind.nuke, 'ORDEM TÁTICA · OGIVA NUCLEAR', AppColors.rad)
+          : trenchMode
+              ? (EstIconKind.shield, 'ORDEM TÁTICA · TRINCHEIRA', AppColors.gold)
+              : (EstIconKind.airlift, 'ORDEM TÁTICA · PONTE AÉREA', AppColors.gold);
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          EstIcon(icon, size: 13, color: col),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+              color: col,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (occupy) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: const [
+          EstIcon(EstIconKind.sword, size: 13, color: AppColors.gold),
+          SizedBox(width: 6),
+          Text(
+            'TERRITÓRIO CONQUISTADO · AVANÇO DE TROPAS',
+            textHeightBehavior: TextHeightBehavior(
+              applyHeightToFirstAscent: false,
+              applyHeightToLastDescent: false,
+            ),
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+              height: 1.15,
+              color: AppColors.gold,
+            ),
+          ),
+        ],
+      );
+    }
+
+    const stages = [
+      ('reinforce', '1. Reforço', EstIconKind.troop),
+      ('attack', '2. Ataque', EstIconKind.sword),
+      ('move', '3. Remanejar', EstIconKind.move),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.obsidian,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < stages.length; i++) ...[
+              if (i > 0) Container(width: 1, color: AppColors.line),
+              Builder(
+                builder: (_) {
+                  final active = step == stages[i].$1;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: active ? accent.withValues(alpha: 0.24) : Colors.transparent,
+                      border: active
+                          ? Border(bottom: BorderSide(color: accent, width: 1.8))
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        EstIcon(
+                          stages[i].$3,
+                          size: 11,
+                          color: active ? AppColors.ink : AppColors.mute.withValues(alpha: 0.55),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          stages[i].$2.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                            letterSpacing: 0.8,
+                            color: active ? AppColors.ink : AppColors.mute.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------- Bottom Bar / Floating Command Dock (#bar) ----------
 
 class _BottomActionBar extends StatelessWidget {
-  const _BottomActionBar({required this.ctrl, required this.layout});
+  const _BottomActionBar({
+    required this.ctrl,
+    required this.layout,
+    this.floatingDock = false,
+  });
 
   final AppController ctrl;
   final EstLayout layout;
+  final bool floatingDock;
 
   @override
   Widget build(BuildContext context) {
@@ -1655,7 +1941,7 @@ class _BottomActionBar extends StatelessWidget {
       } else if (ctrl.trenchMode) {
         msgSpans.add(
           const TextSpan(
-            text: '🛡️ Trincheira: ',
+            text: 'Trincheira: ',
             style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
           ),
         );
@@ -1688,7 +1974,7 @@ class _BottomActionBar extends StatelessWidget {
       } else if (ctrl.airliftMode) {
         msgSpans.add(
           const TextSpan(
-            text: '✈️ Ponte aérea: ',
+            text: 'Ponte aérea: ',
             style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
           ),
         );
@@ -1721,7 +2007,7 @@ class _BottomActionBar extends StatelessWidget {
           );
           msgSpans.add(const TextSpan(text: ' · toque no destino para somar, na origem para tirar'));
           if (rng != null) {
-            btns.add(_StepperWidget(ctrl: ctrl, range: rng));
+            btns.add(_StepperWidget(ctrl: ctrl, range: rng, height: btnHeight));
             btns.add(actionBtn('Máx', () {
               ctrl.stepValue = rng.$2;
               ctrl.confirmAirlift();
@@ -1759,7 +2045,7 @@ class _BottomActionBar extends StatelessWidget {
           msgSpans.add(
             TextSpan(
               text:
-                  ' · 🎖️ Bônus obrigatório de ${ctrl.mapData.continents[selCont].name} (+$contBonusHere ${contBonusHere == 1 ? 'exército' : 'exércitos'})',
+                  ' · Bônus obrigatório de ${ctrl.mapData.continents[selCont].name} (+$contBonusHere ${contBonusHere == 1 ? 'exército' : 'exércitos'})',
               style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
             ),
           );
@@ -1777,7 +2063,7 @@ class _BottomActionBar extends StatelessWidget {
             .join(' e ');
         msgSpans.add(
           const TextSpan(
-            text: '🎖️ Bônus de continente obrigatório: ',
+            text: 'Bônus de continente obrigatório: ',
             style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
           ),
         );
@@ -1797,7 +2083,7 @@ class _BottomActionBar extends StatelessWidget {
 
       if (!inOrderMode) {
         if (rng != null) {
-          btns.add(_StepperWidget(ctrl: ctrl, range: rng));
+          btns.add(_StepperWidget(ctrl: ctrl, range: rng, height: btnHeight));
           btns.add(actionBtn('Máx', ctrl.setMaxReinforce));
           btns.add(actionBtn('Colocar', ctrl.placeReinforce, variant: EstButtonVariant.primary));
         }
@@ -1838,7 +2124,7 @@ class _BottomActionBar extends StatelessWidget {
       final to = (v['occupy']['to'] as num).toInt();
       msgSpans.add(
         const TextSpan(
-          text: '🚩 Conquistou ',
+          text: 'Conquistou ',
           style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
         ),
       );
@@ -1854,7 +2140,7 @@ class _BottomActionBar extends StatelessWidget {
               '! 1 exército já avançou de ${ctrl.mapData.territories[from].name} · levar mais quantos?',
         ),
       );
-      if (rng != null) btns.add(_StepperWidget(ctrl: ctrl, range: rng));
+      if (rng != null) btns.add(_StepperWidget(ctrl: ctrl, range: rng, height: btnHeight));
       btns.add(
         actionBtn(
           ctrl.stepValue == 0 ? 'Manter 1' : 'Levar +${ctrl.stepValue}',
@@ -1869,13 +2155,14 @@ class _BottomActionBar extends StatelessWidget {
         msgSpans.add(
           TextSpan(
             text:
-                '${ctrl.mapData.territories[s].name} (${terrs[s]['a']}) ⚔ ${ctrl.mapData.territories[t].name} (${terrs[t]['a']}) · toque de novo no alvo para atacar',
+                '${ctrl.mapData.territories[s].name} (${terrs[s]['a']}) contra ${ctrl.mapData.territories[t].name} (${terrs[t]['a']}) · toque de novo no alvo para atacar',
           ),
         );
         btns.add(
           _StepperWidget(
             ctrl: ctrl,
             range: rng,
+            height: btnHeight,
             unit: ctrl.stepValue == 1 ? 'dado' : 'dados',
           ),
         );
@@ -1912,7 +2199,7 @@ class _BottomActionBar extends StatelessWidget {
           ),
         );
         msgSpans.add(const TextSpan(text: ' · toque no destino para somar, na origem para tirar'));
-        btns.add(_StepperWidget(ctrl: ctrl, range: rng));
+        btns.add(_StepperWidget(ctrl: ctrl, range: rng, height: btnHeight));
         btns.add(actionBtn('Máx', () {
           ctrl.stepValue = rng.$2;
           ctrl.moveTroops();
@@ -2033,91 +2320,153 @@ class _BottomActionBar extends StatelessWidget {
         ? parseHexColor(colors[(meP['color'] as num).toInt()].hex)
         : AppColors.mute;
 
+    if (floatingDock) {
+      // Quando não é a sua vez (e partida está ativa sem aviso crítico): barra tática compacta
+      if (!can && v['phase'] == 'play' && warnRow == null && btns.isEmpty) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.obsidian.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: curCol.withValues(alpha: 0.55)),
+            boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 6))],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EstFactionSeal(color: curCol, size: 9, highlighted: true),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    style: const TextStyle(fontSize: 13, color: AppColors.ink),
+                    children: msgSpans,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return EstGlassCard(
+        ornate: true,
+        highlight: can,
+        borderRadius: 6,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 11),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (can && v['phase'] == 'play') ...[
+              _PhaseTrack(
+                step: v['step'] as String? ?? 'reinforce',
+                occupy: v['occupy'] != null,
+                nukeMode: ctrl.nukeMode,
+                trenchMode: ctrl.trenchMode,
+                airliftMode: ctrl.airliftMode,
+                accent: curCol,
+              ),
+              const SizedBox(height: 6),
+            ],
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 13.5, height: 1.3, color: AppColors.ink),
+                children: msgSpans,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (btns.isNotEmpty) ...[
+              const SizedBox(height: 9),
+              Wrap(
+                spacing: 7,
+                runSpacing: 6,
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (final b in btns)
+                    if (b is Expanded) b.child else b,
+                ],
+              ),
+            ],
+            ?warnRow,
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: EdgeInsets.fromLTRB(
         layout.wide ? 16 : 12,
-        layout.wide ? 14 : 8,
+        layout.wide ? 12 : 8,
         layout.wide ? 16 : 12,
-        layout.wide ? 14 : 10,
+        layout.wide ? 12 : 10,
       ),
       decoration: BoxDecoration(
         gradient: layout.wide ? AppColors.wideHudGradient : AppColors.hudGradient,
-        border: const Border(top: BorderSide(color: Color(0xFF2D4A72))),
-        boxShadow: layout.wide
-            ? const [BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, -10))]
-            : null,
+        border: const Border(top: BorderSide(color: AppColors.line)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (can && v['phase'] == 'play') ...[
+            Center(
+              child: _PhaseTrack(
+                step: v['step'] as String? ?? 'reinforce',
+                occupy: v['occupy'] != null,
+                nukeMode: ctrl.nukeMode,
+                trenchMode: ctrl.trenchMode,
+                airliftMode: ctrl.airliftMode,
+                accent: curCol,
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
           Text.rich(
             TextSpan(
               style: TextStyle(
-                fontSize: layout.wide ? 15 : 14,
-                height: layout.wide ? 1.4 : 1.3,
+                fontSize: layout.wide ? 14.5 : 13.5,
+                height: 1.3,
                 color: AppColors.ink,
               ),
               children: msgSpans,
             ),
           ),
           if (btns.isNotEmpty) ...[
-            SizedBox(height: layout.wide ? 10 : 6),
-            layout.wide
-                ? Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      for (final b in btns)
-                        if (b is Expanded) b.child else b,
-                    ],
-                  )
-                : Row(
-                    children: [
-                      for (var i = 0; i < btns.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 6),
-                        btns[i],
-                      ],
-                    ],
-                  ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                for (var i = 0; i < btns.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  btns[i],
+                ],
+              ],
+            ),
           ],
           ?warnRow,
-          SizedBox(height: layout.wide ? 10 : 6),
-          if (layout.wide)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text.rich(
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text.rich(
                   TextSpan(
                     style: const TextStyle(fontSize: 12, color: AppColors.mute),
                     children: infoSpans,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                _YouChip(meP: meP, meColor: meColor, watchers: ctrl.watchersCount ?? 0),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      style: const TextStyle(fontSize: 12, color: AppColors.mute),
-                      children: infoSpans,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: layout.size.width * 0.5),
-                  child: _YouChip(meP: meP, meColor: meColor, watchers: ctrl.watchersCount ?? 0),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: layout.size.width * 0.5),
+                child: _YouChip(meP: meP, meColor: meColor, watchers: ctrl.watchersCount ?? 0),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -2138,10 +2487,19 @@ class _YouChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (meP == null) {
-      return Text(
-        '👁 Assistindo${watchers > 1 ? ' com mais ${watchers - 1}' : ''}',
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 12, color: AppColors.mute),
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.visibility_outlined, size: 13, color: AppColors.mute),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              'Assistindo${watchers > 1 ? ' (+${watchers - 1})' : ''}',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AppColors.mute),
+            ),
+          ),
+        ],
       );
     }
     return Row(
@@ -2165,8 +2523,10 @@ class _YouChip extends StatelessWidget {
           ),
         ),
         if (watchers > 0) ...[
-          const SizedBox(width: 4),
-          Text('· 👁 $watchers', style: const TextStyle(fontSize: 12, color: AppColors.mute)),
+          const SizedBox(width: 6),
+          const Icon(Icons.visibility_outlined, size: 12, color: AppColors.mute),
+          const SizedBox(width: 3),
+          Text('$watchers', style: const TextStyle(fontSize: 12, color: AppColors.mute)),
         ],
       ],
     );
@@ -2174,91 +2534,114 @@ class _YouChip extends StatelessWidget {
 }
 
 class _StepperWidget extends StatelessWidget {
-  const _StepperWidget({required this.ctrl, required this.range, this.unit});
+  const _StepperWidget({
+    required this.ctrl,
+    required this.range,
+    this.unit,
+    this.height = 40,
+  });
 
   final AppController ctrl;
   final (int, int) range;
   final String? unit;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final canMinus = ctrl.stepValue > range.$1;
     final canPlus = ctrl.stepValue < range.$2;
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0B1626), Color(0xFF0F1E33)],
-        ),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.line),
-        boxShadow: const [BoxShadow(color: Color(0x88000000), blurRadius: 4, offset: Offset(0, 2))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InkWell(
-            onTap: canMinus ? () => ctrl.changeStep(-1) : null,
+    final cellSize = height - 2;
+
+    Widget stepBtn({
+      required EstIconKind icon,
+      required bool enabled,
+      required VoidCallback onTap,
+    }) =>
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
             child: Opacity(
-              opacity: canMinus ? 1.0 : 0.3,
-              child: const SizedBox(
-                width: 40,
-                height: 40,
+              opacity: enabled ? 1.0 : 0.30,
+              child: SizedBox(
+                width: cellSize,
+                height: cellSize,
                 child: Center(
-                  child: Text(
-                    '−',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink),
-                  ),
+                  child: EstIcon(icon, size: 16, color: AppColors.ink),
                 ),
               ),
             ),
           ),
+        );
+
+    return Container(
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF141F31), Color(0xFF0A111D)],
+        ),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: AppColors.line),
+        boxShadow: const [BoxShadow(color: Color(0x77000000), blurRadius: 4, offset: Offset(0, 2))],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          stepBtn(
+            icon: EstIconKind.minus,
+            enabled: canMinus,
+            onTap: () => ctrl.changeStep(-1),
+          ),
+          Container(width: 1, height: cellSize, color: AppColors.line),
           Container(
-            constraints: const BoxConstraints(minWidth: 34),
-            padding: const EdgeInsets.symmetric(horizontal: 2),
+            constraints: BoxConstraints(minWidth: unit != null ? 42 : 38),
+            height: cellSize,
+            color: AppColors.obsidian.withValues(alpha: 0.72),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             alignment: Alignment.center,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   '${ctrl.stepValue}',
+                  textHeightBehavior: const TextHeightBehavior(
+                    applyHeightToFirstAscent: false,
+                    applyHeightToLastDescent: false,
+                  ),
                   style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
                     color: AppColors.ink,
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
                 if (unit != null)
                   Text(
                     unit!,
+                    textHeightBehavior: const TextHeightBehavior(
+                      applyHeightToFirstAscent: false,
+                      applyHeightToLastDescent: false,
+                    ),
                     style: const TextStyle(
                       fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                      height: 1.15,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
                       color: AppColors.mute,
                     ),
                   ),
               ],
             ),
           ),
-          InkWell(
-            onTap: canPlus ? () => ctrl.changeStep(1) : null,
-            child: Opacity(
-              opacity: canPlus ? 1.0 : 0.3,
-              child: const SizedBox(
-                width: 40,
-                height: 40,
-                child: Center(
-                  child: Text(
-                    '+',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink),
-                  ),
-                ),
-              ),
-            ),
+          Container(width: 1, height: cellSize, color: AppColors.line),
+          stepBtn(
+            icon: EstIconKind.plus,
+            enabled: canPlus,
+            onTap: () => ctrl.changeStep(1),
           ),
         ],
       ),
@@ -2289,17 +2672,11 @@ class _SheetBackdrop extends StatelessWidget {
           onTap: () {},
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: centered ? maxWidth : 500),
-            child: Container(
-              width: double.infinity,
+            child: EstGlassCard(
+              highlight: true,
+              ornate: true,
+              borderRadius: centered ? 6 : 8,
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: AppColors.glassGradient,
-                borderRadius: centered
-                    ? BorderRadius.circular(18)
-                    : const BorderRadius.vertical(top: Radius.circular(18)),
-                border: Border.all(color: AppColors.glassBorder),
-                boxShadow: AppColors.edgeShadows,
-              ),
               child: child,
             ),
           ),
@@ -2585,7 +2962,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                 padding: EdgeInsets.all(layout.big ? 24 : 18),
                 decoration: BoxDecoration(
                   color: AppColors.panel,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: wCol, width: 2),
                   boxShadow: [
                     BoxShadow(color: wCol.withValues(alpha: 0.22), spreadRadius: 6),
@@ -2640,6 +3017,8 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                       ),
                     ],
                     const SizedBox(height: 14),
+                    const EstRuleDivider(),
+                    const SizedBox(height: 10),
                     for (final i in rank)
                       Builder(
                         builder: (_) {
@@ -2647,31 +3026,26 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                           final col = parseHexColor(colors[(p['color'] as num).toInt()].hex);
                           final isFirst = i == wIdx;
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 2),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                             decoration: BoxDecoration(
-                              color: isFirst ? wCol.withValues(alpha: 0.18) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
+                              color: isFirst ? wCol.withValues(alpha: 0.16) : AppColors.obsidian.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(
+                                color: isFirst ? wCol.withValues(alpha: 0.6) : AppColors.line,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: col,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: const Color(0x88000000), width: 2),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
+                                EstFactionSeal(color: col, size: 12, highlighted: isFirst),
+                                const SizedBox(width: 9),
                                 Expanded(
                                   child: Text(
                                     '${p['name'] ?? ''}',
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 14,
-                                      fontWeight: isFirst ? FontWeight.w700 : FontWeight.w400,
+                                      fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
                                       color: isFirst ? AppColors.ink : AppColors.mute,
                                     ),
                                   ),
@@ -2679,9 +3053,10 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                                 Text(
                                   p['alive'] == true ? '${owned(i)} territórios' : 'eliminado',
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13.5,
                                     fontWeight: isFirst ? FontWeight.w700 : FontWeight.w400,
                                     color: isFirst ? AppColors.ink : AppColors.mute,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
                                   ),
                                 ),
                               ],
@@ -2770,77 +3145,135 @@ class _TutorialCoachBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 520),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xEB0A1422),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xAAE2B04A), width: 1.5),
-          boxShadow: const [
-            BoxShadow(color: Color(0x99000000), blurRadius: 18, offset: Offset(0, 6)),
-          ],
-        ),
+      constraints: const BoxConstraints(maxWidth: 540),
+      child: EstGlassCard(
+        highlight: true,
+        ornate: false,
+        borderRadius: 6,
+        padding: EdgeInsets.zero,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0x33E2B04A),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: const Color(0x88E2B04A)),
-                  ),
-                  child: Text(
-                    'TUTORIAL · PASSO ${guide.step}/${guide.total}',
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
+              decoration: const BoxDecoration(
+                color: Color(0x88060A12),
+                border: Border(bottom: BorderSide(color: AppColors.line)),
+              ),
+              child: Row(
+                children: [
+                  const EstIcon(EstIconKind.compass, size: 13, color: AppColors.brass),
+                  const SizedBox(width: 7),
+                  Text(
+                    'PASSO ${guide.step}/${guide.total}',
                     style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                      color: Color(0xFFFFE2A3),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                      color: AppColors.gold,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    guide.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
+                  Container(
+                    width: 1,
+                    height: 11,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    color: AppColors.line,
                   ),
-                ),
-                InkWell(
-                  onTap: onExit,
-                  borderRadius: BorderRadius.circular(6),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  Expanded(
                     child: Text(
-                      'Sair',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.mute,
+                      guide.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 5),
-            Text(
-              guide.body,
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.35,
-                color: Color(0xFFD8E4F2),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: onExit,
+                    borderRadius: BorderRadius.circular(4),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Text(
+                        'Sair',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.mute,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 9, 14, 11),
+              child: Text(
+                guide.body,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.38,
+                  color: Color(0xFFD9E1ED),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MapLensBar extends StatelessWidget {
+  const _MapLensBar({
+    required this.onZoomIn,
+    required this.onFit,
+    required this.onZoomOut,
+  });
+
+  final VoidCallback onZoomIn;
+  final VoidCallback onFit;
+  final VoidCallback onZoomOut;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget cell(EstIconKind kind, String tip, VoidCallback onTap) => Tooltip(
+          message: tip,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: 30,
+              height: 29,
+              child: Center(
+                child: EstIcon(kind, size: 14, color: AppColors.ink),
+              ),
+            ),
+          ),
+        );
+
+    return Material(
+      color: AppColors.obsidian.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: AppColors.line),
+          boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 3))],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            cell(EstIconKind.plus, 'Aproximar mapa', onZoomIn),
+            Container(width: 30, height: 1, color: AppColors.line),
+            cell(EstIconKind.fit, 'Ajustar enquadramento (F)', onFit),
+            Container(width: 30, height: 1, color: AppColors.line),
+            cell(EstIconKind.minus, 'Afastar mapa', onZoomOut),
           ],
         ),
       ),

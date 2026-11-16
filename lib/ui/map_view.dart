@@ -12,10 +12,18 @@ import 'theme.dart';
 const double _mapPad = 30.0;
 
 class WorldMapView extends StatefulWidget {
-  const WorldMapView({super.key, required this.ctrl, this.onControllerReady});
+  const WorldMapView({
+    super.key,
+    required this.ctrl,
+    this.onControllerReady,
+    this.onZoomControllerReady,
+    this.bottomReserve = 0.0,
+  });
 
   final AppController ctrl;
   final void Function(VoidCallback fitZoom)? onControllerReady;
+  final void Function(void Function(double factor) zoomBy)? onZoomControllerReady;
+  final double bottomReserve;
 
   @override
   State<WorldMapView> createState() => _WorldMapViewState();
@@ -107,6 +115,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
       return ((ta.y + tb.y) / 2 - _camY) * _camZ;
     };
     widget.onControllerReady?.call(toggleFit);
+    widget.onZoomControllerReady?.call(zoomBy);
   }
 
   @override
@@ -171,9 +180,10 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
   (double contain, double cover, double maxZ) _limits() {
     if (_viewSize.width <= 0 || _viewSize.height <= 0) return (1.0, 1.0, 4.0);
     final md = widget.ctrl.mapData;
+    final availH = max(120.0, _viewSize.height - widget.bottomReserve);
     final contain = min(
       _viewSize.width / (md.width + 2 * _mapPad),
-      _viewSize.height / (md.height + 2 * _mapPad),
+      availH / (md.height + 2 * _mapPad),
     );
     final cover = max(_viewSize.width / md.width, _viewSize.height / md.height);
     return (contain, cover, max(cover * 2.2, 1.4));
@@ -186,15 +196,17 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     _camZ = _camZ.clamp(contain, maxZ);
     final visW = _viewSize.width / _camZ;
     final visH = _viewSize.height / _camZ;
+    final padBottom = _mapPad + widget.bottomReserve / _camZ;
+    final availH = max(120.0, _viewSize.height - widget.bottomReserve);
     if (visW >= md.width + 2 * _mapPad) {
       _camX = (md.width - visW) / 2;
     } else {
       _camX = _camX.clamp(-_mapPad, md.width + _mapPad - visW);
     }
-    if (visH >= md.height + 2 * _mapPad) {
-      _camY = (md.height - visH) / 2;
+    if (visH >= md.height + _mapPad + padBottom) {
+      _camY = (md.height - availH / _camZ) / 2;
     } else {
-      _camY = _camY.clamp(-_mapPad, md.height + _mapPad - visH);
+      _camY = _camY.clamp(-_mapPad, md.height + padBottom - visH);
     }
   }
 
@@ -204,6 +216,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     final layout = EstLayout.of(context, inGame: true, forceLand: widget.ctrl.forceLand);
     final (contain, cover, _) = _limits();
     final mid = min(cover, contain * 2.4);
+    final availH = max(120.0, _viewSize.height - widget.bottomReserve);
     setState(() {
       if (layout.wide) {
         _camZ = contain;
@@ -213,7 +226,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
         _camZ = mid;
       }
       _camX = (md.width - _viewSize.width / _camZ) / 2;
-      _camY = (md.height - _viewSize.height / _camZ) / 2;
+      _camY = (md.height - availH / _camZ) / 2;
       _clampCam();
       _fitted = true;
     });
@@ -224,21 +237,41 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     final md = widget.ctrl.mapData;
     final (contain, cover, _) = _limits();
     final mid = min(cover, contain * 2.4);
+    final availH = max(120.0, _viewSize.height - widget.bottomReserve);
     setState(() {
       _camZ = (_camZ - contain).abs() < 0.01 ? mid : contain;
       _camX = (md.width - _viewSize.width / _camZ) / 2;
-      _camY = (md.height - _viewSize.height / _camZ) / 2;
+      _camY = (md.height - availH / _camZ) / 2;
       _clampCam();
       _fitted = true;
+    });
+  }
+
+  void zoomBy(double factor) {
+    if (_viewSize.width <= 0 || _viewSize.height <= 0) return;
+    final (contain, _, maxZ) = _limits();
+    final nextZ = (_camZ * factor).clamp(contain, maxZ);
+    if ((nextZ - _camZ).abs() < 0.0001) return;
+    final availH = max(120.0, _viewSize.height - widget.bottomReserve);
+    final focalX = _viewSize.width / 2;
+    final focalY = availH / 2;
+    final mapX = focalX / _camZ + _camX;
+    final mapY = focalY / _camZ + _camY;
+    setState(() {
+      _camZ = nextZ;
+      _camX = mapX - focalX / _camZ;
+      _camY = mapY - focalY / _camZ;
+      _clampCam();
     });
   }
 
   void _panTo(double x0, double y0, double x1, double y1, int ms) {
     if (_viewSize.width <= 0 || _viewSize.height <= 0) return;
     final (contain, _, maxZ) = _limits();
+    final availH = max(120.0, _viewSize.height - widget.bottomReserve);
     final bw = (x1 - x0).abs() + 260;
     final bh = (y1 - y0).abs() + 200;
-    final z1 = max(contain, min(maxZ, min(_camZ, min(_viewSize.width / bw, _viewSize.height / bh))));
+    final z1 = max(contain, min(maxZ, min(_camZ, min(_viewSize.width / bw, availH / bh))));
     final cx = (x0 + x1) / 2;
     final cy = (y0 + y1) / 2;
     _panStartX = _camX;
@@ -246,7 +279,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     _panStartZ = _camZ;
     _panEndZ = z1;
     _panEndX = cx - _viewSize.width / z1 / 2;
-    _panEndY = cy - _viewSize.height / z1 / 2;
+    _panEndY = cy - availH / z1 / 2;
     _panStartMs = DateTime.now().millisecondsSinceEpoch;
     _panDurMs = ms;
 

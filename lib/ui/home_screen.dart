@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/map_data.dart';
 import '../game/app_controller.dart';
+import '../platform/lan_host.dart';
 import 'modals.dart';
 import 'theme.dart';
 
@@ -57,17 +58,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               gradient: RadialGradient(
                 center: twoColBig ? const Alignment(-0.4, -0.4) : const Alignment(0, -1.0),
-                radius: twoColBig ? 1.0 : 1.15,
-                colors: const [Color(0x9922406A), Color(0x000A1422)],
+                radius: twoColBig ? 1.05 : 1.15,
+                colors: const [Color(0x991C2D46), Color(0x0009101B)],
               ),
             ),
           ),
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                center: twoColBig ? const Alignment(0.5, 0.4) : const Alignment(0, 1.0),
-                radius: 0.9,
-                colors: const [Color(0x661B2F4D), Color(0x000A1422)],
+                center: twoColBig ? const Alignment(0.55, 0.35) : const Alignment(0, 1.0),
+                radius: 0.95,
+                colors: const [Color(0x44382A16), Color(0x0009101B)],
               ),
             ),
           ),
@@ -133,15 +134,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       mainAxisSize: MainAxisSize.min,
       children: [
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
+          constraints: const BoxConstraints(maxWidth: 450),
           child: _buildBrand(alignLeft: true, big: true, sz: sz),
         ),
         SizedBox(width: gap),
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 410),
+          constraints: const BoxConstraints(maxWidth: 420),
           child: EstGlassCard(
-            padding: const EdgeInsets.all(24),
-            borderRadius: 20,
+            padding: const EdgeInsets.all(22),
+            borderRadius: 6,
+            highlight: true,
             child: _buildForm(big: true, compactLand: false),
           ),
         ),
@@ -159,8 +161,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           SizedBox(height: layout.big ? 28 : 14),
           if (layout.big)
             EstGlassCard(
-              padding: const EdgeInsets.all(26),
-              borderRadius: 20,
+              padding: const EdgeInsets.all(22),
+              borderRadius: 6,
+              highlight: true,
               child: _buildForm(big: true, compactLand: false),
             )
           else
@@ -226,8 +229,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             width: crestSize,
             height: crestSize,
             decoration: const BoxDecoration(
+              shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(color: Color(0x55D64545), blurRadius: 18, offset: Offset(0, 6)),
+                BoxShadow(color: Color(0x66D64545), blurRadius: 28, spreadRadius: 2),
+                BoxShadow(color: Color(0x33E6B652), blurRadius: 42),
               ],
             ),
             child: EstIcon(EstIconKind.crest, size: crestSize),
@@ -299,9 +304,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             runSpacing: 8,
             alignment: alignLeft ? WrapAlignment.start : WrapAlignment.center,
             children: const [
-              _FeaturePill(text: '🎖️ Quartel & Ordens'),
-              _FeaturePill(text: '⚡ Fila Rápida (45s)'),
-              _FeaturePill(text: '🤝 2 a 6 Jogadores'),
+              _FeaturePill(icon: EstIconKind.medal, text: 'Quartel & Ordens'),
+              _FeaturePill(icon: EstIconKind.bolt, text: 'Fila Rápida 45s'),
+              _FeaturePill(icon: EstIconKind.sword, text: '2 a 6 Comandantes'),
             ],
           ),
           const SizedBox(height: 16),
@@ -338,151 +343,216 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildForm({required bool big, required bool compactLand}) {
     final c = widget.ctrl;
-    final btnHeight = big ? 48.0 : 44.0;
-    final btnFs = big ? 15.0 : 14.0;
+    final btnHeight = big ? 46.0 : 42.0;
+    final btnFs = big ? 14.5 : 13.5;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Seu nome de comandante',
-          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.mute),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _nameCtrl,
-          maxLength: 14,
-          onChanged: c.savePlayerName,
-          style: TextStyle(fontSize: big ? 16 : 15, color: AppColors.ink),
-          decoration: InputDecoration(
-            hintText: 'Como quer ser chamado',
-            counterText: '',
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: big ? 14 : 12,
-              vertical: big ? 12 : 10,
-            ),
+        // Plaqueta de Comandante (rebaixada estilo gabinete imperial)
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
+          decoration: BoxDecoration(
+            color: AppColors.obsidian.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            children: [
+              const EstIcon(EstIconKind.crest, size: 17),
+              const SizedBox(width: 9),
+              const Text(
+                'COMANDANTE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                  color: AppColors.mute,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _nameCtrl,
+                  maxLength: 14,
+                  onChanged: c.savePlayerName,
+                  textAlign: TextAlign.right,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: TextStyle(
+                    fontSize: big ? 15.5 : 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'Seu apelido',
+                    counterText: '',
+                    filled: false,
+                    isDense: true,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 6),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.edit_outlined, size: 14, color: AppColors.mute.withValues(alpha: 0.65)),
+            ],
           ),
         ),
-        SizedBox(height: big ? 12 : 10),
+        SizedBox(height: big ? 14 : 10),
 
-        // Online card (Hero mode)
-        _ModeCard(
-          title: 'Jogar Online',
-          badge: const EstBadge(text: 'pela internet', net: true),
-          highlight: true,
-          description: compactLand
-              ? null
-              : 'Partida rápida com fila automática em até 45 s ou salas públicas e privadas por link.',
-          padding: compactLand
-              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
-              : (big ? const EdgeInsets.all(14) : const EdgeInsets.all(12)),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  flex: 6,
-                  child: EstButton(
-                    label: '⚡ Partida Rápida',
-                    variant: EstButtonVariant.primary,
-                    height: btnHeight,
-                    fontSize: btnFs,
-                    onPressed: () => c.startQuickMatch(_nameCtrl.text),
+        // Ordem de Batalha Principal: Partida Rápida Online
+        Container(
+          padding: EdgeInsets.all(compactLand ? 11 : (big ? 15 : 13)),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF172539), Color(0xFF0C1422)],
+            ),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF8C7141), width: 1.0),
+            boxShadow: const [
+              BoxShadow(color: Color(0x77000000), blurRadius: 16, offset: Offset(0, 6)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const EstIcon(EstIconKind.bolt, size: 15, color: AppColors.brass),
+                  const SizedBox(width: 7),
+                  const Expanded(
+                    child: Text(
+                      'PARTIDA RÁPIDA',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.4,
+                        color: AppColors.ink,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 5,
-                  child: EstButton(
-                    label: 'Salas e código',
-                    height: btnHeight,
-                    fontSize: btnFs,
-                    onPressed: () {
-                      c.savePlayerName(_nameCtrl.text);
-                      c.openRoomsBrowser();
-                    },
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.obsidian,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF6B5734)),
+                    ),
+                    child: const Text(
+                      'ONLINE · 45S',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: AppColors.gold,
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              if (!compactLand) ...[
+                const SizedBox(height: 8),
+                const EstRuleDivider(diamond: false),
+                const SizedBox(height: 8),
+                const Text(
+                  '4 comandantes · Quartel ativo · 1 min/turno',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.mute),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 11),
+              EstButton(
+                icon: EstIconKind.sword,
+                label: 'ENTRAR EM BATALHA',
+                variant: EstButtonVariant.primary,
+                height: big ? 46 : 42,
+                fontSize: big ? 14.5 : 13.5,
+                onPressed: () => c.startQuickMatch(_nameCtrl.text),
+              ),
+            ],
+          ),
         ),
         SizedBox(height: big ? 10 : 8),
 
-        // Local & Offline card
-        _ModeCard(
-          title: 'Local & Rede Wi-Fi',
-          badge: const EstBadge(text: 'sem internet'),
-          description: compactLand
-              ? null
-              : 'Contra bots neste aparelho, passa-o-aparelho ou celulares próximos por QR Code.',
-          padding: compactLand
-              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
-              : (big ? const EdgeInsets.all(14) : const EdgeInsets.all(12)),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: EstButton(
-                    label: 'Criar mesa local',
-                    height: btnHeight,
-                    fontSize: btnFs,
-                    onPressed: () => c.startLocalSetup(hostName: _nameCtrl.text),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: EstButton(
-                    label: 'Entrar por QR',
-                    height: btnHeight,
-                    fontSize: btnFs,
-                    onPressed: () {
-                      c.savePlayerName(_nameCtrl.text);
-                      showP2pJoinModal(context, c);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            if (c.hasSavedGuest) ...[
-              const SizedBox(height: 8),
-              EstButton(
-                label: 'Reconectar à partida',
-                height: btnHeight,
-                fontSize: btnFs,
-                onPressed: c.resumeSavedGuest,
-              ),
-            ],
-            if (c.hasSavedLocal) ...[
-              const SizedBox(height: 8),
-              EstButton(
-                label: 'Continuar partida salva',
-                height: btnHeight,
-                fontSize: btnFs,
-                onPressed: c.resumeSavedLocal,
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 8),
+        // Grid tático de Modos Secundários
         Row(
           children: [
             Expanded(
-              child: EstButton(
-                label: '🎓 Tutorial jogável',
-                variant: EstButtonVariant.ghost,
-                height: btnHeight - 2,
-                fontSize: btnFs - 0.5,
-                onPressed: () => c.startTutorial(playerName: _nameCtrl.text),
+              child: _TacticalTile(
+                icon: EstIconKind.globe,
+                title: 'Salas Online',
+                sub: 'Mesas e código',
+                compact: compactLand,
+                onTap: () {
+                  c.savePlayerName(_nameCtrl.text);
+                  c.openRoomsBrowser();
+                },
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
+              child: _TacticalTile(
+                icon: EstIconKind.board,
+                title: 'Mesa Local',
+                sub: LanHost.supported ? 'Bots, LAN ou código' : 'Bots, QR ou código',
+                compact: compactLand,
+                onTap: () => c.startLocalSetup(hostName: _nameCtrl.text),
+              ),
+            ),
+          ],
+        ),
+
+        if (c.hasSavedGuest || c.hasSavedLocal) ...[
+          const SizedBox(height: 8),
+          if (c.hasSavedGuest)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
               child: EstButton(
-                label: '📖 Como jogar',
+                icon: EstIconKind.globe,
+                label: 'Reconectar à partida em curso',
+                variant: EstButtonVariant.pact,
+                height: btnHeight,
+                fontSize: btnFs,
+                onPressed: c.resumeSavedGuest,
+              ),
+            ),
+          if (c.hasSavedLocal)
+            EstButton(
+              icon: EstIconKind.board,
+              label: 'Retomar campanha salva',
+              variant: EstButtonVariant.pact,
+              height: btnHeight,
+              fontSize: btnFs,
+              onPressed: c.resumeSavedLocal,
+            ),
+        ],
+
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: EstButton(
+                icon: EstIconKind.compass,
+                label: 'Tutorial',
                 variant: EstButtonVariant.ghost,
-                height: btnHeight - 2,
-                fontSize: btnFs - 0.5,
+                height: 38,
+                fontSize: 13.5,
+                onPressed: () => c.startTutorial(playerName: _nameCtrl.text),
+              ),
+            ),
+            Container(width: 1, height: 18, color: AppColors.line),
+            Expanded(
+              child: EstButton(
+                icon: EstIconKind.book,
+                label: 'Como jogar',
+                variant: EstButtonVariant.ghost,
+                height: 38,
+                fontSize: 13.5,
                 onPressed: () => showRulesModal(context, c),
               ),
             ),
@@ -494,98 +564,109 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 }
 
 class _FeaturePill extends StatelessWidget {
-  const _FeaturePill({required this.text});
+  const _FeaturePill({required this.icon, required this.text});
+  final EstIconKind icon;
   final String text;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0x880D1B2E),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF2D4A72)),
+        color: AppColors.panel.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.line),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFFDCE6F4),
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          EstIcon(icon, size: 13, color: AppColors.brass),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFDDE3EE),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({
+class _TacticalTile extends StatelessWidget {
+  const _TacticalTile({
+    required this.icon,
     required this.title,
-    required this.badge,
-    this.description,
-    this.highlight = false,
-    required this.children,
-    required this.padding,
+    required this.sub,
+    required this.onTap,
+    this.compact = false,
   });
 
+  final EstIconKind icon;
   final String title;
-  final Widget badge;
-  final String? description;
-  final bool highlight;
-  final List<Widget> children;
-  final EdgeInsetsGeometry padding;
+  final String sub;
+  final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        gradient: highlight
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xB814263D), Color(0x990B1626)],
-              )
-            : null,
-        color: highlight ? null : const Color(0x8C0B1626),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: highlight ? const Color(0x99E8B84B) : const Color(0xFF2D4A72),
-          width: highlight ? 1.2 : 1.0,
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(5),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(5),
+        child: Ink(
+          padding: EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: compact ? 10 : 12,
+          ),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF162336), Color(0xFF0C1422)],
+            ),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Row(
+                children: [
+                  EstIcon(icon, size: 15, color: AppColors.brass),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.mute),
+                ],
+              ),
+              SizedBox(height: compact ? 6 : 8),
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),
-              const SizedBox(width: 8),
-              badge,
+              if (!compact) ...[
+                const SizedBox(height: 2),
+                Text(
+                  sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                ),
+              ],
             ],
           ),
-          if (description != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              description!,
-              style: const TextStyle(
-                fontSize: 12.5,
-                height: 1.35,
-                color: AppColors.mute,
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          ...children,
-        ],
+        ),
       ),
     );
   }

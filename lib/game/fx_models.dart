@@ -195,6 +195,7 @@ class OnlineSession {
     this.token,
     this.owner = false,
     this.isPublic = false,
+    this.lan = false,
     this.gone = false,
     this.waitMsg = '',
   });
@@ -207,6 +208,7 @@ class OnlineSession {
   String? token;
   bool owner;
   bool isPublic;
+  final bool lan;
   bool gone;
   String waitMsg;
   GameLink? pendingLink;

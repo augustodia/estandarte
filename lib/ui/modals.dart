@@ -59,25 +59,92 @@ void showObjectiveModal(BuildContext context, AppController ctrl) {
   showEstSheet<void>(
     context,
     builder: (ctx) => EstSheetBody(
+      title: 'Objetivo Secreto',
+      titleIcon: const EstIcon(EstIconKind.goal, size: 20, color: AppColors.gold),
+      onClose: () => Navigator.pop(ctx),
       children: [
-        Text(
-          'Objetivo de ${meP['name'] ?? ''}',
-          style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          text,
-          style: const TextStyle(fontSize: 16, height: 1.4, color: AppColors.ink),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.obsidian,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: const Color(0xFF7D663D)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  EstFactionSeal(color: col, size: 15, highlighted: true),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      '${meP['name'] ?? ''}',
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.panel,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.brassDim),
+                    ),
+                    child: const Text(
+                      'SIGILOSO',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                        color: AppColors.gold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const EstRuleDivider(),
+              const SizedBox(height: 10),
+              Text(
+                text,
+                style: const TextStyle(fontSize: 15.5, height: 1.42, color: AppColors.ink),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
+        const EstSectionTag('DOMÍNIO NO MAPA'),
+        const SizedBox(height: 8),
         _DomainMeter(fraction: pct, color: col),
-        const SizedBox(height: 10),
-        Text(
-          'Mantenha em segredo. Territórios: $owned de $total.',
-          style: const TextStyle(fontSize: 14, color: AppColors.mute),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Text(
+              'Mantenha em segredo dos adversários.',
+              style: TextStyle(fontSize: 12.5, color: AppColors.mute),
+            ),
+            const Spacer(),
+            Text(
+              '$owned de $total (${(pct * 100).round()}%)',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        EstButton(label: 'Fechar', onPressed: () => Navigator.pop(ctx)),
+        const SizedBox(height: 14),
+        EstButton(
+          label: 'Fechar',
+          variant: EstButtonVariant.primary,
+          onPressed: () => Navigator.pop(ctx),
+        ),
       ],
     ),
   );
@@ -92,24 +159,24 @@ class _DomainMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 10,
+      height: 8,
       decoration: BoxDecoration(
-        color: AppColors.deep,
-        borderRadius: BorderRadius.circular(5),
-        boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 3, offset: Offset(0, 1))],
+        color: AppColors.obsidian,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.line),
       ),
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.centerLeft,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: fraction),
-        duration: const Duration(milliseconds: 700),
+        duration: const Duration(milliseconds: 650),
         curve: Curves.easeOutCubic,
         builder: (context, val, _) => FractionallySizedBox(
           widthFactor: val,
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [color, Color.lerp(color, Colors.white, 0.4)!],
+                colors: [color, Color.lerp(color, Colors.white, 0.35)!],
               ),
             ),
           ),
@@ -145,39 +212,54 @@ void showCardsModal(BuildContext context, AppController ctrl) {
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) {
         final chosen = picked.toList();
-        final ok = canTrade && chosen.length == 3 && ctrl.engine.validTrade(chosen);
+        final threePicked = chosen.length == 3;
+        final validSet = threePicked && ctrl.engine.validTrade(chosen);
+        final ok = canTrade && validSet;
+        final String statusMsg;
+        final Color statusColor;
+        if (cards.isEmpty) {
+          statusMsg = 'Conquiste um território no turno para ganhar sua primeira carta.';
+          statusColor = AppColors.mute;
+        } else if (!threePicked) {
+          statusMsg =
+              'Selecione ${3 - chosen.length} carta${3 - chosen.length == 1 ? '' : 's'} · próxima troca vale +${ev.tradeValue} exércitos';
+          statusColor = AppColors.mute;
+        } else if (!validSet) {
+          statusMsg = 'Conjunto inválido · precisa de 3 símbolos iguais ou 3 diferentes (★ é coringa).';
+          statusColor = AppColors.bad;
+        } else if (!canTrade) {
+          statusMsg = 'Trinca válida (+${ev.tradeValue}) · disponível no início do seu próximo turno.';
+          statusColor = AppColors.gold;
+        } else {
+          statusMsg = 'Trinca pronta para troca · +${ev.tradeValue} exércitos agora!';
+          statusColor = AppColors.gold;
+        }
+
         return EstSheetBody(
+          title: 'Cartas (${cards.length})',
+          titleIcon: const EstIcon(EstIconKind.cards, size: 20, color: AppColors.gold),
+          onClose: () => Navigator.pop(ctx),
           children: [
-            Text(
-              'Cartas (${cards.length})',
-              style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
-            ),
-            const SizedBox(height: 8),
             Text.rich(
               TextSpan(
-                style: const TextStyle(fontSize: 14, color: AppColors.mute),
+                style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
                 children: [
                   const TextSpan(
                     text:
-                        'Troque 3 símbolos iguais ou 3 diferentes (★ vale qualquer um) no início do seu turno. Próxima troca vale ',
+                        'Troque 3 símbolos iguais ou 3 diferentes (★ vale qualquer um) no reforço. Próxima troca: ',
                   ),
                   TextSpan(
-                    text: '${ev.tradeValue}',
+                    text: '+${ev.tradeValue} exércitos',
                     style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
                   ),
                   const TextSpan(
-                    text: ' exércitos; cartas de territórios seus dão +2 neles. Com 5 cartas a troca é automática.',
+                    text: ' (+2 em territórios seus). Com 5 cartas a troca é obrigatória.',
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
-            if (cards.isEmpty)
-              const Text(
-                'Nenhuma carta ainda. Conquiste um território no turno para ganhar uma.',
-                style: TextStyle(fontSize: 14, color: AppColors.mute),
-              )
-            else
+            if (cards.isNotEmpty)
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -192,75 +274,71 @@ void showCardsModal(BuildContext context, AppController ctrl) {
                   final c = cards[idx];
                   final info = ctrl.engine.cardInfo(c);
                   final isOn = picked.contains(c);
-                  final rot = isOn ? 0.0 : (idx.isEven ? -0.0175 : 0.0175);
-                  return Transform.rotate(
-                    angle: rot,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      transform: Matrix4.translationValues(0, isOn ? -6 : 0, 0),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFFFBF3E1), Color(0xFFE9DCC0)],
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isOn ? AppColors.gold : const Color(0xFFC9B48A),
-                          width: isOn ? 3 : 2,
-                        ),
-                        boxShadow: isOn
-                            ? const [
-                                BoxShadow(color: Color(0xAA000000), blurRadius: 18, offset: Offset(0, 8)),
-                                BoxShadow(color: Color(0x99E2B04A), spreadRadius: 3),
-                              ]
-                            : const [
-                                BoxShadow(color: Color(0x77000000), blurRadius: 8, offset: Offset(0, 3)),
-                              ],
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    transform: Matrix4.translationValues(0, isOn ? -5 : 0, 0),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFF7EEDB), Color(0xFFE3D3B3)],
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () {
-                            setState(() {
-                              if (picked.contains(c)) {
-                                picked.remove(c);
-                              } else if (picked.length < 3) {
-                                picked.add(c);
-                              }
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0x66FFFFFF), width: 1.5),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CustomPaint(painter: _CardSymbolPainter(info.symbol)),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(
+                        color: isOn ? AppColors.gold : const Color(0xFFB39D74),
+                        width: isOn ? 2.4 : 1.4,
+                      ),
+                      boxShadow: isOn
+                          ? const [
+                              BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 8)),
+                              BoxShadow(color: Color(0x66D9B25F), spreadRadius: 2),
+                            ]
+                          : const [
+                              BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2)),
+                            ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () {
+                          setState(() {
+                            if (picked.contains(c)) {
+                              picked.remove(c);
+                            } else if (picked.length < 3) {
+                              picked.add(c);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0x55FFFFFF), width: 1.0),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 23,
+                                height: 23,
+                                child: CustomPaint(painter: _CardSymbolPainter(info.symbol)),
+                              ),
+                              const SizedBox(height: 7),
+                              Text(
+                                info.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.18,
+                                  color: Color(0xFF1C1408),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  info.name,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.2,
-                                    color: Color(0xFF1C1408),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -268,12 +346,30 @@ void showCardsModal(BuildContext context, AppController ctrl) {
                   );
                 },
               ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.obsidian,
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(
+                  color: ok
+                      ? const Color(0xFF7D663D)
+                      : (threePicked && !validSet ? AppColors.bad.withValues(alpha: 0.6) : AppColors.line),
+                ),
+              ),
+              child: Text(
+                statusMsg,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: statusColor),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: EstButton(
-                    label: 'Trocar selecionadas',
+                    label: ok ? 'Trocar (+${ev.tradeValue})' : 'Trocar selecionadas',
                     variant: EstButtonVariant.primary,
                     onPressed: ok
                         ? () {
@@ -377,210 +473,235 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
   showEstSheet<void>(
     context,
     builder: (ctx) => EstSheetBody(
-      title: 'Regras extras',
+      title: 'Regras Extras',
+      titleIcon: const EstIcon(EstIconKind.extras, size: 20, color: AppColors.gold),
       onClose: () => Navigator.pop(ctx),
       children: [
         if (opts['events'] == true) ...[
-          Text('Evento da rodada', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
-          const SizedBox(height: 6),
-          if (v['event'] != null)
-            Text.rich(
-              TextSpan(
-                style: const TextStyle(fontSize: 16, color: AppColors.ink),
-                children: [
-                  TextSpan(
-                    text: '${eventTitles[v['event']['k']] ?? v['event']['k']}',
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
-                  ),
-                  TextSpan(text: ' · ${ev.eventText}'),
-                ],
+          const EstSectionTag('EVENTO DA RODADA'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.obsidian,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: v['event'] != null ? const Color(0xFF7D663D) : AppColors.line,
               ),
-            )
-          else
-            const Text(
-              'Rodada calma: nenhum evento em vigor.',
-              style: TextStyle(fontSize: 14, color: AppColors.mute),
             ),
-          const SizedBox(height: 8),
-          const Text(
-            'Os eventos aparecem de surpresa, a partir da rodada 2: valem para todos por uma rodada e depois vem ao menos uma rodada calma.',
-            style: TextStyle(fontSize: 14, color: AppColors.mute),
-          ),
-          const SizedBox(height: 8),
-          for (final x in ctrl.engine.constants.events)
-            Padding(
-              padding: const EdgeInsets.only(left: 8, bottom: 4),
-              child: Text.rich(
-                TextSpan(
-                  style: const TextStyle(fontSize: 13, color: AppColors.mute),
-                  children: [
-                    const TextSpan(text: '• '),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (v['event'] != null)
+                  Text.rich(
                     TextSpan(
-                      text: '${x.name}: ',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+                      style: const TextStyle(fontSize: 15, height: 1.35, color: AppColors.ink),
+                      children: [
+                        TextSpan(
+                          text: '${eventTitles[v['event']['k']] ?? v['event']['k']}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+                        ),
+                        TextSpan(text: ' · ${ev.eventText}'),
+                      ],
                     ),
-                    TextSpan(text: x.desc.replaceAll('América do Norte', 'um continente sorteado')),
-                  ],
+                  )
+                else
+                  const Text(
+                    'Rodada calma: nenhum evento em vigor.',
+                    style: TextStyle(fontSize: 13.5, color: AppColors.mute),
+                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Os eventos surgem a partir da 2ª rodada, valem para todos por uma rodada e são seguidos de ao menos uma rodada calma:',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.mute),
                 ),
-              ),
+                const SizedBox(height: 6),
+                for (final x in ctrl.engine.constants.events)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: _RuleBullet(
+                      x.name,
+                      x.desc.replaceAll('América do Norte', 'um continente sorteado'),
+                    ),
+                  ),
+              ],
             ),
-          const SizedBox(height: 12),
+          ),
+          const SizedBox(height: 14),
         ],
         if (opts['pacts'] == true) ...[
-          Text('Pactos', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
-          const SizedBox(height: 6),
-          if (pacts.isEmpty)
-            const Text('Nenhum pacto em vigor.', style: TextStyle(fontSize: 14, color: AppColors.mute))
-          else
-            Text.rich(
-              TextSpan(
-                style: const TextStyle(fontSize: 14, color: AppColors.mute),
-                children: [
-                  for (var i = 0; i < pacts.length; i++) ...[
-                    if (i > 0) const TextSpan(text: '; '),
-                    playerTag((pacts[i]['a'] as num).toInt()),
-                    const TextSpan(text: ' e '),
-                    playerTag((pacts[i]['b'] as num).toInt()),
-                    TextSpan(text: ' até o fim da rodada ${(pacts[i]['until'] as num).toInt() + 1}'),
-                  ],
-                  const TextSpan(text: '.'),
-                ],
-              ),
+          const EstSectionTag('PACTOS DIPLOMÁTICOS'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.obsidian,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: AppColors.line),
             ),
-          if (offer != null) ...[
-            const SizedBox(height: 4),
-            Text.rich(
-              TextSpan(
-                style: const TextStyle(fontSize: 14, color: AppColors.mute),
-                children: [
-                  playerTag((offer['from'] as num).toInt()),
-                  const TextSpan(text: ' propôs um pacto a '),
-                  playerTag((offer['to'] as num).toInt()),
-                  const TextSpan(text: '.'),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          EstButton(
-            variant: EstButtonVariant.pact,
-            onPressed: () {
-              Navigator.pop(ctx);
-              if (offerIsMine) {
-                showOfferModal(context, ctrl);
-              } else {
-                showPactsModal(context, ctrl);
-              }
-            },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const EstIcon(EstIconKind.pact, size: 16, color: Color(0xFFFFE2A3)),
-                const SizedBox(width: 6),
-                Text(
-                  offerIsMine
+                if (pacts.isEmpty)
+                  const Text(
+                    'Nenhum pacto em vigor.',
+                    style: TextStyle(fontSize: 13.5, color: AppColors.mute),
+                  )
+                else
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(fontSize: 13.5, color: AppColors.mute),
+                      children: [
+                        for (var i = 0; i < pacts.length; i++) ...[
+                          if (i > 0) const TextSpan(text: '; '),
+                          playerTag((pacts[i]['a'] as num).toInt()),
+                          const TextSpan(text: ' e '),
+                          playerTag((pacts[i]['b'] as num).toInt()),
+                          TextSpan(text: ' até o fim da rodada ${(pacts[i]['until'] as num).toInt() + 1}'),
+                        ],
+                        const TextSpan(text: '.'),
+                      ],
+                    ),
+                  ),
+                if (offer != null) ...[
+                  const SizedBox(height: 6),
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(fontSize: 13.5, color: AppColors.mute),
+                      children: [
+                        playerTag((offer['from'] as num).toInt()),
+                        const TextSpan(text: ' propôs um pacto a '),
+                        playerTag((offer['to'] as num).toInt()),
+                        const TextSpan(text: '.'),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                EstButton(
+                  variant: EstButtonVariant.pact,
+                  icon: EstIconKind.pact,
+                  label: offerIsMine
                       ? 'Responder à proposta'
                       : myTurn
                           ? 'Abrir pactos (propor ou romper)'
                           : 'Ver pactos',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFFFE2A3),
-                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    if (offerIsMine) {
+                      showOfferModal(context, ctrl);
+                    } else {
+                      showPactsModal(context, ctrl);
+                    }
+                  },
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
         ],
         if (opts['nukes'] == true) ...[
-          Text('Ogiva nuclear', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
-          const SizedBox(height: 6),
-          if (v['fog'] != null) ...[
-            Text.rich(
-              TextSpan(
-                style: const TextStyle(fontSize: 16, color: AppColors.ink),
-                children: [
-                  TextSpan(
-                    text: 'Névoa sobre ${ctrl.mapData.territories[(v['fog']['t'] as num).toInt()].name}',
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.rad),
-                  ),
-                  const TextSpan(text: ', lançada por '),
-                  playerTag((v['fog']['by'] as num).toInt()),
-                  const TextSpan(text: '. Dissipa quando a vez voltar para quem lançou.'),
-                ],
+          const EstSectionTag('OGIVA NUCLEAR'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.obsidian,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: v['fog'] != null ? AppColors.rad.withValues(alpha: 0.55) : AppColors.line,
               ),
             ),
-            const SizedBox(height: 6),
-          ],
-          Text.rich(
-            TextSpan(
-              style: const TextStyle(fontSize: 14, color: AppColors.mute),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextSpan(
-                  text: opts['hq'] == true
-                      ? 'A ogiva é uma das ordens do Quartel: quando está aberta, custa 4 medalhas e pode ser lançada em qualquer território inimigo. Hoje ela destrói '
-                      : 'No reforço, em vez de trocar 3 cartas por exércitos, você pode lançar a ogiva em qualquer território inimigo. Hoje ela destrói ',
+                if (v['fog'] != null) ...[
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(fontSize: 14.5, color: AppColors.ink),
+                      children: [
+                        TextSpan(
+                          text: 'Névoa sobre ${ctrl.mapData.territories[(v['fog']['t'] as num).toInt()].name}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.rad),
+                        ),
+                        const TextSpan(text: ', lançada por '),
+                        playerTag((v['fog']['by'] as num).toInt()),
+                        const TextSpan(text: '.'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text.rich(
+                  TextSpan(
+                    style: const TextStyle(fontSize: 13.5, color: AppColors.mute),
+                    children: [
+                      TextSpan(
+                        text: opts['hq'] == true
+                            ? 'Ordem do Quartel (4 medalhas). Hoje destrói '
+                            : 'No reforço (em vez da troca de 3 cartas), destrói ',
+                      ),
+                      TextSpan(
+                        text: '${ev.nukeDamage} exércitos',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+                      ),
+                      TextSpan(
+                        text: opts['hq'] == true
+                            ? ' (dobro da Mobilização), sempre sobrando 1 no alvo.'
+                            : ' (dobro da troca), sempre sobrando 1 no alvo.',
+                      ),
+                    ],
+                  ),
                 ),
-                TextSpan(
-                  text: '${ev.nukeDamage}',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
-                ),
-                TextSpan(
-                  text: opts['hq'] == true
-                      ? ' exércitos, o dobro do valor da Mobilização, sempre sobrando 1 no alvo. Não há sorteio.'
-                      : ' exércitos, o dobro do valor da troca, sempre sobrando 1 no alvo. Não há sorteio.',
-                ),
+                const SizedBox(height: 6),
+                for (final b in [
+                  if (opts['hq'] == true)
+                    'Conta como sua ordem tática do turno e o restante da vez segue normal.'
+                  else
+                    'Você recebe 75% dos exércitos da troca (hoje ${ev.nukeRefund}).',
+                  'O alvo fica radioativo até sua vez voltar: ninguém o ataca, mas o dono joga normalmente.',
+                  'Lançar uma ogiva encerra seu pacto imediatamente.',
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text('• $b', style: const TextStyle(fontSize: 12.5, color: AppColors.mute)),
+                  ),
+                if (myTurn && ev.nukeBlock.isNotEmpty && v['step'] == 'reinforce') ...[
+                  const SizedBox(height: 6),
+                  Text(ev.nukeBlock, style: const TextStyle(fontSize: 12.5, color: AppColors.bad)),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          for (final b in [
-            if (opts['hq'] == true)
-              'Ela conta como a sua ordem tática do turno e você joga o resto do turno normalmente.'
-            else
-              'Você recebe 75% dos exércitos da troca (hoje ${ev.nukeRefund}) e joga o resto do turno normalmente.',
-            'O território atingido fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você. O dono joga normalmente: reforça, ataca a partir dele e recebe o bônus do continente.',
-            'Quando a névoa some, você é o primeiro a poder atacar ali.',
-            'Só uma névoa no mapa por vez.',
-            if (opts['hq'] == true)
-              'Antes da primeira ogiva, e entre uma ogiva e outra, é preciso ter feito uma Mobilização.'
-            else ...[
-              'A primeira troca de cada jogador é sempre normal, e depois de uma ogiva a troca seguinte também.',
-              'O lançamento conta na escada: a próxima troca de qualquer jogador vale o degrau seguinte.',
-            ],
-            'O pacto de quem lança acaba na hora.',
-          ])
-            Padding(
-              padding: const EdgeInsets.only(left: 8, bottom: 3),
-              child: Text('• $b', style: const TextStyle(fontSize: 13, color: AppColors.mute)),
-            ),
-          if (myTurn && ev.nukeBlock.isNotEmpty && v['step'] == 'reinforce') ...[
-            const SizedBox(height: 6),
-            Text(ev.nukeBlock, style: const TextStyle(fontSize: 13.5, color: AppColors.mute)),
-          ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
         ],
         if (opts['hq'] == true && opts['spy'] == true) ...[
-          Text('Espionagem', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
-          const SizedBox(height: 6),
-          const Text(
-            'Ordem do Quartel (2 medalhas): revela informações sobre o objetivo de um adversário e fortalece seus ataques contra ele no turno.',
-            style: TextStyle(fontSize: 14, color: AppColors.mute),
-          ),
-          const SizedBox(height: 6),
-          for (final b in const [
-            '1ª espionagem no alvo: mostra 2 objetivos possíveis (1 verdadeiro e 1 falso, em ordem qualquer).',
-            '2ª espionagem no mesmo alvo: confirma o objetivo verdadeiro com certeza.',
-            'Neste turno, seus ataques contra o alvo espionado somam +1 ao maior dado de ataque (até 6).',
-            'Só você lê os relatórios (guardados no Quartel); a mesa apenas fica sabendo quem você espionou.',
-          ])
-            Padding(
-              padding: const EdgeInsets.only(left: 8, bottom: 3),
-              child: Text('• $b', style: const TextStyle(fontSize: 13, color: AppColors.mute)),
+          const EstSectionTag('ESPIONAGEM'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.obsidian,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: AppColors.line),
             ),
-          const SizedBox(height: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final b in const [
+                  '1ª espionagem no alvo: revela 2 objetivos possíveis (1 verdadeiro e 1 falso).',
+                  '2ª espionagem no mesmo alvo: confirma o objetivo verdadeiro com certeza.',
+                  'Ataques contra o alvo espionado no turno somam +1 ao maior dado (até 6).',
+                  'Os relatórios ficam guardados no Quartel e só você lê.',
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text('• $b', style: const TextStyle(fontSize: 12.5, color: AppColors.mute)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
         ],
         EstButton(
           label: 'Fechar',
@@ -619,44 +740,21 @@ class _PactPairWidget extends StatelessWidget {
       final p = players[idx] as Map<String, dynamic>;
       final col = parseHexColor(colors[(p['color'] as num).toInt()].hex);
       final name = '${p['name'] ?? ''}';
-      final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
       final terrs = _ownedCount(v, idx);
-      final avSize = large ? 52.0 : 40.0;
       return Expanded(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: avSize,
-              height: avSize,
-              decoration: BoxDecoration(
-                color: col,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  const BoxShadow(color: Color(0xFF0B1626), spreadRadius: 3),
-                  BoxShadow(color: col, spreadRadius: 4),
-                  BoxShadow(color: col.withValues(alpha: 0.5), blurRadius: 16),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initial,
-                style: TextStyle(
-                  color: const Color(0xFF0B1626),
-                  fontSize: large ? 22 : 17,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+            EstFactionSeal(color: col, size: large ? 38 : 28, highlighted: true),
             const SizedBox(height: 6),
             Text(
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
             ),
             Text(
-              '$terrs territórios · ${_handLabel(v, p)}',
+              '$terrs terr. · ${_handLabel(v, p)}',
               style: const TextStyle(fontSize: 11, color: AppColors.mute),
             ),
           ],
@@ -716,18 +814,10 @@ void showOfferModal(BuildContext context, AppController ctrl) {
     context,
     pactTheme: true,
     builder: (ctx) => EstSheetBody(
+      title: 'Proposta de Pacto',
+      titleIcon: const EstIcon(EstIconKind.pact, size: 20, color: AppColors.gold),
+      onClose: () => Navigator.pop(ctx),
       children: [
-        const Text(
-          'PROPOSTA DE PACTO',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.7,
-            color: AppColors.gold,
-          ),
-        ),
-        const SizedBox(height: 12),
         _PactPairWidget(
           ctrl: ctrl,
           a: fromIdx,
@@ -831,16 +921,8 @@ void showPactsModal(BuildContext context, AppController ctrl) {
   }
 
   Widget secTitle(String t) => Padding(
-        padding: const EdgeInsets.only(top: 14, bottom: 6),
-        child: Text(
-          t.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.3,
-            color: AppColors.mute,
-          ),
-        ),
+        padding: const EdgeInsets.only(top: 14, bottom: 8),
+        child: EstSectionTag(t),
       );
 
   Widget pCard({required Widget child, bool highlight = false, bool dashed = false}) {
@@ -848,14 +930,11 @@ void showPactsModal(BuildContext context, AppController ctrl) {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0x8C0B1626),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.obsidian,
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(
-          color: highlight ? const Color(0x88E2B04A) : const Color(0xFF233C5E),
+          color: highlight ? const Color(0xFF7D663D) : AppColors.line,
         ),
-        boxShadow: highlight
-            ? const [BoxShadow(color: Color(0x14E2B04A), blurRadius: 24)]
-            : null,
       ),
       child: child,
     );
@@ -1017,8 +1096,6 @@ void showPactsModal(BuildContext context, AppController ctrl) {
                           final sub = why.isNotEmpty
                               ? why
                               : '${_ownedCount(v, i)} territórios · ${_handSize(p)} carta${_handSize(p) == 1 ? '' : 's'}${p['ctrl'] == 'bot' ? ' · bot' : ''}';
-                          final initial =
-                              '${p['name'] ?? ''}'.isNotEmpty ? '${p['name']}'[0].toUpperCase() : '?';
 
                           return Opacity(
                             opacity: why.isNotEmpty ? 0.62 : 1.0,
@@ -1026,33 +1103,13 @@ void showPactsModal(BuildContext context, AppController ctrl) {
                               margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
-                                color: const Color(0x8C0B1626),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFF233C5E)),
+                                color: AppColors.obsidian,
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: AppColors.line),
                               ),
                               child: Row(
                                 children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: col,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        const BoxShadow(color: Color(0xFF0B1626), spreadRadius: 2),
-                                        BoxShadow(color: col, spreadRadius: 3),
-                                      ],
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      initial,
-                                      style: const TextStyle(
-                                        color: Color(0xFF0B1626),
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
+                                  EstFactionSeal(color: col, size: 18),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
@@ -1176,18 +1233,10 @@ void _showConfirmBreakPact(BuildContext context, AppController ctrl, int otherPl
     context,
     pactTheme: true,
     builder: (ctx) => EstSheetBody(
+      title: 'Romper Pacto?',
+      titleIcon: const EstIcon(EstIconKind.pact, size: 20, color: AppColors.bad),
+      onClose: () => Navigator.pop(ctx),
       children: [
-        const Text(
-          'ROMPER O PACTO?',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.7,
-            color: Color(0xFFFF8F7A),
-          ),
-        ),
-        const SizedBox(height: 12),
         _PactPairWidget(ctrl: ctrl, a: ctrl.me, b: otherPlayer, note: 'rompendo', large: true),
         const SizedBox(height: 12),
         Text(
@@ -1236,8 +1285,11 @@ void showMenuModal(BuildContext context, AppController ctrl) {
       builder: (ctx, setState) {
         final turnIdx = (v?['turn'] as num?)?.toInt() ?? -1;
         return EstSheetBody(
+          title: 'Mesa & Crônica',
+          titleIcon: const EstIcon(EstIconKind.menu, size: 20, color: AppColors.gold),
+          onClose: () => Navigator.pop(ctx),
           children: [
-            Text('Jogadores', style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC))),
+            const EstSectionTag('FORÇAS EM CAMPO'),
             const SizedBox(height: 8),
             for (var i = 0; i < players.length; i++)
               Builder(
@@ -1250,95 +1302,101 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                   final offline = p['ctrl'] == 'remote' &&
                       (host ? (seat == null || seat.link == null || seat.lag) : (ctrl.onlMap[i] != true));
                   final isNow = i == turnIdx;
+                  final dead = p['alive'] != true;
                   final pct = (owned / totalTerr).clamp(0.0, 1.0);
 
-                  return Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: const BorderSide(color: AppColors.line),
-                        left: isNow ? BorderSide(color: col, width: 3.5) : BorderSide.none,
-                      ),
-                    ),
-                    padding: EdgeInsets.only(left: isNow ? 8 : 0, top: 6, bottom: 8),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 14,
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: col,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0x88000000), width: 2),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text.rich(
-                                TextSpan(
-                                  style: const TextStyle(fontSize: 13, color: AppColors.ink),
-                                  children: [
-                                    if (p['alive'] != true) const TextSpan(text: '☠ '),
-                                    TextSpan(
-                                      text: '${p['name'] ?? ''}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: isNow ? Colors.white : AppColors.ink,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text:
-                                          ' · $owned terr. · ${_handLabel(v, p)}${p['ctrl'] == 'bot' ? ' · bot' : ''}',
-                                    ),
-                                    if (offline)
-                                      TextSpan(
-                                        text:
-                                            ' · ${seat != null && seat.link != null ? 'sem resposta' : 'offline'}',
-                                        style: const TextStyle(color: AppColors.bad),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            if (host && p['ctrl'] == 'remote' && p['alive'] == true && P2P.supported) ...[
-                              const SizedBox(width: 6),
-                              EstButton(
-                                small: true,
-                                height: 34,
-                                label: 'QR',
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  showP2pInviteModal(context, ctrl, reconnectSeat: seatIdx);
-                                },
-                              ),
-                            ],
-                            if (host && offline && p['alive'] == true) ...[
-                              const SizedBox(width: 6),
-                              EstButton(
-                                small: true,
-                                height: 34,
-                                label: 'Virar bot',
-                                onPressed: () {
-                                  ctrl.convertSeatToBot(seatIdx);
-                                  Navigator.pop(ctx);
-                                },
-                              ),
-                            ],
-                          ],
+                  return Opacity(
+                    opacity: dead ? 0.45 : 1.0,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 5),
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppColors.obsidian,
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                          color: isNow ? col.withValues(alpha: 0.7) : AppColors.line,
                         ),
-                        const SizedBox(height: 5),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            widthFactor: pct,
-                            child: Container(
-                              height: 2,
-                              color: col.withValues(alpha: 0.85),
+                      ),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+                            child: Row(
+                              children: [
+                                EstFactionSeal(color: col, size: 12, highlighted: isNow),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: Text.rich(
+                                    TextSpan(
+                                      style: const TextStyle(fontSize: 13, color: AppColors.ink),
+                                      children: [
+                                        TextSpan(
+                                          text: '${p['name'] ?? ''}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            decoration: dead ? TextDecoration.lineThrough : null,
+                                            color: isNow ? Colors.white : AppColors.ink,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              ' · $owned terr. · ${_handLabel(v, p)}${p['ctrl'] == 'bot' ? ' · bot' : ''}',
+                                          style: const TextStyle(color: AppColors.mute),
+                                        ),
+                                        if (dead)
+                                          const TextSpan(
+                                            text: ' · eliminado',
+                                            style: TextStyle(color: AppColors.mute),
+                                          ),
+                                        if (offline)
+                                          TextSpan(
+                                            text:
+                                                ' · ${seat != null && seat.link != null ? 'sem resposta' : 'offline'}',
+                                            style: const TextStyle(color: AppColors.bad),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (host && p['ctrl'] == 'remote' && !dead && P2P.supported) ...[
+                                  const SizedBox(width: 6),
+                                  EstButton(
+                                    small: true,
+                                    height: 32,
+                                    label: 'QR',
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      showP2pInviteModal(context, ctrl, reconnectSeat: seatIdx);
+                                    },
+                                  ),
+                                ],
+                                if (host && offline && !dead) ...[
+                                  const SizedBox(width: 6),
+                                  EstButton(
+                                    small: true,
+                                    height: 32,
+                                    label: 'Virar bot',
+                                    onPressed: () {
+                                      ctrl.convertSeatToBot(seatIdx);
+                                      Navigator.pop(ctx);
+                                    },
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: pct,
+                              child: Container(
+                                height: 2,
+                                color: col.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -1349,8 +1407,8 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Sala online ${ctrl.online!.code}',
-                    style: const TextStyle(fontSize: 13.5, color: AppColors.mute, fontWeight: FontWeight.w700),
+                    'Sala online #${ctrl.online!.code}',
+                    style: const TextStyle(fontSize: 13, color: AppColors.mute, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(width: 10),
                   EstButton(
@@ -1366,19 +1424,114 @@ void showMenuModal(BuildContext context, AppController ctrl) {
             ],
             if (log.isNotEmpty) ...[
               const SizedBox(height: 10),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 120),
+              const EstSectionTag('CRÔNICA DA PARTIDA'),
+              const SizedBox(height: 6),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 130),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.obsidian,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: AppColors.line),
+                ),
                 child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final entry in log)
-                        Text(
-                          entry.toString(),
-                          style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.mute),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 3),
+                          child: Text(
+                            entry.toString(),
+                            style: const TextStyle(fontSize: 12, height: 1.38, color: AppColors.mute),
+                          ),
                         ),
                     ],
                   ),
+                ),
+              ),
+            ],
+            if (host && ctrl.relayCode != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.obsidian,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: const Color(0xFF7D663D)),
+                ),
+                child: Row(
+                  children: [
+                    const EstIcon(EstIconKind.globe, size: 15, color: AppColors.gold),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SelectableText(
+                        'Sala por código: #${ctrl.relayCode}',
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                    EstButton(
+                      small: true,
+                      height: 30,
+                      label: 'Copiar',
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: ctrl.relayCode!));
+                        ctrl.showToast('Código #${ctrl.relayCode} copiado.');
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    EstButton(
+                      small: true,
+                      height: 30,
+                      label: 'QR',
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        showOnlineInviteModal(context, ctrl);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (host && ctrl.lanHostAddr != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.obsidian,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: const Color(0xFF7D663D)),
+                ),
+                child: Row(
+                  children: [
+                    const EstIcon(EstIconKind.lan, size: 15, color: AppColors.gold),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SelectableText(
+                        'Host LAN: ${ctrl.lanHostAddr}',
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                    EstButton(
+                      small: true,
+                      height: 30,
+                      label: 'Copiar IP',
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: ctrl.lanHostAddr!));
+                        ctrl.showToast('IP copiado.');
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1386,6 +1539,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
               const SizedBox(height: 10),
               EstButton(
                 small: true,
+                icon: EstIconKind.qr,
                 label: 'Reconectar por QR',
                 onPressed: () {
                   Navigator.pop(ctx);
@@ -1393,7 +1547,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 },
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            const EstSectionTag('PREFERÊNCIAS'),
+            const SizedBox(height: 8),
             Row(
               children: [
                 if (!layout.big) ...[
@@ -1428,6 +1584,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 Expanded(
                   child: EstButton(
                     small: true,
+                    icon: EstIconKind.book,
                     label: 'Regras',
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -1439,6 +1596,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 Expanded(
                   child: EstButton(
                     small: true,
+                    variant: EstButtonVariant.warn,
                     label: 'Sair',
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -1478,20 +1636,17 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
     context,
     maxWidth: 440,
     builder: (ctx) => EstSheetBody(
+      title: watching ? 'Parar de assistir?' : 'Sair da partida?',
+      onClose: () => Navigator.pop(ctx),
       children: [
-        Text(
-          watching ? 'Parar de assistir?' : 'Sair da partida?',
-          style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
-        ),
-        const SizedBox(height: 8),
-        Text(desc, style: const TextStyle(fontSize: 14, color: AppColors.mute)),
-        const SizedBox(height: 14),
+        Text(desc, style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.mute)),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: EstButton(
                 label: 'Sair',
-                variant: EstButtonVariant.primary,
+                variant: EstButtonVariant.warn,
                 onPressed: () {
                   Navigator.pop(ctx);
                   ctrl.leaveGame();
@@ -1500,7 +1655,11 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: EstButton(label: 'Ficar', onPressed: () => Navigator.pop(ctx)),
+              child: EstButton(
+                label: 'Ficar',
+                variant: EstButtonVariant.primary,
+                onPressed: () => Navigator.pop(ctx),
+              ),
             ),
           ],
         ),
@@ -1514,87 +1673,281 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
 void showRulesModal(BuildContext context, AppController ctrl) {
   final c = ctrl.engine.constants;
   final eventNames = c.events.map((e) => e.name).join(', ');
+  var tab = 0;
+
+  Widget codexBox(List<Widget> children) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.obsidian,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+      );
+
+  Widget phaseStep(EstIconKind icon, String numStr, String title) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.panel,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EstIcon(icon, size: 15, color: AppColors.gold),
+              const SizedBox(height: 4),
+              Text(
+                '$numStr. $title',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget keyRow(String keys, String desc) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            Container(
+              constraints: const BoxConstraints(minWidth: 66),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.panel2,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFF455B7A)),
+              ),
+              child: Text(
+                keys,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.gold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                desc,
+                style: const TextStyle(fontSize: 13, color: AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+      );
+
   showEstSheet<void>(
     context,
-    builder: (ctx) => EstSheetBody(
-      title: 'Como jogar',
-      onClose: () => Navigator.pop(ctx),
-      children: [
-        const _RuleBullet(
-          'Objetivo',
-          'cada jogador recebe um objetivo secreto (🎯). Quem cumprir primeiro vence.',
-        ),
-        const _RuleBullet(
-          'Reforço',
-          'no início do turno você recebe metade dos seus territórios em exércitos (mínimo 3), mais o bônus de cada continente inteiro que dominar (o bônus só pode ser colocado no próprio continente).',
-        ),
-        const _RuleBullet(
-          'Ataque',
-          'a partir da 2ª rodada, ataque vizinhos com até 3 dados (precisa deixar 1 exército para trás); use − e + para escolher quantos. A defesa rola até 3. Compare do maior para o menor; empate é da defesa. “Auto” repete o ataque com o máximo de dados até conquistar ou não poder mais.',
-        ),
-        const _RuleBullet(
-          'Conquista',
-          'ao zerar a defesa você ocupa o território com 1 a 3 exércitos e, no fim do turno, ganha uma carta.',
-        ),
-        const _RuleBullet(
-          'Cartas (regra extra)',
-          'entram no lugar do Quartel. Troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória e o jogo faz sozinho no início do turno, escolhendo a melhor trinca. Com menos, o botão “Trocar cartas” aparece no reforço.',
-        ),
-        const _RuleBullet(
-          'Remanejamento',
-          'ao final, mova exércitos entre territórios vizinhos seus; cada exército anda uma vez por turno.',
-        ),
-        const _RuleBullet(
-          'Rotas marítimas',
-          'linhas pontilhadas também são fronteiras. O Alasca liga com o Extremo Oriente pela borda do mapa.',
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Regras extras (opcionais)',
-          style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC)),
-        ),
-        const SizedBox(height: 6),
-        _RuleBullet(
-          'Eventos de rodada',
-          'da 2ª rodada em diante, de vez em quando uma rodada começa com um evento surpresa, que vale para todos até ela acabar e é seguido de ao menos uma rodada calma: $eventNames. O raio no painel mostra o evento em vigor.',
-        ),
-        _RuleBullet(
-          'Pactos',
-          'na sua vez, proponha a outro jogador um pacto de não agressão de ${c.pactRounds} rodadas. Enquanto valer, um não ataca o outro. Cada jogador só pode ter um pacto por vez. Para romper antes, só no início do seu turno, antes de reforçar, ao custo de metade do reforço (no mínimo ${c.pactPenalty}). Com dois jogadores em jogo os pactos acabam.',
-        ),
-        const _RuleBullet(
-          'Quartel',
-          'você ganha medalhas pelo que faz no mapa: 1 na primeira conquista do turno, +1 ao fechar um continente e +2 ao eliminar alguém, e guarda até 6. No início do turno, 3 medalhas pagam uma Mobilização, que rende o esforço de guerra: 4 exércitos na rodada 2 e mais 1 a cada rodada. Três ordens táticas ficam abertas para todos (ponte aérea, trincheira, sabotagem, espionagem e, se a partida tiver, a ogiva); cada jogador compra uma por turno e outra entra no lugar. A espionagem custa as 6 medalhas e não entrega o objetivo: dá dois objetivos possíveis do adversário, um verdadeiro e um falso. Todos veem as medalhas de todos.',
-        ),
-        _RuleBullet(
-          'Ogiva nuclear',
-          'no Quartel é uma ordem de 4 medalhas, com dano igual ao dobro da Mobilização e sem devolução. Com cartas: no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sempre sobra 1) e fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você, mas o dono joga normalmente. Você recebe 75% dos exércitos da troca e segue o turno normalmente, atacando em outros lugares. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.',
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Mouse e teclado',
-          style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC)),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Clique para escolher, arraste para mover o mapa, roda do mouse para o zoom e botão direito para desfazer a seleção. Enter confirma a ação principal, + e − (ou as setas) mudam a quantidade, Esc cancela, F ajusta o zoom, C cartas, O objetivo, M menu.',
-          style: TextStyle(fontSize: 14, color: AppColors.mute),
-        ),
-        const SizedBox(height: 10),
-        Text('Conexão', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
-        const SizedBox(height: 4),
-        const Text(
-          'Os aparelhos falam direto entre si, sem servidor e sem internet: basta estarem no mesmo Wi-Fi ou no hotspot de um dos celulares. Permita a câmera quando o navegador pedir. Se alguém cair, o jogo tenta voltar sozinho em alguns segundos. Se não conseguir, o anfitrião toca em “Reconectar” e o jogador lê o novo QR em “Reconectar à partida”: ele volta para o mesmo lugar.',
-          style: TextStyle(fontSize: 14, color: AppColors.mute),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Online: em “Jogar online”, um cria a sala e manda o link ou o código; cada um joga do próprio celular, de qualquer lugar com internet. Se a conexão cair, o jogo volta sozinho para o mesmo lugar. Quem sai no meio da partida vira bot (e pode voltar pelo link). Sem relógio, a vez de quem está desconectado passa depois de um minuto e meio.',
-          style: TextStyle(fontSize: 14, color: AppColors.mute),
-        ),
-        const SizedBox(height: 14),
-        EstButton(label: 'Fechar', onPressed: () => Navigator.pop(ctx)),
-      ],
+    maxWidth: 600,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        const tabs = [
+          'Turno',
+          'Quartel e Cartas',
+          'Extras',
+          'Atalhos e Rede',
+        ];
+
+        Widget content;
+        switch (tab) {
+          case 0:
+            content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const EstSectionTag('RITMO DA RODADA'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    phaseStep(EstIconKind.troop, '1', 'Reforço'),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 5),
+                      child: Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.brass),
+                    ),
+                    phaseStep(EstIconKind.sword, '2', 'Ataque'),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 5),
+                      child: Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.brass),
+                    ),
+                    phaseStep(EstIconKind.move, '3', 'Remanejar'),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                codexBox(const [
+                  _RuleBullet(
+                    'Objetivo secreto',
+                    'cada comandante recebe uma missão oculta (ícone de alvo ou tecla O). O primeiro a cumprir vence imediatamente.',
+                  ),
+                  _RuleBullet(
+                    'Reforço',
+                    'receba metade dos seus territórios em exércitos (mínimo 3), além do bônus de cada continente dominado por inteiro — esse bônus deve ser posicionado no próprio continente.',
+                  ),
+                  _RuleBullet(
+                    'Ataque',
+                    'a partir da 2ª rodada, ataque vizinhos com até 3 dados (sempre sobra ao menos 1 exército atrás). A defesa rola até 3 dados e vence empates. "Auto" repete com o máximo até conquistar ou parar.',
+                  ),
+                  _RuleBullet(
+                    'Conquista e Remanejamento',
+                    'ao zerar a defesa, ocupe com 1 a 3 exércitos. No fim da vez, desloque tropas entre territórios vizinhos seus (cada exército move uma vez).',
+                  ),
+                  _RuleBullet(
+                    'Rotas marítimas',
+                    'linhas pontilhadas também conectam fronteiras — inclusive a ligação do Alasca com o Extremo Oriente pela borda.',
+                  ),
+                ]),
+              ],
+            );
+          case 1:
+            content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const EstSectionTag('QUARTEL (PADRÃO)'),
+                const SizedBox(height: 8),
+                codexBox(const [
+                  _RuleBullet(
+                    'Ganho de medalhas',
+                    '1 medalha na primeira conquista do turno, +1 ao fechar um continente e +2 ao eliminar um comandante (máximo de 6 acumuladas).',
+                  ),
+                  _RuleBullet(
+                    'Mobilização',
+                    'por 3 medalhas no início do turno, receba o esforço de guerra: 4 exércitos na rodada 2, subindo +1 a cada nova rodada.',
+                  ),
+                  _RuleBullet(
+                    'Ordens abertas',
+                    '3 ordens ficam disponíveis para todos (Ponte aérea, Trincheira, Sabotagem, Espionagem e Ogiva). Cada jogador usa no máximo uma por turno e outra entra no lugar.',
+                  ),
+                  _RuleBullet(
+                    'Espionagem',
+                    '1ª vez revela 2 objetivos possíveis (1 verdadeiro e 1 falso); 2ª vez confirma o real, além de dar +1 ao maior dado contra o alvo no turno.',
+                  ),
+                ]),
+                const EstSectionTag('CARTAS DE TERRITÓRIO (CLÁSSICO)'),
+                const SizedBox(height: 8),
+                codexBox(const [
+                  _RuleBullet(
+                    'Substitui o Quartel',
+                    'com Quartel desligado, conquiste ao menos 1 território no turno para comprar uma carta ao fim da vez.',
+                  ),
+                  _RuleBullet(
+                    'Trocas escalonadas',
+                    'junte 3 símbolos iguais ou 3 diferentes (★ é coringa) para ganhar 4, 6, 8, 10, 12, 15 e +5 a cada troca seguinte (+2 no próprio território). Ao juntar 5 cartas, a troca torna-se obrigatória antes de reforçar.',
+                  ),
+                ]),
+              ],
+            );
+          case 2:
+            content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const EstSectionTag('SISTEMAS OPCIONAIS'),
+                const SizedBox(height: 8),
+                codexBox([
+                  _RuleBullet(
+                    'Eventos de rodada',
+                    'a partir da 2ª rodada, eventos globais podem surgir para todos por uma rodada, seguidos de ao menos uma rodada calma: $eventNames.',
+                  ),
+                  _RuleBullet(
+                    'Pactos diplomáticos',
+                    'proponha um acordo de não agressão de ${c.pactRounds} rodadas (1 por jogador). Romper antes custa metade do reforço do turno (mínimo ${c.pactPenalty}) e só pode ser feito antes de colocar tropas.',
+                  ),
+                  const _RuleBullet(
+                    'Ogiva nuclear',
+                    'destrói o dobro da Mobilização (ou da troca) no território alvo, deixando no mínimo 1 exército e criando névoa radioativa impenetrável até sua vez voltar. Lança-la encerra seu pacto atual.',
+                  ),
+                ]),
+              ],
+            );
+          default:
+            content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const EstSectionTag('ATALHOS E CÂMERA'),
+                const SizedBox(height: 8),
+                codexBox([
+                  keyRow('Clique / Arraste', 'Seleciona territórios e navega pelo mapa'),
+                  keyRow('Botão direito', 'Desfaz a seleção atual no mapa'),
+                  keyRow('Enter', 'Confirma a ação principal da barra inferior'),
+                  keyRow('+ / − / Setas', 'Ajusta a quantidade de dados ou exércitos'),
+                  keyRow('F', 'Alterna o enquadramento completo do mapa'),
+                  keyRow('O · C · M', 'Abre Objetivo (O), Cartas/Quartel (C) ou Mesa (M)'),
+                  keyRow('Esc', 'Cancela ordens ativas, seleções ou confirmações'),
+                ]),
+                const EstSectionTag('MODOS DE CONEXÃO'),
+                const SizedBox(height: 8),
+                codexBox(const [
+                  _RuleBullet(
+                    'Salas Online',
+                    'jogue pela internet via fila rápida ou código de sala; se cair, reconecte pelo link para retomar seu assento.',
+                  ),
+                  _RuleBullet(
+                    'Rede Local (QR P2P)',
+                    'aparelhos no mesmo Wi-Fi ou hotspot conectam direto via QR Code sem depender de servidor.',
+                  ),
+                ]),
+              ],
+            );
+        }
+
+        return EstSheetBody(
+          title: 'Manual de Campanha',
+          titleIcon: const EstIcon(EstIconKind.book, size: 20, color: AppColors.gold),
+          onClose: () => Navigator.pop(ctx),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: AppColors.obsidian,
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: AppColors.line),
+              ),
+              child: Wrap(
+                spacing: 3,
+                runSpacing: 3,
+                children: [
+                  for (var i = 0; i < tabs.length; i++)
+                    GestureDetector(
+                      onTap: () => setState(() => tab = i),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: tab == i ? AppColors.panel2 : Colors.transparent,
+                          borderRadius: BorderRadius.circular(4),
+                          border: tab == i ? Border.all(color: const Color(0xFF7D663D)) : null,
+                        ),
+                        child: Text(
+                          tabs[i],
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: tab == i ? FontWeight.w700 : FontWeight.w600,
+                            color: tab == i ? AppColors.gold : AppColors.mute,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              child: KeyedSubtree(key: ValueKey(tab), child: content),
+            ),
+            const SizedBox(height: 4),
+            EstButton(
+              label: 'Fechar',
+              variant: EstButtonVariant.primary,
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -1633,15 +1986,13 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
   showEstSheet<void>(
     context,
     builder: (ctx) => EstSheetBody(
+      title: 'Convidar · #$code',
+      titleIcon: const EstIcon(EstIconKind.globe, size: 20, color: AppColors.gold),
+      onClose: () => Navigator.pop(ctx),
       children: [
-        Text(
-          'Convidar para a sala $code',
-          style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
-        ),
-        const SizedBox(height: 6),
         const Text(
-          'Mande o link (ou peça para lerem o QR). Quem abrir entra direto nesta sala; também dá para digitar o código em “Jogar online”.',
-          style: TextStyle(fontSize: 14, color: AppColors.mute),
+          'Compartilhe o link ou o QR abaixo. Quem abrir entra direto nesta sala; também dá para digitar o código em Salas Online.',
+          style: TextStyle(fontSize: 13.5, height: 1.4, color: AppColors.mute),
         ),
         const SizedBox(height: 12),
         Center(
@@ -1649,9 +2000,10 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.brass),
             ),
-            child: QrImageView(data: url, size: 220, backgroundColor: Colors.white),
+            child: QrImageView(data: url, size: 210, backgroundColor: Colors.white),
           ),
         ),
         const SizedBox(height: 10),
@@ -1751,9 +2103,13 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
                 : 'Convidar jogador';
 
         return EstSheetBody(
+          title: title,
+          titleIcon: const EstIcon(EstIconKind.qr, size: 20, color: AppColors.gold),
+          onClose: () {
+            invite?.cancel();
+            Navigator.pop(ctx);
+          },
           children: [
-            Text(title, style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC))),
-            const SizedBox(height: 8),
             if (loading)
               const Padding(
                 padding: EdgeInsets.all(24),
@@ -1763,13 +2119,13 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
               Text(err!, style: const TextStyle(fontSize: 14, color: AppColors.bad))
             else ...[
               Text(
-                '1. O convidado abre o jogo, toca em “${ctrl.view != null ? 'Reconectar à partida' : 'Rede local → Entrar por QR'}” e lê este QR.',
-                style: const TextStyle(fontSize: 14, color: AppColors.ink),
+                '1. O convidado abre o jogo, toca em “${ctrl.view != null ? 'Reconectar à partida' : 'Conectar por QR Code'}” e lê este QR.',
+                style: const TextStyle(fontSize: 13.5, color: AppColors.ink),
               ),
               const SizedBox(height: 4),
               const Text(
-                '2. O celular dele mostra um QR de resposta: aponte a câmera deste aparelho para ele ou cole o código abaixo.',
-                style: TextStyle(fontSize: 14, color: AppColors.ink),
+                '2. O aparelho dele mostra um QR de resposta: aponte a câmera deste aparelho para ele ou cole o código abaixo.',
+                style: TextStyle(fontSize: 13.5, color: AppColors.ink),
               ),
               const SizedBox(height: 10),
               Center(
@@ -1777,11 +2133,12 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.brass),
                   ),
                   child: QrImageView(
                     data: '${WebEnv.getBaseUrl()}#j=${Uri.encodeComponent(invite!.code)}',
-                    size: 210,
+                    size: 200,
                     backgroundColor: Colors.white,
                   ),
                 ),
@@ -1789,7 +2146,7 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
               if (QrScannerView.supported) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(6),
                   child: SizedBox(
                     height: 160,
                     child: QrScannerView(
@@ -1915,18 +2272,19 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
         }
 
         return EstSheetBody(
+          title: result != null
+              ? 'Mostre este QR ao anfitrião'
+              : (ctrl.hasSavedGuest ? 'Reconectar à partida' : 'Entrar por QR Code'),
+          titleIcon: const EstIcon(EstIconKind.qr, size: 20, color: AppColors.gold),
+          onClose: () {
+            result?.cancel();
+            Navigator.pop(ctx);
+          },
           children: [
-            Text(
-              result != null
-                  ? 'Mostre este QR ao anfitrião'
-                  : (ctrl.hasSavedGuest ? 'Reconectar à partida' : 'Entrar em partida'),
-              style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
-            ),
-            const SizedBox(height: 8),
             if (result != null) ...[
               const Text(
-                'No celular dele, aponte para este QR. A conexão abre sozinha em seguida.',
-                style: TextStyle(fontSize: 14, color: AppColors.mute),
+                'No aparelho dele, aponte para este QR. A conexão abre sozinha em seguida.',
+                style: TextStyle(fontSize: 13.5, color: AppColors.mute),
               ),
               const SizedBox(height: 12),
               Center(
@@ -1934,11 +2292,12 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.brass),
                   ),
                   child: QrImageView(
                     data: result!.code,
-                    size: 220,
+                    size: 210,
                     backgroundColor: Colors.white,
                   ),
                 ),
@@ -1984,7 +2343,7 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
               if (QrScannerView.supported && initialOffer == null) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(6),
                   child: SizedBox(
                     height: 190,
                     child: QrScannerView(
@@ -2031,6 +2390,87 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
           ],
         );
       },
+    ),
+  );
+}
+
+void showLanJoinModal(BuildContext context, AppController ctrl) {
+  final nameCtrl = TextEditingController(text: ctrl.savedName);
+  final addrCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+
+  void connect(BuildContext ctx) {
+    final addr = addrCtrl.text.trim();
+    if (addr.isEmpty) {
+      ctrl.showToast('Digite o IP do anfitrião.');
+      return;
+    }
+    Navigator.pop(ctx);
+    ctrl.joinLanHost(addr, nameCtrl.text, pass: passCtrl.text);
+  }
+
+  showEstSheet<void>(
+    context,
+    maxWidth: 440,
+    builder: (ctx) => EstSheetBody(
+      title: 'Entrar na Rede Local',
+      titleIcon: const EstIcon(EstIconKind.lan, size: 20, color: AppColors.gold),
+      onClose: () => Navigator.pop(ctx),
+      children: [
+        const Text(
+          'Conecte diretamente ao IP exibido na tela do anfitrião (mesmo Wi-Fi ou cabo, sem QR Code e sem servidor externo).',
+          style: TextStyle(fontSize: 13.5, height: 1.4, color: AppColors.mute),
+        ),
+        const SizedBox(height: 12),
+        const Text('Seu nome', style: TextStyle(fontSize: 12.5, color: AppColors.mute)),
+        const SizedBox(height: 5),
+        EstTextField(
+          controller: nameCtrl,
+          maxLength: 14,
+          hintText: 'Seu apelido',
+        ),
+        const SizedBox(height: 10),
+        const Text('Endereço do anfitrião (IP ou IP:Porta)', style: TextStyle(fontSize: 12.5, color: AppColors.mute)),
+        const SizedBox(height: 5),
+        EstTextField(
+          controller: addrCtrl,
+          autofocus: true,
+          hintText: 'Ex.: 192.168.1.15 ou 192.168.1.15:7788',
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+          onSubmitted: (_) => connect(ctx),
+        ),
+        const SizedBox(height: 10),
+        const Text('Senha da sala (se houver)', style: TextStyle(fontSize: 12.5, color: AppColors.mute)),
+        const SizedBox(height: 5),
+        EstTextField(
+          controller: passCtrl,
+          obscureText: true,
+          maxLength: 24,
+          hintText: 'Deixe em branco se não houver senha',
+          onSubmitted: (_) => connect(ctx),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: EstButton(
+                variant: EstButtonVariant.primary,
+                icon: EstIconKind.lan,
+                label: 'Conectar',
+                onPressed: () => connect(ctx),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: EstButton(
+                variant: EstButtonVariant.ghost,
+                label: 'Cancelar',
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ],
     ),
   );
 }

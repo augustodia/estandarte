@@ -8,6 +8,7 @@ import '../core/map_data.dart';
 import '../core/names.dart';
 import '../engine/game_engine.dart';
 import '../net/online_client.dart';
+import '../platform/lan_host.dart';
 import '../platform/p2p.dart';
 import '../platform/sound.dart';
 import '../platform/storage.dart';
@@ -68,6 +69,28 @@ class AppController extends ChangeNotifier {
   bool lobbyOwner = false;
   bool lobbyQuick = false;
   int lobbyQuickDeadlineMs = 0;
+  String lobbyPass = '';
+  bool lobbyHasPass = false;
+  ({String code, bool wrong, bool isLan})? passPrompt;
+  String? _pendingRoomPass;
+
+  // Native LAN WebSocket host (Windows / mobile / desktop)
+  LanServerHandle? _lanServer;
+  final Set<GameLink> _pendingGuestLinks = {};
+  bool lanStarting = false;
+  String? get lanHostAddr => _lanServer?.primaryAddress;
+  List<String> get lanAllAddrs => _lanServer?.addresses ?? const [];
+
+  // Host Relay WebSocket (5-letter shareable room code over Internet)
+  OnlineLink? _relayLink;
+  Timer? _relayRetryTimer;
+  String? relayCode;
+  String? _relaySecret;
+  bool relayStarting = false;
+  String relayWaitMsg = '';
+  final Map<int, _RelayPeerLink> _relayPeers = {};
+  final Set<_RelayPeerLink> _relayWatchers = {};
+  bool get isRelayConnected => _relayLink != null && _relayLink!.isOpen;
 
   // Engine Game ID (when host)
   int? _engineId;
@@ -735,6 +758,7 @@ class AppController extends ChangeNotifier {
     }
     if (index <= 0 || index >= seats.length) return;
     final s = seats.removeAt(index);
+    s.link?.send({'t': 'gone', 'm': 'Você foi removido da mesa.'});
     s.link?.close();
     if (s.spare != null && s.spare!['cancel'] is void Function()) {
       (s.spare!['cancel'] as void Function())();
@@ -751,9 +775,15 @@ class AppController extends ChangeNotifier {
     bool? hq,
     bool? spy,
     bool? isPublic,
+    String? pass,
   }) {
+    final cleanPass = pass != null ? _cleanRoomPass(pass) : null;
     if (online != null) {
       if (lobbyOwner && guestLink != null) {
+        if (cleanPass != null && !lobbyQuick) {
+          lobbyPass = cleanPass;
+          lobbyHasPass = cleanPass.isNotEmpty;
+        }
         guestLink!.send({
           't': 'cfg',
           'secs': ?secs,
@@ -763,7 +793,9 @@ class AppController extends ChangeNotifier {
           'hq': ?hq,
           'spy': ?spy,
           'public': ?isPublic,
+          if (cleanPass != null && !lobbyQuick) 'pass': cleanPass,
         });
+        if (cleanPass != null) notifyListeners();
       }
       return;
     }
@@ -773,6 +805,11 @@ class AppController extends ChangeNotifier {
     if (nukes != null) optNukes = nukes;
     if (hq != null) optHq = hq;
     if (spy != null) optSpy = spy;
+    if (isPublic != null) optPublic = isPublic;
+    if (cleanPass != null) {
+      lobbyPass = cleanPass;
+      lobbyHasPass = cleanPass.isNotEmpty;
+    }
     AppStorage.instance.setString(
       'estandarte.cfg',
       jsonEncode({
@@ -830,8 +867,395 @@ class AppController extends ChangeNotifier {
     _syncHost();
   }
 
+  String _cleanRoomPass(String raw) {
+    final s = raw.trim();
+    return s.length > 24 ? s.substring(0, 24) : s;
+  }
+
+  String _randomToken() {
+    final r = Random.secure();
+    const hex = '0123456789abcdef';
+    final buf = StringBuffer();
+    for (var i = 0; i < 32; i++) {
+      buf.write(hex[r.nextInt(16)]);
+    }
+    return buf.toString();
+  }
+
+  Future<void> startLanHost() async {
+    if (!LanHost.supported ||
+        _lanServer != null ||
+        lanStarting ||
+        relayCode != null ||
+        relayStarting ||
+        online != null) {
+      return;
+    }
+    SoundPlayer.unlock();
+    lanStarting = true;
+    notifyListeners();
+    try {
+      final srv = await LanHost.start(
+        onOpen: (link) {
+          _pendingGuestLinks.add(link);
+        },
+        onMessage: (msg, link) => _handleHostMessage(msg, link),
+        onClose: (link) => _handleHostLinkClosed(link),
+      );
+      _lanServer = srv;
+      role = 'host';
+      lobbyCode = srv.primaryAddress;
+      _broadcastLobby();
+    } catch (e) {
+      showToast('Não foi possível abrir a rede local ($e).');
+    } finally {
+      lanStarting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopLanHost() async {
+    final srv = _lanServer;
+    if (srv == null) return;
+    _lanServer = null;
+    for (final l in _pendingGuestLinks.toList()) {
+      if (l is! _RelayPeerLink) {
+        _pendingGuestLinks.remove(l);
+        l.close();
+      }
+    }
+    for (var i = seats.length - 1; i >= 0; i--) {
+      if (seats[i].ctrl == 'remote' && seats[i].link is! _RelayPeerLink) {
+        seats[i].link?.send({'t': 'gone', 'm': 'O anfitrião encerrou a rede local.'});
+        seats[i].link?.close();
+        seats.removeAt(i);
+      }
+    }
+    lobbyCode = relayCode;
+    await srv.close();
+    _broadcastLobby();
+    notifyListeners();
+  }
+
+  void startRelayHost() {
+    if (relayCode != null ||
+        relayStarting ||
+        _lanServer != null ||
+        lanStarting ||
+        online != null) {
+      return;
+    }
+    if (!netOnline) {
+      showToast('Sem internet: abrir sala por código precisa de conexão.', 4000);
+      return;
+    }
+    SoundPlayer.unlock();
+    _relayRetryTimer?.cancel();
+    relayStarting = true;
+    relayWaitMsg = 'Conectando ao servidor…';
+    role = 'host';
+    notifyListeners();
+    _connectRelaySocket('relay=1');
+  }
+
+  void _connectRelaySocket(String query) {
+    final srv = serverUrl();
+    _relayLink = connectOnline(
+      srv,
+      query,
+      onOpen: (link) {
+        relayWaitMsg = '';
+        notifyListeners();
+      },
+      onMessage: (msg, link) => _handleRelayControlMessage(msg, link),
+      onClose: (link) {
+        if (_relayLink != link) return;
+        _relayLink = null;
+        if (relayCode != null && _relaySecret != null && role == 'host') {
+          relayWaitMsg = 'Conexão perdida. Reconectando…';
+          _relayRetryTimer?.cancel();
+          _relayRetryTimer = Timer(const Duration(milliseconds: 1200), _reconnectRelayHost);
+        } else {
+          relayStarting = false;
+          relayWaitMsg = '';
+        }
+        notifyListeners();
+      },
+      onWait: (secs, _) {
+        if (relayStarting || relayCode != null) {
+          relayWaitMsg = secs < 6
+              ? 'Conectando ao servidor…'
+              : 'Acordando o servidor (${secs}s)… aguarde até 1 min.';
+          notifyListeners();
+        }
+      },
+      onFail: () {
+        relayStarting = false;
+        if (relayCode == null) {
+          relayWaitMsg = '';
+          showToast('Não foi possível abrir a sala no servidor.');
+        } else {
+          relayWaitMsg = 'Sem conexão com o servidor.';
+        }
+        notifyListeners();
+      },
+    );
+  }
+
+  void _reconnectRelayHost() {
+    if (relayCode == null || _relaySecret == null || _relayLink != null || role != 'host') return;
+    final q =
+        'relayHost=${Uri.encodeQueryComponent(relayCode!)}&secret=${Uri.encodeQueryComponent(_relaySecret!)}';
+    _connectRelaySocket(q);
+  }
+
+  void stopRelayHost({bool silent = false}) {
+    _teardownRelayHost(
+      reason: 'O anfitrião fechou a sala online.',
+      sendEnd: true,
+      showReason: !silent,
+    );
+  }
+
+  void _teardownRelayHost({
+    required String reason,
+    required bool sendEnd,
+    bool showReason = true,
+  }) {
+    _relayRetryTimer?.cancel();
+    _relayRetryTimer = null;
+    final rl = _relayLink;
+    _relayLink = null;
+    if (rl != null) {
+      if (sendEnd && rl.isOpen) {
+        rl.send({'t': 'rEnd', 'm_reason': reason});
+      }
+      rl.close();
+    }
+    relayStarting = false;
+    relayWaitMsg = '';
+    relayCode = null;
+    _relaySecret = null;
+    lobbyCode = lanHostAddr;
+    for (final w in _relayWatchers.toList()) {
+      w.markClosed();
+    }
+    _relayWatchers.clear();
+    for (final p in _relayPeers.values) {
+      p.markClosed();
+      _pendingGuestLinks.remove(p);
+    }
+    _relayPeers.clear();
+    if (_engineId == null) {
+      seats.removeWhere((s) => s.ctrl == 'remote' && s.link is _RelayPeerLink);
+      for (final s in seats) {
+        if (s.link is _RelayPeerLink) {
+          s.link = null;
+          s.online = false;
+        }
+      }
+      watchersCount = null;
+      _broadcastLobby();
+    } else {
+      for (final s in seats) {
+        if (s.link is _RelayPeerLink) {
+          s.link = null;
+          s.online = false;
+        }
+      }
+      watchersCount = null;
+      _syncHost();
+    }
+    if (showReason) {
+      showToast(reason);
+    }
+    notifyListeners();
+  }
+
+  void _handleRelayControlMessage(Map<String, dynamic> msg, GameLink link) {
+    final t = msg['t'] as String?;
+    if (t == 'relayReady') {
+      final code = msg['code'] as String?;
+      final secret = msg['secret'] as String?;
+      if (code == null || secret == null) return;
+      final isReconnect = relayCode == code;
+      relayStarting = false;
+      relayWaitMsg = '';
+      relayCode = code;
+      _relaySecret = secret;
+      lobbyCode = code;
+      role = 'host';
+      if (isReconnect) {
+        final aliveIds = <int>{
+          for (final p in (msg['peers'] as List<dynamic>? ?? const []))
+            if (p is num) p.toInt(),
+        };
+        final dropped = _relayPeers.keys.where((id) => !aliveIds.contains(id)).toList();
+        for (final id in dropped) {
+          final pl = _relayPeers.remove(id);
+          if (pl != null) {
+            pl.markClosed();
+            _relayWatchers.remove(pl);
+            _handleHostLinkClosed(pl);
+          }
+        }
+      }
+      _publishRelayRoomInfo();
+      _broadcastLobby();
+      if (_engineId != null) _syncHost();
+      notifyListeners();
+      return;
+    }
+    if (t == 'rPing') {
+      link.send({'t': 'rPong'});
+      return;
+    }
+    if (t == 'rOpen') {
+      final pid = (msg['id'] as num?)?.toInt();
+      if (pid == null) return;
+      final watch = msg['watch'] == true;
+      final old = _relayPeers.remove(pid);
+      if (old != null) {
+        old.markClosed();
+        _relayWatchers.remove(old);
+        _handleHostLinkClosed(old);
+      }
+      final peer = _RelayPeerLink(pid, watch, this);
+      _relayPeers[pid] = peer;
+      _pendingGuestLinks.add(peer);
+      return;
+    }
+    if (t == 'rIn') {
+      final pid = (msg['id'] as num?)?.toInt();
+      final inner = msg['m'];
+      if (pid == null || inner is! Map<String, dynamic>) return;
+      final peer = _relayPeers[pid];
+      if (peer == null) return;
+      _handleHostMessage(inner, peer);
+      return;
+    }
+    if (t == 'rClose') {
+      final pid = (msg['id'] as num?)?.toInt();
+      if (pid == null) return;
+      final peer = _relayPeers.remove(pid);
+      if (peer == null) return;
+      peer.markClosed();
+      final wasWatcher = _relayWatchers.remove(peer);
+      _handleHostLinkClosed(peer);
+      if (wasWatcher) {
+        _publishRelayRoomInfo();
+        if (_engineId != null) _syncHost();
+      }
+      return;
+    }
+    if (t == 'err') {
+      showToast(msg['m'] as String? ?? 'Erro no servidor.');
+      return;
+    }
+    if (t == 'gone') {
+      final m = msg['m'] as String? ?? 'Sala encerrada no servidor.';
+      _teardownRelayHost(reason: m, sendEnd: false);
+      return;
+    }
+  }
+
+  void _sendRelayOut(int peerId, Map<String, dynamic> msg) {
+    final rl = _relayLink;
+    if (rl == null || !rl.isOpen) return;
+    rl.send({'t': 'rOut', 'id': peerId, 'm': msg});
+  }
+
+  void _closeRelayPeer(int peerId) {
+    final peer = _relayPeers.remove(peerId);
+    if (peer != null) {
+      peer.markClosed();
+      _pendingGuestLinks.remove(peer);
+      _relayWatchers.remove(peer);
+    }
+    final rl = _relayLink;
+    if (rl != null && rl.isOpen) {
+      rl.send({
+        't': 'rOut',
+        'id': peerId,
+        'm': {'t': 'gone', 'm': 'Conexão encerrada.'},
+        'close': true,
+      });
+    }
+  }
+
+  void _publishRelayRoomInfo() {
+    final rl = _relayLink;
+    if (role != 'host' || relayCode == null || rl == null || !rl.isOpen) return;
+    final id = _engineId;
+    final curView = id != null ? view : null;
+    final status = id == null
+        ? 'lobby'
+        : (curView != null && curView['phase'] == 'over' ? 'over' : 'play');
+    final hostName = seats.isNotEmpty
+        ? seats.first.name
+        : (savedName.isNotEmpty ? savedName : 'Anfitrião');
+    final List<Map<String, dynamic>> playersInfo;
+    if (id != null && curView != null) {
+      final vPlayers = curView['players'] as List<dynamic>? ?? const [];
+      playersInfo = [
+        for (var p = 0; p < vPlayers.length; p++)
+          () {
+            final vp = vPlayers[p] as Map<String, dynamic>;
+            final ctrl = vp['ctrl'] as String? ?? 'local';
+            final seatIdx = (vp['seat'] as num?)?.toInt() ?? p;
+            final isOn = ctrl == 'bot'
+                ? false
+                : (ctrl != 'remote' ||
+                    (seatIdx >= 0 &&
+                        seatIdx < seats.length &&
+                        seats[seatIdx].link != null &&
+                        seats[seatIdx].link!.isOpen &&
+                        !seats[seatIdx].lag));
+            return {
+              'name': vp['name'] ?? '',
+              'color': vp['color'] ?? p,
+              'ctrl': ctrl,
+              'on': isOn,
+            };
+          }(),
+      ];
+    } else {
+      playersInfo = [
+        for (final s in seats)
+          {
+            'name': s.name,
+            'color': s.color,
+            'ctrl': s.ctrl,
+            'on': s.ctrl == 'bot'
+                ? false
+                : (s.ctrl != 'remote' || (s.link != null && s.link!.isOpen)),
+          },
+      ];
+    }
+    final watcherLimit = maxWatchers > 0 ? maxWatchers : 5;
+    final isFull = status == 'lobby' ? seats.length >= 6 : _relayWatchers.length >= watcherLimit;
+    rl.send({
+      't': 'rCfg',
+      'host': hostName,
+      'status': status,
+      'players': playersInfo,
+      'round': id != null && curView != null ? (curView['round'] as num?)?.toInt() ?? 0 : 0,
+      'secs': turnSecs,
+      'events': optEvents,
+      'pacts': optPacts,
+      'nukes': optNukes,
+      'hq': optHq,
+      'spy': optHq && optSpy,
+      'watchers': _relayWatchers.length,
+      'full': isFull,
+      'public': optPublic,
+      'hasPass': lobbyPass.isNotEmpty,
+    });
+  }
+
   void _broadcastLobby() {
     if (role != 'host') return;
+    final roomCode = relayCode ?? lanHostAddr;
     for (var i = 0; i < seats.length; i++) {
       final link = seats[i].link;
       if (link != null && link.isOpen) {
@@ -845,9 +1269,31 @@ class AppController extends ChangeNotifier {
           'nukes': optNukes,
           'hq': optHq,
           'spy': optHq && optSpy,
+          'public': optPublic,
+          'hasPass': lobbyPass.isNotEmpty,
+          'code': ?roomCode,
         });
       }
     }
+    for (final w in _relayWatchers) {
+      if (w.isOpen) {
+        w.send({
+          't': 'lobby',
+          'seats': seats.map((s) => s.toLobbyJson()).toList(),
+          'you': -1,
+          'secs': turnSecs,
+          'events': optEvents,
+          'pacts': optPacts,
+          'nukes': optNukes,
+          'hq': optHq,
+          'spy': optHq && optSpy,
+          'public': optPublic,
+          'hasPass': lobbyPass.isNotEmpty,
+          'code': ?roomCode,
+        });
+      }
+    }
+    _publishRelayRoomInfo();
   }
 
   // ---------------- Host P2P QR Invite / Reconnect ----------------
@@ -976,7 +1422,107 @@ class AppController extends ChangeNotifier {
       return;
     }
     if (t == 'hello') {
-      if (idx < 0) return;
+      if (idx < 0) {
+        if (!_pendingGuestLinks.contains(link)) return;
+        final tok = msg['token'] as String?;
+        if (tok != null && tok.isNotEmpty) {
+          final reIdx = seats.indexWhere((s) => s.token == tok);
+          if (reIdx >= 0) {
+            _pendingGuestLinks.remove(link);
+            _attachRemoteSeat(reIdx, link);
+            link.send({'t': 'seat', 'token': tok});
+            return;
+          }
+        }
+        if (link is _RelayPeerLink && link.watch) {
+          final watcherLimit = maxWatchers > 0 ? maxWatchers : 5;
+          if (_relayWatchers.length >= watcherLimit) {
+            _pendingGuestLinks.remove(link);
+            link.send({
+              't': 'gone',
+              'm': 'Esta partida já tem $watcherLimit espectadores, o máximo.',
+            });
+            link.close();
+            return;
+          }
+          if (lobbyPass.isNotEmpty) {
+            final supplied = _cleanRoomPass((msg['pass'] as String?) ?? '');
+            if (supplied != lobbyPass) {
+              link.send({
+                't': 'needPass',
+                'wrong': supplied.isNotEmpty,
+                'code': relayCode ?? lanHostAddr ?? 'Sala',
+              });
+              return;
+            }
+          }
+          _pendingGuestLinks.remove(link);
+          _relayWatchers.add(link);
+          if (_engineId != null) {
+            _syncHost();
+          } else {
+            _broadcastLobby();
+          }
+          notifyListeners();
+          return;
+        }
+        if (_engineId != null) {
+          _pendingGuestLinks.remove(link);
+          link.send({
+            't': 'gone',
+            'm': link is _RelayPeerLink
+                ? 'A partida já começou.'
+                : 'A partida na rede local já começou.',
+          });
+          link.close();
+          return;
+        }
+        if (seats.length >= 6) {
+          _pendingGuestLinks.remove(link);
+          link.send({'t': 'gone', 'm': 'Mesa cheia (máximo 6).'});
+          link.close();
+          return;
+        }
+        if (lobbyPass.isNotEmpty) {
+          final supplied = _cleanRoomPass((msg['pass'] as String?) ?? '');
+          if (supplied != lobbyPass) {
+            link.send({
+              't': 'needPass',
+              'wrong': supplied.isNotEmpty,
+              'code': relayCode ?? lanHostAddr ?? 'Rede Local',
+            });
+            return;
+          }
+        }
+        _pendingGuestLinks.remove(link);
+        final used = seats.map((s) => s.color).toSet();
+        var col = 0;
+        while (used.contains(col) && col < engine.constants.colors.length) {
+          col++;
+        }
+        final rawNm = cleanName(msg['name'] as String?);
+        final seatName = uniqueName(
+          rawNm.isNotEmpty ? rawNm : 'Convidado ${seats.length}',
+          seats,
+          (s) => s.name,
+        );
+        final seatTok = _randomToken();
+        seats.add(
+          LobbySeat(
+            name: seatName,
+            color: col,
+            ctrl: 'remote',
+            online: true,
+            seenMs: DateTime.now().millisecondsSinceEpoch,
+            token: seatTok,
+            link: link,
+          ),
+        );
+        link.send({'t': 'seat', 'token': seatTok});
+        _broadcastLobby();
+        notifyListeners();
+        return;
+      }
       final nm = cleanName(msg['name'] as String?);
       if (nm.isNotEmpty && _engineId == null) {
         seats[idx].name = uniqueName(nm, seats, (s) => s.name, self: seats[idx]);
@@ -987,7 +1533,13 @@ class AppController extends ChangeNotifier {
       }
       return;
     }
-    if (idx < 0) return;
+    if (idx < 0) {
+      if (t == 'leave' && link is _RelayPeerLink && _relayWatchers.remove(link)) {
+        _publishRelayRoomInfo();
+        if (_engineId != null) _syncHost();
+      }
+      return;
+    }
     if (t == 'color' && _engineId == null) {
       cycleSeatColor(idx);
       return;
@@ -1023,6 +1575,9 @@ class AppController extends ChangeNotifier {
         if (s.link != null && s.link!.isOpen && s.link != link) {
           s.link!.send(msg);
         }
+      }
+      for (final w in _relayWatchers) {
+        if (w.isOpen) w.send(msg);
       }
       notifyListeners();
       return;
@@ -1075,13 +1630,22 @@ class AppController extends ChangeNotifier {
   }
 
   void _handleHostLinkClosed(GameLink link) {
+    _pendingGuestLinks.remove(link);
+    final wasWatcher = link is _RelayPeerLink && _relayWatchers.remove(link);
     final idx = seats.indexWhere((s) => s.link == link);
-    if (idx < 0) return;
+    if (idx < 0) {
+      if (wasWatcher) {
+        _publishRelayRoomInfo();
+        if (_engineId != null) _syncHost();
+      }
+      return;
+    }
     seats[idx].link = null;
     seats[idx].online = false;
     if (_engineId != null) {
       _syncHost();
     } else {
+      _broadcastLobby();
       notifyListeners();
     }
   }
@@ -1240,16 +1804,18 @@ class AppController extends ChangeNotifier {
     });
   }
 
-  void createOnlineRoom(String playerName, {bool isPublic = true}) {
+  void createOnlineRoom(String playerName, {bool isPublic = true, String? pass}) {
     final nm = cleanName(playerName);
     final finalName = nm.isNotEmpty ? nm : 'Jogador';
     savePlayerName(finalName);
+    final cleanP = pass != null ? _cleanRoomPass(pass) : '';
     _connectOnlineQuery(
       'create=1',
       host: true,
       fromRooms: screen == AppScreen.rooms,
       name: finalName,
       isPublic: isPublic,
+      pass: cleanP.isNotEmpty ? cleanP : null,
     );
   }
 
@@ -1272,6 +1838,7 @@ class AppController extends ChangeNotifier {
     bool watchOnly = false,
     bool fromRooms = false,
     String? token,
+    String? pass,
   }) {
     final cleanCode = roomCode(code);
     if (cleanCode == null) {
@@ -1293,11 +1860,36 @@ class AppController extends ChangeNotifier {
       code: cleanCode,
       token: tok,
       watchOnly: watchOnly,
+      pass: pass,
+    );
+  }
+
+  void joinLanHost(String rawAddress, String playerName, {String? pass}) {
+    final wsUrl = parseLanWsUrl(rawAddress);
+    if (wsUrl == null) {
+      showToast('Endereço inválido (ex.: 192.168.1.15 ou 192.168.1.15:7788).');
+      return;
+    }
+    final nm = cleanName(playerName);
+    final finalName = nm.isNotEmpty ? nm : 'Convidado';
+    savePlayerName(finalName);
+    final tok = _loadRoomToken(wsUrl, 'lan');
+    _connectOnlineQuery(
+      'room=lan',
+      serverOverride: wsUrl,
+      host: false,
+      fromRooms: false,
+      name: finalName,
+      code: rawAddress.trim(),
+      token: tok,
+      isLan: true,
+      pass: pass,
     );
   }
 
   void _connectOnlineQuery(
     String query, {
+    String? serverOverride,
     required bool host,
     required bool fromRooms,
     required String name,
@@ -1305,9 +1897,11 @@ class AppController extends ChangeNotifier {
     String? token,
     bool isPublic = true,
     bool watchOnly = false,
+    bool isLan = false,
+    String? pass,
   }) {
     SoundPlayer.unlock();
-    if (!netOnline) {
+    if (!isLan && !netOnline) {
       showToast('Sem internet: jogar online precisa de conexão.', 4000);
       return;
     }
@@ -1315,7 +1909,8 @@ class AppController extends ChangeNotifier {
     _resetSessionState();
     role = 'guest';
     netP2p = false;
-    final srv = serverUrl();
+    _pendingRoomPass = pass != null ? _cleanRoomPass(pass) : null;
+    final srv = serverOverride ?? serverUrl();
     final ses = OnlineSession(
       server: srv,
       code: code,
@@ -1324,13 +1919,14 @@ class AppController extends ChangeNotifier {
       name: name,
       token: token,
       owner: host,
-      isPublic: isPublic,
-    )..waitMsg = 'Conectando ao servidor…';
+      isPublic: !isLan && isPublic,
+      lan: isLan,
+    )..waitMsg = isLan ? 'Conectando ao anfitrião ($code)…' : 'Conectando ao servidor…';
     online = ses;
     screen = AppScreen.lobby;
     lobbyCode = code;
     lobbyOwner = host;
-    optPublic = isPublic;
+    optPublic = !isLan && isPublic;
     WebEnv.setWakeLock(true);
     notifyListeners();
 
@@ -1347,11 +1943,16 @@ class AppController extends ChangeNotifier {
             't': 'hello',
             'name': name,
             if (ses.token != null) 'token': ses.token,
+            if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
           });
         } else {
-          link.send({'t': 'hello', 'name': name});
+          link.send({
+            't': 'hello',
+            'name': name,
+            if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+          });
         }
-        if (ses.code != null) {
+        if (ses.code != null && !ses.lan) {
           _saveOnlineSession(watch: watchOnly);
         }
         notifyListeners();
@@ -1370,15 +1971,19 @@ class AppController extends ChangeNotifier {
       },
       onWait: (secs, _) {
         if (online == ses) {
-          ses.waitMsg = secs < 6
-              ? 'Conectando ao servidor…'
-              : 'Acordando o servidor (${secs}s)… aguarde até 1 min.';
+          ses.waitMsg = isLan
+              ? 'Procurando anfitrião ($secs s)… confira IP, porta e firewall.'
+              : (secs < 6
+                  ? 'Conectando ao servidor…'
+                  : 'Acordando o servidor (${secs}s)… aguarde até 1 min.');
           notifyListeners();
         }
       },
       onFail: () {
         if (online == ses) {
-          ses.waitMsg = 'Não foi possível falar com o servidor.';
+          ses.waitMsg = isLan
+              ? 'Não foi possível conectar ao anfitrião ($code).'
+              : 'Não foi possível falar com o servidor.';
           notifyListeners();
         }
       },
@@ -1388,8 +1993,8 @@ class AppController extends ChangeNotifier {
   void _reconnectOnline() {
     final ses = online;
     if (ses == null || ses.gone || ses.code == null || guestLink != null) return;
-    final tok = ses.token ?? _loadRoomToken(ses.server, ses.code!);
-    final q = 'room=${Uri.encodeQueryComponent(ses.code!)}';
+    final tok = ses.token ?? _loadRoomToken(ses.server, ses.lan ? 'lan' : ses.code!);
+    final q = ses.lan ? 'room=lan' : 'room=${Uri.encodeQueryComponent(ses.code!)}';
     guestLink = connectOnline(
       ses.server,
       q,
@@ -1402,6 +2007,7 @@ class AppController extends ChangeNotifier {
           't': 'hello',
           'name': ses.name,
           'token': ?tok,
+          if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
         });
         notifyListeners();
       },
@@ -1490,13 +2096,51 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  void submitRoomPassword(String rawPass) {
+    final link = guestLink;
+    final ses = online;
+    final clean = _cleanRoomPass(rawPass);
+    _pendingRoomPass = clean;
+    passPrompt = null;
+    if (ses != null) {
+      ses.waitMsg = 'Verificando senha…';
+    }
+    notifyListeners();
+    link?.send({
+      't': 'hello',
+      'name': ses?.name ?? (savedName.isNotEmpty ? savedName : 'Convidado'),
+      if (ses?.token != null) 'token': ses!.token,
+      'pass': clean,
+    });
+  }
+
+  void cancelPasswordPrompt() {
+    passPrompt = null;
+    leaveGame();
+  }
+
   void _handleRemoteMessage(Map<String, dynamic> msg, GameLink link) {
     final t = msg['t'] as String?;
+    if (t == 'needPass') {
+      passPrompt = (
+        code: (msg['code'] as String?) ?? lobbyCode ?? 'Sala',
+        wrong: msg['wrong'] == true,
+        isLan: online?.lan ?? false,
+      );
+      if (online != null) online!.waitMsg = '';
+      notifyListeners();
+      return;
+    }
     if (t == 'seat') {
+      passPrompt = null;
       final tok = msg['token'] as String?;
       if (online != null && tok != null) {
         online!.token = tok;
-        _saveOnlineSession();
+        if (online!.lan) {
+          _saveRoomToken(online!.server, 'lan', tok);
+        } else {
+          _saveOnlineSession();
+        }
       }
       return;
     }
@@ -1533,6 +2177,7 @@ class AppController extends ChangeNotifier {
       return;
     }
     if (t == 'lobby') {
+      passPrompt = null;
       _hostLastHeardMs = DateTime.now().millisecondsSinceEpoch;
       hostLag = false;
       screen = AppScreen.lobby;
@@ -1556,6 +2201,12 @@ class AppController extends ChangeNotifier {
       optHq = msg['hq'] == true;
       optSpy = msg['spy'] == true;
       optPublic = msg['public'] == true;
+      lobbyHasPass = msg['hasPass'] == true;
+      if (msg['pass'] is String) {
+        lobbyPass = msg['pass'] as String;
+      } else if (!lobbyHasPass) {
+        lobbyPass = '';
+      }
       lobbyCode = msg['code'] as String?;
       lobbyOwner = msg['owner'] == true;
       lobbyQuick = msg['quick'] == true;
@@ -1567,12 +2218,15 @@ class AppController extends ChangeNotifier {
         online!.code = lobbyCode ?? online!.code;
         online!.owner = lobbyOwner;
         online!.isPublic = optPublic;
-        _saveOnlineSession();
+        if (!online!.lan) {
+          _saveOnlineSession();
+        }
       }
       notifyListeners();
       return;
     }
     if (t == 'state') {
+      passPrompt = null;
       _hostLastHeardMs = DateTime.now().millisecondsSinceEpoch;
       hostLag = false;
       screen = AppScreen.game;
@@ -1662,6 +2316,9 @@ class AppController extends ChangeNotifier {
           (seats[seatIdx].link != null && seats[seatIdx].link!.isOpen && !seats[seatIdx].lag);
     }
     onlMap = onlineByTurn;
+    final roomCode = relayCode ?? lanHostAddr;
+    final onlineMapMsg = {for (final e in onlineByTurn.entries) '${e.key}': e.value};
+    watchersCount = relayCode != null ? _relayWatchers.length : null;
     for (var p = 0; p < players.length; p++) {
       final seatIdx = (players[p]['seat'] as num).toInt();
       final link = seats[seatIdx].link;
@@ -1673,7 +2330,25 @@ class AppController extends ChangeNotifier {
           'you': p,
           'left': ?leftMs,
           if (turnSecs > 0) 'limit': turnSecs * 1000,
-          'on': {for (final e in onlineByTurn.entries) '${e.key}': e.value},
+          'on': onlineMapMsg,
+          'code': ?roomCode,
+          if (relayCode != null) 'watchers': _relayWatchers.length,
+        });
+      }
+    }
+    for (final w in _relayWatchers) {
+      if (w.isOpen) {
+        final wv = engine.viewFor(id, -1);
+        w.send({
+          't': 'state',
+          's': wv,
+          'you': -1,
+          'watch': true,
+          'left': ?leftMs,
+          if (turnSecs > 0) 'limit': turnSecs * 1000,
+          'on': onlineMapMsg,
+          'code': ?relayCode,
+          'watchers': _relayWatchers.length,
         });
       }
     }
@@ -1699,6 +2374,7 @@ class AppController extends ChangeNotifier {
     }
 
     _applyIncomingView(hostView, turnKeyForClock: turnKey);
+    _publishRelayRoomInfo();
     _scheduleHostBot(hostView);
   }
 
@@ -2548,6 +3224,9 @@ class AppController extends ChangeNotifier {
       for (final s in seats) {
         if (s.link != null && s.link!.isOpen) s.link!.send(msg);
       }
+      for (final w in _relayWatchers) {
+        if (w.isOpen) w.send(msg);
+      }
     }
   }
 
@@ -3160,6 +3839,38 @@ class AppController extends ChangeNotifier {
     _autoTimer?.cancel();
     _onlineRetryTimer?.cancel();
     _roomsTimer?.cancel();
+    for (final l in _pendingGuestLinks.toList()) {
+      l.close();
+    }
+    _pendingGuestLinks.clear();
+    _relayRetryTimer?.cancel();
+    _relayRetryTimer = null;
+    final rl = _relayLink;
+    _relayLink = null;
+    if (rl != null) {
+      if (rl.isOpen) {
+        rl.send({'t': 'rEnd', 'm_reason': 'O anfitrião encerrou a sala.'});
+      }
+      rl.close();
+    }
+    relayStarting = false;
+    relayWaitMsg = '';
+    relayCode = null;
+    _relaySecret = null;
+    for (final w in _relayWatchers.toList()) {
+      w.markClosed();
+    }
+    _relayWatchers.clear();
+    for (final p in _relayPeers.values) {
+      p.markClosed();
+    }
+    _relayPeers.clear();
+    final srv = _lanServer;
+    _lanServer = null;
+    if (srv != null) {
+      unawaited(srv.close());
+    }
+    lanStarting = false;
     for (final s in seats) {
       _dropSeatSpare(s);
       s.link?.close();
@@ -3167,6 +3878,10 @@ class AppController extends ChangeNotifier {
     guestLink?.close();
     guestLink = null;
     online = null;
+    passPrompt = null;
+    _pendingRoomPass = null;
+    lobbyPass = '';
+    lobbyHasPass = false;
     _dropEngineGame();
     smoke.stop(true);
     _fogKey = null;
@@ -3230,5 +3945,34 @@ class AppController extends ChangeNotifier {
     _resetSessionState();
     smoke.dispose();
     super.dispose();
+  }
+}
+
+class _RelayPeerLink extends GameLink {
+  _RelayPeerLink(this.id, this.watch, this._owner);
+
+  final int id;
+  final bool watch;
+  final AppController _owner;
+  bool _open = true;
+
+  @override
+  bool get isOpen => _open && _owner.isRelayConnected;
+
+  @override
+  void send(Map<String, dynamic> msg) {
+    if (!isOpen) return;
+    _owner._sendRelayOut(id, msg);
+  }
+
+  @override
+  void close() {
+    if (!_open) return;
+    _open = false;
+    _owner._closeRelayPeer(id);
+  }
+
+  void markClosed() {
+    _open = false;
   }
 }

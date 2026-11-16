@@ -74,226 +74,213 @@ class _RoomsScreenState extends State<RoomsScreen> {
         ? 'Sem internet: o jogo online precisa de conexão.'
         : (c.roomsError ?? '');
 
-    Widget topHeader() => Row(
-          children: [
-            SizedBox(
-              width: 44,
-              child: EstButton(
-                label: '←',
-                variant: EstButtonVariant.ghost,
-                fontSize: 22,
-                padding: EdgeInsets.zero,
-                onPressed: c.goHome,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Jogar online',
-              style: AppText.serif(
-                size: layout.big ? 32 : (compactLand ? 20 : 24),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const EstBadge(text: 'pela internet', net: true),
-          ],
-        );
-
-    Widget quickHero() {
-      return Container(
-        padding: EdgeInsets.all(layout.big ? 18 : 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xD8152942), Color(0xBF0B1626)],
+    Widget commanderPlaque({double? width}) => Container(
+          width: width,
+          padding: const EdgeInsets.fromLTRB(10, 4, 8, 4),
+          decoration: BoxDecoration(
+            color: AppColors.obsidian.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: AppColors.line),
           ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0x99E8B84B), width: 1.2),
-          boxShadow: const [
-            BoxShadow(color: Color(0x44000000), blurRadius: 16, offset: Offset(0, 6)),
-          ],
-        ),
-        child: horizBar
-            ? Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: const [
-                            Text(
-                              '⚡ Partida Rápida',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.gold,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            EstBadge(text: 'fila automática', net: true),
-                          ],
-                        ),
-                        const SizedBox(height: 5),
-                        const Text(
-                          'Entra direto na próxima mesa de 4 jogadores (Quartel ativo, 1 min/turno). Se não fechar em 45 s, bots completam a sala automaticamente.',
-                          style: TextStyle(fontSize: 13, height: 1.35, color: Color(0xFFD6E2F0)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  EstButton(
-                    label: '⚡ Entrar na Fila Rápida',
-                    variant: EstButtonVariant.primary,
-                    height: 48,
-                    fontSize: 15,
-                    onPressed: () {
-                      _syncName();
-                      c.startQuickMatch(_nameCtrl.text);
-                    },
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: const [
-                      Text(
-                        '⚡ Partida Rápida',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.gold,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      EstBadge(text: 'fila automática', net: true),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Mesa de 4 jogadores (Quartel, 1 min/turno). Se não fechar em 45 s, bots completam a sala.',
-                    style: TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFFD6E2F0)),
-                  ),
-                  const SizedBox(height: 10),
-                  EstButton(
-                    label: '⚡ Entrar na Fila Rápida',
-                    variant: EstButtonVariant.primary,
-                    height: 46,
-                    fontSize: 15,
-                    onPressed: () {
-                      _syncName();
-                      c.startQuickMatch(_nameCtrl.text);
-                    },
-                  ),
-                ],
-              ),
-      );
-    }
-
-    Widget rBar() {
-      Widget nameField() => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: [
+              const EstIcon(EstIconKind.crest, size: 15),
+              const SizedBox(width: 7),
               const Text(
-                'Seu nome',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.mute),
+                'COMANDANTE',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.3,
+                  color: AppColors.mute,
+                ),
               ),
-              const SizedBox(height: 5),
-              TextField(
-                controller: _nameCtrl,
-                maxLength: 14,
-                onChanged: c.savePlayerName,
-                decoration: const InputDecoration(
-                  hintText: 'Como quer ser chamado',
-                  counterText: '',
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _nameCtrl,
+                  maxLength: 14,
+                  onChanged: c.savePlayerName,
+                  textAlign: TextAlign.right,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'Seu apelido',
+                    counterText: '',
+                    filled: false,
+                    isDense: true,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 6),
+                  ),
                 ),
               ),
             ],
-          );
+          ),
+        );
 
-      Widget createBtn() => EstButton(
-            label: '+ Criar sala personalizada',
-            onPressed: () {
-              _syncName();
-              c.createOnlineRoom(_nameCtrl.text, isPublic: true);
-            },
-          );
-
-      Widget codeField() => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Entrar por código ou link',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.mute),
+    Widget topHeader() => Row(
+          children: [
+            EstIconButton(
+              icon: EstIconKind.back,
+              size: 36,
+              iconSize: 16,
+              color: AppColors.ink,
+              tooltip: 'Voltar',
+              onPressed: c.goHome,
+            ),
+            const SizedBox(width: 12),
+            EstIcon(EstIconKind.globe, size: layout.big ? 22 : 18, color: AppColors.gold),
+            const SizedBox(width: 8),
+            Text(
+              'Salas Online',
+              style: AppText.serif(
+                size: layout.big ? 28 : (compactLand ? 20 : 22),
               ),
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _codeCtrl,
-                      maxLength: 80,
-                      textCapitalization: TextCapitalization.characters,
-                      onSubmitted: (_) => _enterCode(),
-                      decoration: const InputDecoration(
-                        hintText: 'Ex.: K7M2Q',
-                        counterText: '',
-                      ),
+            ),
+            if (horizBar) ...[
+              const Spacer(),
+              commanderPlaque(width: layout.big ? 270 : 220),
+            ],
+          ],
+        );
+
+    Widget commandStrip() {
+      final quickCard = EstGlassCard(
+        highlight: true,
+        borderRadius: 6,
+        padding: EdgeInsets.symmetric(horizontal: layout.big ? 16 : 12, vertical: layout.big ? 12 : 10),
+        child: Row(
+          children: [
+            const EstIcon(EstIconKind.bolt, size: 22, color: AppColors.gold),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Text(
+                    'PARTIDA RÁPIDA',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      color: AppColors.gold,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  EstButton(label: 'Entrar', onPressed: _enterCode),
-                ],
-              ),
-            ],
-          );
-
-      return EstGlassCard(
-        borderRadius: 16,
-        padding: EdgeInsets.all(layout.big ? 16 : (compactLand ? 8 : 12)),
-        child: horizBar
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  SizedBox(width: layout.big ? 240 : 180, child: nameField()),
-                  const SizedBox(width: 10),
-                  createBtn(),
-                  const SizedBox(width: 10),
-                  Expanded(child: codeField()),
-                ],
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(child: nameField()),
-                      const SizedBox(width: 10),
-                      createBtn(),
-                    ],
+                  SizedBox(height: 2),
+                  Text(
+                    '4 comandantes · Quartel · entra em até 45s',
+                    style: TextStyle(fontSize: 12, color: AppColors.mute),
                   ),
-                  const SizedBox(height: 8),
-                  codeField(),
                 ],
               ),
+            ),
+            const SizedBox(width: 12),
+            EstButton(
+              icon: EstIconKind.sword,
+              label: 'Entrar na Fila',
+              variant: EstButtonVariant.primary,
+              height: 40,
+              fontSize: 14,
+              onPressed: () {
+                _syncName();
+                c.startQuickMatch(_nameCtrl.text);
+              },
+            ),
+          ],
+        ),
+      );
+
+      final customBar = EstGlassCard(
+        ornate: false,
+        borderRadius: 6,
+        padding: EdgeInsets.symmetric(horizontal: layout.big ? 14 : 10, vertical: layout.big ? 10 : 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!horizBar) ...[
+              commanderPlaque(),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                EstButton(
+                  label: '+ Criar Mesa',
+                  height: 40,
+                  fontSize: 13.5,
+                  onPressed: () {
+                    _syncName();
+                    c.createOnlineRoom(_nameCtrl.text, isPublic: true);
+                  },
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: EstTextField(
+                    controller: _codeCtrl,
+                    height: 40,
+                    maxLength: 80,
+                    hintText: 'Código (ex.: K7M2Q)',
+                    textCapitalization: TextCapitalization.characters,
+                    onSubmitted: (_) => _enterCode(),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0,
+                      fontSize: 13.5,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                EstButton(
+                  label: 'Entrar',
+                  height: 40,
+                  fontSize: 13.5,
+                  onPressed: _enterCode,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      if (layout.wide) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(flex: 11, child: quickCard),
+            const SizedBox(width: 10),
+            Expanded(flex: 10, child: customBar),
+          ],
+        );
+      }
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          quickCard,
+          const SizedBox(height: 8),
+          customBar,
+        ],
       );
     }
 
     Widget toolsRow() {
       final tabs = Container(
+        height: 40,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: AppColors.deep,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF233C5E)),
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: AppColors.line),
         ),
         child: Row(
           children: [
@@ -317,20 +304,32 @@ class _RoomsScreenState extends State<RoomsScreen> {
         ),
       );
 
-      final search = SizedBox(
+      final search = EstTextField(
+        controller: _searchCtrl,
         height: 40,
-        child: TextField(
-          controller: _searchCtrl,
-          onChanged: c.setRoomsQuery,
-          decoration: const InputDecoration(
-            hintText: 'Buscar sala ou jogador',
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-          ),
-        ),
+        hintText: 'Buscar sala ou jogador',
+        prefix: const Icon(Icons.search_rounded, size: 16, color: AppColors.mute),
+        onChanged: (q) {
+          c.setRoomsQuery(q);
+          setState(() {});
+        },
+        suffix: _searchCtrl.text.isNotEmpty
+            ? IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                icon: const EstIcon(EstIconKind.close, size: 12, color: AppColors.mute),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  c.setRoomsQuery('');
+                  setState(() {});
+                },
+              )
+            : null,
       );
 
       final filterChip = EstChip(
         label: wait ? 'Com vaga' : 'Dá para assistir',
+        height: 40,
         selected: c.roomsOnlyOpen,
         onTap: c.toggleRoomsOnlyOpen,
       );
@@ -385,22 +384,25 @@ class _RoomsScreenState extends State<RoomsScreen> {
       ].join(' · ');
 
       final maxSeats = isQuick ? 4 : 6;
+      final openSlots = wait ? (maxSeats - players.length).clamp(0, maxSeats) : 0;
       final meta = wait
-          ? '${players.length} de $maxSeats jogadores · $extras'
-          : 'rodada $round · $humans ${humans == 1 ? 'pessoa' : 'pessoas'}'
-              '${bots > 0 ? ' e $bots bot${bots == 1 ? '' : 's'}' : ''}'
-              ' · 👁 $watchers/${c.maxWatchers} · $extras';
+          ? '${players.length}/$maxSeats lugares · $extras'
+          : 'Rodada $round · $humans ${humans == 1 ? 'humano' : 'humanos'}'
+              '${bots > 0 ? ' + $bots bot${bots == 1 ? '' : 's'}' : ''}'
+              ' · $watchers/${c.maxWatchers} assistindo · $extras';
 
       final colors = c.engine.constants.colors;
 
       return Opacity(
-        opacity: full ? 0.6 : 1.0,
+        opacity: full ? 0.58 : 1.0,
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
-            color: const Color(0x8C0B1626),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF233C5E)),
+            gradient: AppColors.glassGradient,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(
+              color: isQuick ? const Color(0xFF7D663D) : AppColors.line,
+            ),
           ),
           child: Row(
             children: [
@@ -413,7 +415,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            'Sala de $host',
+                            'Mesa de $host',
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 15,
@@ -427,52 +429,91 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0x28E8B84B),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0x88E8B84B)),
+                              color: const Color(0x28E6B652),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppColors.brassDim),
                             ),
-                            child: const Text(
-                              '⚡ RÁPIDA',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.gold,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                EstIcon(EstIconKind.bolt, size: 10, color: AppColors.gold),
+                                SizedBox(width: 3),
+                                Text(
+                                  'RÁPIDA',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                    color: AppColors.gold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 6),
                         ],
-                        Text(
-                          code,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.8,
-                            color: AppColors.gold,
+                        if (r['hasPass'] == true) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.obsidian,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF7D663D)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                EstIcon(EstIconKind.lock, size: 10, color: AppColors.gold),
+                                SizedBox(width: 3),
+                                Text(
+                                  'SENHA',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                    color: AppColors.gold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.obsidian,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.line),
+                          ),
+                          child: Text(
+                            '#$code',
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.7,
+                              color: AppColors.gold,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 4,
+                      spacing: 8,
+                      runSpacing: 5,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         for (final p in players)
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: parseHexColor(
-                                    colors[((p['color'] as num?)?.toInt() ?? 0) % colors.length].hex,
-                                  ),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0x88000000), width: 1.5),
+                              EstFactionSeal(
+                                color: parseHexColor(
+                                  colors[((p['color'] as num?)?.toInt() ?? 0) % colors.length].hex,
                                 ),
+                                size: 9,
                               ),
                               const SizedBox(width: 5),
                               Text(
@@ -480,11 +521,12 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                 style: const TextStyle(fontSize: 12.5, color: AppColors.ink),
                               ),
                               if (p['ctrl'] == 'bot') ...[
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 3),
                                 const Text(
                                   'BOT',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
                                     color: AppColors.mute,
                                     letterSpacing: 0.5,
                                   ),
@@ -492,12 +534,26 @@ class _RoomsScreenState extends State<RoomsScreen> {
                               ],
                             ],
                           ),
+                        for (var k = 0; k < openSlots; k++)
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.mute.withValues(alpha: 0.35),
+                                width: 1.2,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 7),
                     Text(
                       meta,
-                      style: const TextStyle(fontSize: 12, color: AppColors.mute),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
                     ),
                   ],
                 ),
@@ -510,7 +566,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   variant: wait ? EstButtonVariant.primary : EstButtonVariant.normal,
                   label: wait
                       ? (full ? 'Cheia' : 'Entrar')
-                      : (full ? 'Lotada (${c.maxWatchers} assistindo)' : 'Assistir'),
+                      : (full ? 'Lotada (${c.maxWatchers})' : 'Assistir'),
                   onPressed: full
                       ? null
                       : () {
@@ -579,7 +635,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
               crossAxisCount: cols,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              mainAxisExtent: 124,
+              mainAxisExtent: 132,
             ),
             itemCount: filtered.length,
             itemBuilder: (_, idx) => roomCard(filtered[idx]),
@@ -606,9 +662,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 children: [
                   topHeader(),
                   SizedBox(height: layout.big ? 12 : 8),
-                  quickHero(),
-                  SizedBox(height: layout.big ? 10 : 8),
-                  rBar(),
+                  commandStrip(),
                   SizedBox(height: layout.big ? 12 : 8),
                   toolsRow(),
                   if (statusMsg.isNotEmpty) ...[
@@ -649,11 +703,12 @@ class _RoomTabButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        height: 38,
+        duration: const Duration(milliseconds: 140),
+        height: 32,
         decoration: BoxDecoration(
           color: active ? AppColors.panel2 : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(4),
+          border: active ? Border.all(color: const Color(0xFF6B5734)) : null,
           boxShadow: active
               ? const [BoxShadow(color: Color(0x88000000), blurRadius: 3, offset: Offset(0, 1))]
               : null,
@@ -665,26 +720,34 @@ class _RoomTabButton extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontSize: 13.5,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 color: active ? AppColors.ink : AppColors.mute,
               ),
             ),
             const SizedBox(width: 6),
             Container(
               constraints: const BoxConstraints(minWidth: 22),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+              height: 20,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
               decoration: BoxDecoration(
-                color: const Color(0x12FFFFFF),
-                borderRadius: BorderRadius.circular(999),
+                color: active
+                    ? AppColors.gold.withValues(alpha: 0.16)
+                    : AppColors.ink.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: active
+                    ? Border.all(color: AppColors.brass.withValues(alpha: 0.40), width: 0.8)
+                    : null,
               ),
               alignment: Alignment.center,
               child: Text(
                 count,
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
+                  height: 1.0,
+                  color: active ? AppColors.gold : AppColors.mute,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
@@ -706,10 +769,11 @@ class _EmptyRoomsBox extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF2D4A72)),
+          color: AppColors.obsidian.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppColors.line),
         ),
         child: Text(
           text,
