@@ -61,6 +61,7 @@ class AppController extends ChangeNotifier {
   bool optPacts = false;
   bool optNukes = false;
   bool optHq = true; // Quartel (padrão): medalhas e ordens. Desligado, a partida usa as cartas (o extra)
+  bool optSpy = false;
   bool optPublic = true;
   bool? extrasOpen;
   String? lobbyCode;
@@ -148,6 +149,7 @@ class AppController extends ChangeNotifier {
 
   // Victory dismissal (allows inspecting board after game ends)
   bool victoryDismissed = false;
+  bool inTutorial = false;
 
   // Settings & Saved state availability
   bool forceLand = true;
@@ -184,6 +186,7 @@ class AppController extends ChangeNotifier {
       optPacts = savedCfg['pacts'] == true;
       optNukes = savedCfg['nukes'] == true;
       optHq = savedCfg['hq'] != false;
+      optSpy = savedCfg['spy'] == true;
     }
 
     _unsubConn = WebEnv.listenConnectivity((on) {
@@ -441,6 +444,185 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void startTutorial({String? playerName}) {
+    SoundPlayer.unlock();
+    _resetSessionState();
+    inTutorial = true;
+    role = 'host';
+    netP2p = false;
+    me = 0;
+    turnSecs = 0;
+    optEvents = false;
+    optPacts = false;
+    optNukes = true;
+    optHq = true;
+    optSpy = true;
+
+    final rawName = playerName != null ? cleanName(playerName) : cleanName(savedName);
+    if (playerName != null && rawName.isNotEmpty) savePlayerName(playerName);
+    final name = rawName.isNotEmpty ? rawName : 'Você';
+    seats = [
+      LobbySeat(name: name, color: 0, ctrl: 'local'),
+      LobbySeat(name: 'Instrutor', color: 1, ctrl: 'bot'),
+    ];
+
+    final tmpId = engine.newGame(
+      seats: seats.map((s) => s.toEngineSeat()).toList(),
+      opts: {'events': false, 'pacts': false, 'nukes': true, 'hq': true, 'spy': true},
+      seed: 42,
+    );
+    final st = engine.exportGame(tmpId);
+    engine.dropGame(tmpId);
+
+    st['players'] = [
+      {
+        'name': name,
+        'color': 0,
+        'ctrl': 'local',
+        'seat': 0,
+        'alive': true,
+        'cards': <int>[],
+        'obj': 6, // Dominar 32 territórios (2 jogadores)
+        'killedBy': null,
+        'conquered': false,
+        'lastTrade': 'normal',
+        'medals': 1,
+      },
+      {
+        'name': 'Instrutor',
+        'color': 1,
+        'ctrl': 'bot',
+        'seat': 1,
+        'alive': true,
+        'cards': <int>[],
+        'obj': 7,
+        'killedBy': null,
+        'conquered': false,
+        'lastTrade': 'normal',
+        'medals': 0,
+      },
+    ];
+    // Jogador 0 começa com 30 territórios; faltam Argentina (12) e África Ocidental (22) para chegar a 32.
+    const foeTerrs = <int>{12, 22, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41};
+    const strongBorders = <int>{0, 20, 23, 28, 29, 30, 31};
+    st['terr'] = [
+      for (var t = 0; t < 42; t++)
+        {
+          'o': foeTerrs.contains(t) ? 1 : 0,
+          'a': t == 11
+              ? 12 // Brasil
+              : t == 10
+                  ? 6 // Peru e Chile
+                  : strongBorders.contains(t)
+                      ? 15
+                      : t == 12
+                          ? 1 // Argentina
+                          : t == 22
+                              ? 2 // África Ocidental (entrincheirada no 1º turno)
+                              : 1,
+        },
+    ];
+    st['turn'] = 0;
+    st['round'] = 1;
+    st['step'] = 'reinforce';
+    st['pool'] = {'free': 3, 'cont': <String, int>{}};
+    st['orders'] = ['airlift', 'trench', 'spy'];
+    st['trenches'] = [
+      {'t': 22, 'by': 1},
+    ];
+    st['log'] = [
+      'Tutorial: conquiste a Argentina para juntar 3 medalhas, use o Quartel e domine 32 territórios!',
+    ];
+    st['ev'] = <Map<String, dynamic>>[];
+
+    _engineId = engine.loadGame(st);
+    screen = AppScreen.game;
+    WebEnv.setWakeLock(true);
+    _syncHost();
+    sel = 11; // Pré-seleciona o Brasil
+    _reeval();
+  }
+
+  ({int step, int total, String title, String body})? get tutorialGuide {
+    if (!inTutorial) return null;
+    final v = view;
+    if (v == null) return null;
+    if (v['phase'] == 'over') {
+      return (
+        step: 5,
+        total: 5,
+        title: 'Tutorial concluído!',
+        body: 'Você dominou os 32 territórios, usou o Quartel e cumpriu seu objetivo secreto!',
+      );
+    }
+    final turnIdx = (v['turn'] as num).toInt();
+    if (turnIdx != 0) {
+      return (
+        step: 3,
+        total: 5,
+        title: 'Vez do Instrutor…',
+        body: 'Aguarde o turno do adversário terminar. A Trincheira na África Ocidental vai se desfazer.',
+      );
+    }
+    final terrs = v['terr'] as List<dynamic>;
+    var owned = 0;
+    for (final t in terrs) {
+      if (((t as Map<String, dynamic>)['o'] as num).toInt() == 0) owned++;
+    }
+    final medals = medalsOf(0);
+    final step = v['step'] as String? ?? 'reinforce';
+    final round = (v['round'] as num).toInt();
+
+    if (round == 1 && step == 'reinforce') {
+      return (
+        step: 1,
+        total: 5,
+        title: 'Reforço (30 de 32 territórios)',
+        body: 'Seu objetivo é dominar 32 territórios. O Brasil já está selecionado: toque no botão dourado "Colocar" para posicionar seus 3 exércitos.',
+      );
+    }
+    if (round == 1 && step == 'attack' && owned < 31) {
+      return (
+        step: 2,
+        total: 5,
+        title: 'Ataque e Medalhas',
+        body: 'Toque no Brasil e depois na Argentina (1 exército) para atacar! A 1ª conquista do turno dá +1 medalha e fechar a América do Sul dá mais +1 medalha.',
+      );
+    }
+    if (round == 1 && owned >= 31) {
+      return (
+        step: 3,
+        total: 5,
+        title: '3 Medalhas conquistadas!',
+        body: 'A África Ocidental está protegida por Trincheira neste turno. Toque em "Passar" e depois em "Finalizar turno" para usar o Quartel no próximo turno.',
+      );
+    }
+    if (round >= 2 && step == 'reinforce' && medals >= 2 && _poolTotalOf(v) <= 17) {
+      return (
+        step: 4,
+        total: 5,
+        title: 'O Quartel (Medalhas e Ordens)',
+        body: 'Abra o botão "Quartel" no painel! Com $medals medalhas você pode clicar em "Mobilizar +${eval?.hq?.effort ?? 5}" (ou usar uma Ordem Tática) e depois reforçar o Brasil.',
+      );
+    }
+    return (
+      step: 5,
+      total: 5,
+      title: 'Golpe Final (Rota Marítima)',
+      body: 'Coloque seus reforços no Brasil e ataque a África Ocidental (pela linha tracejada no mar) para conquistar o 32º território e vencer!',
+    );
+  }
+
+  static int _poolTotalOf(Map<String, dynamic> v) {
+    final pool = v['pool'] as Map<String, dynamic>? ?? const {};
+    var t = (pool['free'] as num?)?.toInt() ?? 0;
+    final cont = pool['cont'] as Map<String, dynamic>? ?? const {};
+    for (final val in cont.values) {
+      if (val is num) t += val.toInt();
+    }
+    return t;
+  }
+
   void addLobbyPlayer({bool isBot = false, String? localName}) {
     if (online != null) {
       if (lobbyOwner && guestLink != null && isBot) {
@@ -541,6 +723,7 @@ class AppController extends ChangeNotifier {
     bool? pacts,
     bool? nukes,
     bool? hq,
+    bool? spy,
     bool? isPublic,
   }) {
     if (online != null) {
@@ -552,6 +735,7 @@ class AppController extends ChangeNotifier {
           'pacts': ?pacts,
           'nukes': ?nukes,
           'hq': ?hq,
+          'spy': ?spy,
           'public': ?isPublic,
         });
       }
@@ -562,6 +746,7 @@ class AppController extends ChangeNotifier {
     if (pacts != null) optPacts = pacts;
     if (nukes != null) optNukes = nukes;
     if (hq != null) optHq = hq;
+    if (spy != null) optSpy = spy;
     AppStorage.instance.setString(
       'estandarte.cfg',
       jsonEncode({
@@ -570,6 +755,7 @@ class AppController extends ChangeNotifier {
         'pacts': optPacts,
         'nukes': optNukes,
         'hq': optHq,
+        'spy': optSpy,
       }),
     );
     _broadcastLobby();
@@ -591,7 +777,13 @@ class AppController extends ChangeNotifier {
     _dropEngineGame();
     _engineId = engine.newGame(
       seats: seats.map((s) => s.toEngineSeat()).toList(),
-      opts: {'events': optEvents, 'pacts': optPacts, 'nukes': optNukes, 'hq': optHq},
+      opts: {
+        'events': optEvents,
+        'pacts': optPacts,
+        'nukes': optNukes,
+        'hq': optHq,
+        'spy': optHq && optSpy,
+      },
     );
     _hasEvN = false;
     _lastRollN = 0;
@@ -626,6 +818,7 @@ class AppController extends ChangeNotifier {
           'pacts': optPacts,
           'nukes': optNukes,
           'hq': optHq,
+          'spy': optHq && optSpy,
         });
       }
     }
@@ -1322,6 +1515,7 @@ class AppController extends ChangeNotifier {
       optPacts = msg['pacts'] == true;
       optNukes = msg['nukes'] == true;
       optHq = msg['hq'] == true;
+      optSpy = msg['spy'] == true;
       optPublic = msg['public'] == true;
       lobbyCode = msg['code'] as String?;
       lobbyOwner = msg['owner'] == true;
@@ -1441,22 +1635,24 @@ class AppController extends ChangeNotifier {
     }
 
     // Save host/local game (`save3`)
-    final stateJson = engine.exportGame(id);
-    if (hostView['phase'] == 'play') {
-      AppStorage.instance.setString(
-        'estandarte.save3',
-        jsonEncode({
-          'game': stateJson,
-          'seats': seats.map((s) => {'name': s.name, 'color': s.color, 'ctrl': s.ctrl}).toList(),
-          'secs': turnSecs,
-          'role': role,
-          'savedAt': DateTime.now().millisecondsSinceEpoch,
-        }),
-      );
-    } else {
-      AppStorage.instance.remove('estandarte.save3');
+    if (!inTutorial) {
+      final stateJson = engine.exportGame(id);
+      if (hostView['phase'] == 'play') {
+        AppStorage.instance.setString(
+          'estandarte.save3',
+          jsonEncode({
+            'game': stateJson,
+            'seats': seats.map((s) => {'name': s.name, 'color': s.color, 'ctrl': s.ctrl}).toList(),
+            'secs': turnSecs,
+            'role': role,
+            'savedAt': DateTime.now().millisecondsSinceEpoch,
+          }),
+        );
+      } else {
+        AppStorage.instance.remove('estandarte.save3');
+      }
+      _refreshSavedFlags();
     }
-    _refreshSavedFlags();
 
     _applyIncomingView(hostView, turnKeyForClock: turnKey);
     _scheduleHostBot(hostView);
@@ -1863,9 +2059,9 @@ class AppController extends ChangeNotifier {
                     : '${nm(p)} espionou ${nm(q)}',
             col(p),
             sub: mine(p)
-                ? 'O relatório sobre ${nm(q)} fica guardado no Quartel'
+                ? 'Relatório sobre ${nm(q)} salvo no Quartel · +1 no maior dado contra ele neste turno'
                 : mine(q)
-                    ? 'Ele recebeu dois objetivos possíveis: um é o seu'
+                    ? 'Ele ganha +1 no maior dado contra você neste turno'
                     : '',
             ms: 1500,
             big: mine(p) || mine(q),
@@ -2734,6 +2930,7 @@ class AppController extends ChangeNotifier {
   }
 
   void _resetSessionState() {
+    inTutorial = false;
     _botTimer?.cancel();
     _clockTimer?.cancel();
     _autoTimer?.cancel();

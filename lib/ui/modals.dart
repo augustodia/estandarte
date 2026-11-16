@@ -562,6 +562,26 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
           ],
           const SizedBox(height: 12),
         ],
+        if (opts['hq'] == true && opts['spy'] == true) ...[
+          Text('Espionagem', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
+          const SizedBox(height: 6),
+          const Text(
+            'Ordem do Quartel (2 medalhas): revela informações sobre o objetivo de um adversário e fortalece seus ataques contra ele no turno.',
+            style: TextStyle(fontSize: 14, color: AppColors.mute),
+          ),
+          const SizedBox(height: 6),
+          for (final b in const [
+            '1ª espionagem no alvo: mostra 2 objetivos possíveis (1 verdadeiro e 1 falso, em ordem qualquer).',
+            '2ª espionagem no mesmo alvo: confirma o objetivo verdadeiro com certeza.',
+            'Neste turno, seus ataques contra o alvo espionado somam +1 ao maior dado de ataque (até 6).',
+            'Só você lê os relatórios (guardados no Quartel); a mesa apenas fica sabendo quem você espionou.',
+          ])
+            Padding(
+              padding: const EdgeInsets.only(left: 8, bottom: 3),
+              child: Text('• $b', style: const TextStyle(fontSize: 13, color: AppColors.mute)),
+            ),
+          const SizedBox(height: 12),
+        ],
         EstButton(
           label: 'Fechar',
           variant: EstButtonVariant.primary,

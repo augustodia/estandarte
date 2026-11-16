@@ -23,6 +23,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
       'A partida troca o Quartel (medalhas e ordens táticas) pelas cartas de território: junte três e troque por exércitos.',
     ),
     (
+      'spy',
+      'Espionagem',
+      'Ordem do Quartel (2 medalhas): a 1ª revela 2 objetivos possíveis do alvo; a 2ª confirma o verdadeiro. Dá +1 no maior dado de ataque contra ele no turno.',
+    ),
+    (
       'events',
       'Eventos de rodada',
       'De vez em quando, um evento surpresa muda as regras para todos por uma rodada.',
@@ -44,6 +49,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         'pacts' => widget.ctrl.optPacts,
         'nukes' => widget.ctrl.optNukes,
         'cards' => !widget.ctrl.optHq,
+        'spy' => widget.ctrl.optHq && widget.ctrl.optSpy,
         _ => false,
       };
 
@@ -58,6 +64,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
         c.updateLobbyConfig(nukes: !c.optNukes);
       case 'cards':
         c.updateLobbyConfig(hq: !c.optHq);
+      case 'spy':
+        c.updateLobbyConfig(spy: !c.optSpy);
     }
   }
 
@@ -228,13 +236,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 ),
                 if (extrasOpen)
                   for (final ex in _extrasMeta)
-                    EstSwitchOpt(
-                      title: ex.$2,
-                      subtitle: ex.$3,
-                      value: _getExtra(ex.$1),
-                      enabled: true,
-                      onChanged: (_) => _toggleExtra(ex.$1),
-                    ),
+                    if (ex.$1 != 'spy' || c.optHq)
+                      EstSwitchOpt(
+                        title: ex.$2,
+                        subtitle: ex.$3,
+                        value: _getExtra(ex.$1),
+                        enabled: true,
+                        onChanged: (_) => _toggleExtra(ex.$1),
+                      ),
               ],
             ),
           ),

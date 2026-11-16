@@ -264,6 +264,19 @@ class _GameScreenState extends State<GameScreen> {
               bottom: c.diceBanner!.low ? 10 : null,
               child: Center(child: _DiceTray(banner: c.diceBanner!)),
             ),
+
+          if (c.tutorialGuide != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 10,
+              child: Center(
+                child: _TutorialCoachBanner(
+                  guide: c.tutorialGuide!,
+                  onExit: c.leaveGame,
+                ),
+              ),
+            ),
         ],
       );
     }
@@ -430,7 +443,7 @@ class _HudPanel extends StatelessWidget {
         ? players[ctrl.me] as Map<String, dynamic>
         : null;
     final opts = v['opts'] as Map<String, dynamic>? ?? const {};
-    final extras = opts['events'] == true || opts['pacts'] == true || opts['nukes'] == true;
+    final extras = opts['events'] == true || opts['pacts'] == true || opts['nukes'] == true || (opts['hq'] == true && opts['spy'] == true);
     final pactsCount = opts['pacts'] == true ? (v['pacts'] as List<dynamic>? ?? const []).length : 0;
     final offer = v['offer'] as Map<String, dynamic>?;
     final offerIsMine = offer != null &&
@@ -2609,4 +2622,94 @@ class _ConfettiPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ConfettiPainter old) => old.t != t;
+}
+
+class _TutorialCoachBanner extends StatelessWidget {
+  const _TutorialCoachBanner({
+    required this.guide,
+    required this.onExit,
+  });
+
+  final ({int step, int total, String title, String body}) guide;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xEB0A1422),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xAAE2B04A), width: 1.5),
+          boxShadow: const [
+            BoxShadow(color: Color(0x99000000), blurRadius: 18, offset: Offset(0, 6)),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0x33E2B04A),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0x88E2B04A)),
+                  ),
+                  child: Text(
+                    'TUTORIAL · PASSO ${guide.step}/${guide.total}',
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                      color: Color(0xFFFFE2A3),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    guide.title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: onExit,
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(
+                      'Sair',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.mute,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              guide.body,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: Color(0xFFD8E4F2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

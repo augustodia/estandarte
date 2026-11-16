@@ -151,7 +151,9 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                             EstButton(
                               small: true,
                               variant: EstButtonVariant.primary,
-                              label: o.key == 'spy' ? 'Espionar' : 'Sabotar',
+                              label: o.key == 'spy'
+                                  ? (hq.intel.any((r) => r.q == q) ? 'Confirmar' : 'Espionar')
+                                  : 'Sabotar',
                               onPressed: why.isEmpty
                                   ? () {
                                       if (o.key == 'spy') {
@@ -350,8 +352,11 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                 if (r != null) ...[
                   report(r),
                   note(
-                    'Um dos dois é falso, e o relatório não diz qual: observe o que ${nameOf(spied)} faz no mapa para descobrir. '
-                    'O relatório fica guardado no Quartel até o fim da partida, e só você o lê.',
+                    r.texts.length > 1
+                        ? 'Um dos dois é falso, e o relatório não diz qual — observe o que ${nameOf(spied)} faz no mapa ou espione de novo para confirmar o verdadeiro. '
+                            'Seus ataques contra ${nameOf(spied)} neste turno somam +1 ao maior dado. O relatório fica guardado no Quartel, e só você o lê.'
+                        : 'Objetivo de ${nameOf(spied)} confirmado! '
+                            'Seus ataques contra ${nameOf(spied)} neste turno somam +1 ao maior dado. O relatório fica guardado no Quartel, e só você o lê.',
                   ),
                   const SizedBox(height: 12),
                   EstButton(

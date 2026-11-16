@@ -432,12 +432,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         const SizedBox(height: 8),
-        EstButton(
-          label: 'Como jogar',
-          variant: EstButtonVariant.ghost,
-          height: btnHeight,
-          fontSize: btnFs,
-          onPressed: () => showRulesModal(context, c),
+        Row(
+          children: [
+            Expanded(
+              child: EstButton(
+                label: 'Tutorial jogável',
+                height: btnHeight,
+                fontSize: btnFs,
+                onPressed: () => c.startTutorial(playerName: _nameCtrl.text),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: EstButton(
+                label: 'Como jogar',
+                variant: EstButtonVariant.ghost,
+                height: btnHeight,
+                fontSize: btnFs,
+                onPressed: () => showRulesModal(context, c),
+              ),
+            ),
+          ],
         ),
       ],
     );

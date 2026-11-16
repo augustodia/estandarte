@@ -280,6 +280,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
         if (r['events'] == true) 'eventos de rodada',
         if (r['pacts'] == true) 'pactos',
         if (r['nukes'] == true) 'ogiva nuclear',
+        if (r['hq'] == true && r['spy'] == true) 'espionagem',
         if (r['hq'] != true) 'cartas',
       ].join(' · ');
 
