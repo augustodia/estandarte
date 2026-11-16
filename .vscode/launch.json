@@ -7,6 +7,9 @@
       "type": "dart",
       "program": "lib/main.dart",
       "deviceId": "chrome",
+      "toolArgs": [
+        "--dart-define-from-file=.env"
+      ],
       "preLaunchTask": "Engine: Build WASM"
     },
     {
@@ -15,17 +18,21 @@
       "type": "dart",
       "program": "lib/main.dart",
       "deviceId": "edge",
+      "toolArgs": [
+        "--dart-define-from-file=.env"
+      ],
       "preLaunchTask": "Engine: Build WASM"
     },
     {
-      "name": "Estandarte (Web Server - 8080)",
+      "name": "Estandarte (Web Server - 8081)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
       "deviceId": "web-server",
       "args": [
         "--web-port",
-        "8080"
+        "8081",
+        "--dart-define-from-file=.env"
       ],
       "preLaunchTask": "Engine: Build WASM"
     },
@@ -35,6 +42,9 @@
       "type": "dart",
       "program": "lib/main.dart",
       "deviceId": "windows",
+      "toolArgs": [
+        "--dart-define-from-file=.env"
+      ],
       "preLaunchTask": "Engine: Build Native (Windows DLL)"
     }
   ]

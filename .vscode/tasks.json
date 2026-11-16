@@ -8,7 +8,8 @@
       "args": [
         "run",
         "-d",
-        "chrome"
+        "chrome",
+        "--dart-define-from-file=.env"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -18,6 +19,20 @@
         "kind": "build",
         "isDefault": true
       },
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: Run Local Server (:8080)",
+      "type": "shell",
+      "command": "go",
+      "args": [
+        "run",
+        "./cmd/server"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/../backend-estandarte"
+      },
+      "isBackground": true,
       "problemMatcher": []
     },
     {

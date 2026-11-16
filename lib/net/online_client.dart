@@ -7,7 +7,10 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../platform/storage.dart';
 import '../platform/web_env.dart';
 
-const String defaultServerUrl = 'wss://estandarte-backend.onrender.com';
+const String defaultServerUrl = String.fromEnvironment(
+  'ESTANDARTE_SERVER_URL',
+  defaultValue: 'wss://estandarte-backend.onrender.com',
+);
 const String _serverStorageKey = 'estandarte.server';
 
 bool allowedServer(String? raw) {
@@ -16,7 +19,7 @@ bool allowedServer(String? raw) {
     final normalized = raw.replaceFirst(RegExp(r'^http'), 'ws');
     final u = Uri.parse(normalized);
     if (u.scheme != 'ws' && u.scheme != 'wss') return false;
-    final def = Uri.parse(defaultServerUrl);
+    final def = Uri.parse(defaultServerUrl.replaceFirst(RegExp(r'^http'), 'ws'));
     if (u.scheme == def.scheme && u.host == def.host && u.port == def.port) {
       return true;
     }

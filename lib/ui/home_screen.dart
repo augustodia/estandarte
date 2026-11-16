@@ -138,9 +138,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         SizedBox(width: gap),
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
+          constraints: const BoxConstraints(maxWidth: 410),
           child: EstGlassCard(
-            padding: const EdgeInsets.all(26),
+            padding: const EdgeInsets.all(24),
             borderRadius: 20,
             child: _buildForm(big: true, compactLand: false),
           ),
@@ -282,9 +282,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (big) ...[
           const SizedBox(height: 10),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
+            constraints: const BoxConstraints(maxWidth: 410),
             child: Text(
-              'Estratégia por turnos para 2 a 6 jogadores. No mesmo Wi-Fi, sem internet, ou online com quem está longe.',
+              'Estratégia por turnos para 2 a 6 jogadores. Entre na fila rápida online, crie uma mesa com amigos ou jogue sem internet.',
               textAlign: alignLeft ? TextAlign.left : TextAlign.center,
               style: const TextStyle(
                 fontSize: 15,
@@ -294,6 +294,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: alignLeft ? WrapAlignment.start : WrapAlignment.center,
+            children: const [
+              _FeaturePill(text: '🎖️ Quartel & Ordens'),
+              _FeaturePill(text: '⚡ Fila Rápida (45s)'),
+              _FeaturePill(text: '🤝 2 a 6 Jogadores'),
+            ],
+          ),
+          const SizedBox(height: 16),
           _buildMetaFooter(alignLeft: alignLeft),
         ],
       ],
@@ -327,16 +338,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildForm({required bool big, required bool compactLand}) {
     final c = widget.ctrl;
-    final btnHeight = big ? 50.0 : 46.0;
-    final btnFs = big ? 16.0 : 15.0;
+    final btnHeight = big ? 48.0 : 44.0;
+    final btnFs = big ? 15.0 : 14.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Seu nome',
-          style: TextStyle(fontSize: 13, color: AppColors.mute),
+          'Seu nome de comandante',
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.mute),
         ),
         const SizedBox(height: 6),
         TextField(
@@ -349,27 +360,71 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             counterText: '',
             contentPadding: EdgeInsets.symmetric(
               horizontal: big ? 14 : 12,
-              vertical: big ? 13 : 11,
+              vertical: big ? 12 : 10,
             ),
           ),
         ),
         SizedBox(height: big ? 12 : 10),
 
-        // Rede local card
+        // Online card (Hero mode)
         _ModeCard(
-          title: 'Rede local',
+          title: 'Jogar Online',
+          badge: const EstBadge(text: 'pela internet', net: true),
+          highlight: true,
+          description: compactLand
+              ? null
+              : 'Partida rápida com fila automática em até 45 s ou salas públicas e privadas por link.',
+          padding: compactLand
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+              : (big ? const EdgeInsets.all(14) : const EdgeInsets.all(12)),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: EstButton(
+                    label: '⚡ Partida Rápida',
+                    variant: EstButtonVariant.primary,
+                    height: btnHeight,
+                    fontSize: btnFs,
+                    onPressed: () => c.startQuickMatch(_nameCtrl.text),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 5,
+                  child: EstButton(
+                    label: 'Salas e código',
+                    height: btnHeight,
+                    fontSize: btnFs,
+                    onPressed: () {
+                      c.savePlayerName(_nameCtrl.text);
+                      c.openRoomsBrowser();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        SizedBox(height: big ? 10 : 8),
+
+        // Local & Offline card
+        _ModeCard(
+          title: 'Local & Rede Wi-Fi',
           badge: const EstBadge(text: 'sem internet'),
           description: compactLand
               ? null
-              : 'Celulares no mesmo Wi-Fi ou no hotspot de um deles, conectados por QR.',
-          padding: compactLand ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8) : (big ? const EdgeInsets.all(14) : const EdgeInsets.all(12)),
+              : 'Contra bots neste aparelho, passa-o-aparelho ou celulares próximos por QR Code.',
+          padding: compactLand
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+              : (big ? const EdgeInsets.all(14) : const EdgeInsets.all(12)),
           children: [
             Row(
               children: [
                 Expanded(
                   child: EstButton(
-                    label: 'Criar partida',
-                    variant: EstButtonVariant.primary,
+                    label: 'Criar mesa local',
                     height: btnHeight,
                     fontSize: btnFs,
                     onPressed: () => c.startLocalSetup(hostName: _nameCtrl.text),
@@ -409,46 +464,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ],
           ],
         ),
-        SizedBox(height: big ? 12 : 10),
-
-        // Online card
-        _ModeCard(
-          title: 'Online',
-          badge: const EstBadge(text: 'pela internet', net: true),
-          description: compactLand
-              ? null
-              : 'Cada um no próprio celular, de qualquer lugar: crie uma sala e mande o link.',
-          padding: compactLand ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8) : (big ? const EdgeInsets.all(14) : const EdgeInsets.all(12)),
-          children: [
-            EstButton(
-              label: 'Jogar online',
-              height: btnHeight,
-              fontSize: btnFs,
-              onPressed: () {
-                c.savePlayerName(_nameCtrl.text);
-                c.openRoomsBrowser();
-              },
-            ),
-          ],
-        ),
         const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
               child: EstButton(
-                label: 'Tutorial jogável',
-                height: btnHeight,
-                fontSize: btnFs,
+                label: '🎓 Tutorial jogável',
+                variant: EstButtonVariant.ghost,
+                height: btnHeight - 2,
+                fontSize: btnFs - 0.5,
                 onPressed: () => c.startTutorial(playerName: _nameCtrl.text),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: EstButton(
-                label: 'Como jogar',
+                label: '📖 Como jogar',
                 variant: EstButtonVariant.ghost,
-                height: btnHeight,
-                fontSize: btnFs,
+                height: btnHeight - 2,
+                fontSize: btnFs - 0.5,
                 onPressed: () => showRulesModal(context, c),
               ),
             ),
@@ -459,11 +493,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 
+class _FeaturePill extends StatelessWidget {
+  const _FeaturePill({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0x880D1B2E),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF2D4A72)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFFDCE6F4),
+        ),
+      ),
+    );
+  }
+}
+
 class _ModeCard extends StatelessWidget {
   const _ModeCard({
     required this.title,
     required this.badge,
     this.description,
+    this.highlight = false,
     required this.children,
     required this.padding,
   });
@@ -471,6 +531,7 @@ class _ModeCard extends StatelessWidget {
   final String title;
   final Widget badge;
   final String? description;
+  final bool highlight;
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
 
@@ -479,9 +540,19 @@ class _ModeCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: const Color(0x8C0B1626),
+        gradient: highlight
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xB814263D), Color(0x990B1626)],
+              )
+            : null,
+        color: highlight ? null : const Color(0x8C0B1626),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2D4A72)),
+        border: Border.all(
+          color: highlight ? const Color(0x99E8B84B) : const Color(0xFF2D4A72),
+          width: highlight ? 1.2 : 1.0,
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

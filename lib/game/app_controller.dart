@@ -66,6 +66,8 @@ class AppController extends ChangeNotifier {
   bool? extrasOpen;
   String? lobbyCode;
   bool lobbyOwner = false;
+  bool lobbyQuick = false;
+  int lobbyQuickDeadlineMs = 0;
 
   // Engine Game ID (when host)
   int? _engineId;
@@ -590,11 +592,19 @@ class AppController extends ChangeNotifier {
       );
     }
     if (round == 1 && owned >= 31) {
+      if (v['occupy'] != null) {
+        return (
+          step: 3,
+          total: 5,
+          title: 'Território Conquistado! (Avance tropas)',
+          body: 'Você tomou a Argentina e ganhou 2 medalhas! Escolha quantas tropas extras quer levar do Brasil e clique no botão dourado para confirmar a ocupação.',
+        );
+      }
       return (
         step: 3,
         total: 5,
         title: '3 Medalhas conquistadas!',
-        body: 'A África Ocidental está protegida por Trincheira neste turno. Toque em "Passar" e depois em "Finalizar turno" para usar o Quartel no próximo turno.',
+        body: 'A África Ocidental está protegida por Trincheira neste turno. Toque em "Encerrar ataques" e depois em "Encerrar turno" para usar o Quartel no próximo turno.',
       );
     }
     if (round >= 2 && step == 'reinforce' && medals >= 2 && _poolTotalOf(v) <= 17) {
@@ -602,14 +612,25 @@ class AppController extends ChangeNotifier {
         step: 4,
         total: 5,
         title: 'O Quartel (Medalhas e Ordens)',
-        body: 'Abra o botão "Quartel" no painel! Com $medals medalhas você pode clicar em "Mobilizar +${eval?.hq?.effort ?? 5}" (ou usar uma Ordem Tática) e depois reforçar o Brasil.',
+        body: 'Clique no botão "Mobilizar +${eval?.hq?.effort ?? 5}" (ou abra o "Quartel") para converter suas medalhas em exércitos antes de reforçar!',
       );
+    }
+    if (round >= 2 && step == 'reinforce') {
+      final free = (v['pool']?['free'] as num?)?.toInt() ?? 0;
+      if (free == 0 && _poolTotalOf(v) > 0) {
+        return (
+          step: 5,
+          total: 5,
+          title: 'Bônus de Continente Obrigatório',
+          body: 'Como você domina continentes inteiros, esses exércitos extras devem ser colocados nos continentes destacados em dourado no mapa!',
+        );
+      }
     }
     return (
       step: 5,
       total: 5,
       title: 'Golpe Final (Rota Marítima)',
-      body: 'Coloque seus reforços no Brasil e ataque a África Ocidental (pela linha tracejada no mar) para conquistar o 32º território e vencer!',
+      body: 'Coloque seus reforços livres no Brasil e ataque a África Ocidental (pela linha tracejada no mar) para conquistar o 32º território e vencer!',
     );
   }
 
@@ -1227,6 +1248,19 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  void startQuickMatch(String playerName) {
+    final nm = cleanName(playerName);
+    final finalName = nm.isNotEmpty ? nm : 'Jogador';
+    savePlayerName(finalName);
+    _connectOnlineQuery(
+      'quick=1',
+      host: true,
+      fromRooms: screen == AppScreen.rooms,
+      name: finalName,
+      isPublic: true,
+    );
+  }
+
   void joinOnlineRoom(
     String code,
     String playerName, {
@@ -1519,6 +1553,11 @@ class AppController extends ChangeNotifier {
       optPublic = msg['public'] == true;
       lobbyCode = msg['code'] as String?;
       lobbyOwner = msg['owner'] == true;
+      lobbyQuick = msg['quick'] == true;
+      final qLeft = (msg['quickLeft'] as num?)?.toInt();
+      lobbyQuickDeadlineMs = (lobbyQuick && qLeft != null)
+          ? DateTime.now().millisecondsSinceEpoch + qLeft
+          : 0;
       if (online != null) {
         online!.code = lobbyCode ?? online!.code;
         online!.owner = lobbyOwner;
@@ -2978,6 +3017,8 @@ class AppController extends ChangeNotifier {
     watchersCount = null;
     lobbyCode = null;
     lobbyOwner = false;
+    lobbyQuick = false;
+    lobbyQuickDeadlineMs = 0;
     turnDeadlineMs = 0;
   }
 

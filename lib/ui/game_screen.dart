@@ -1656,6 +1656,8 @@ class _BottomActionBar extends StatelessWidget {
           ),
         );
       } else if (rng != null) {
+        final selCont = ctrl.mapData.territories[ctrl.sel!].continent;
+        final contBonusHere = (contMap['$selCont'] as num?)?.toInt() ?? 0;
         msgSpans.add(const TextSpan(text: 'Reforçar '));
         msgSpans.add(
           TextSpan(
@@ -1663,9 +1665,35 @@ class _BottomActionBar extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
           ),
         );
+        if (free == 0 && contBonusHere > 0) {
+          msgSpans.add(
+            TextSpan(
+              text:
+                  ' · 🎖️ Bônus obrigatório de ${ctrl.mapData.continents[selCont].name} (+$contBonusHere ${contBonusHere == 1 ? 'exército' : 'exércitos'})',
+              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+            ),
+          );
+        } else {
+          msgSpans.add(
+            TextSpan(
+              text: ' · $free livre${free == 1 ? '' : 's'}${extra.isNotEmpty ? ' ($extra)' : ''}',
+            ),
+          );
+        }
+      } else if (free == 0 && contMap.isNotEmpty) {
+        final obList = contMap.entries
+            .where((e) => (e.value as num).toInt() > 0)
+            .map((e) => '+${e.value} na ${ctrl.mapData.continents[int.parse(e.key)].name}')
+            .join(' e ');
+        msgSpans.add(
+          const TextSpan(
+            text: '🎖️ Bônus de continente obrigatório: ',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+          ),
+        );
         msgSpans.add(
           TextSpan(
-            text: ' · $free livre${free == 1 ? '' : 's'}${extra.isNotEmpty ? ' ($extra)' : ''}',
+            text: 'coloque $obList (toque num território iluminado desse continente).',
           ),
         );
       } else {
@@ -1716,17 +1744,34 @@ class _BottomActionBar extends StatelessWidget {
         }
       }
     } else if (v['occupy'] != null) {
+      final from = (v['occupy']['from'] as num).toInt();
       final to = (v['occupy']['to'] as num).toInt();
-      msgSpans.add(const TextSpan(text: 'Conquistou '));
+      msgSpans.add(
+        const TextSpan(
+          text: '🚩 Conquistou ',
+          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+        ),
+      );
       msgSpans.add(
         TextSpan(
           text: ctrl.mapData.territories[to].name,
           style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
         ),
       );
-      msgSpans.add(const TextSpan(text: '! Um exército já entrou; levar mais quantos?'));
+      msgSpans.add(
+        TextSpan(
+          text:
+              '! 1 exército já avançou de ${ctrl.mapData.territories[from].name} · levar mais quantos?',
+        ),
+      );
       if (rng != null) btns.add(_StepperWidget(ctrl: ctrl, range: rng));
-      btns.add(actionBtn('Mover', ctrl.confirmOccupy, variant: EstButtonVariant.primary));
+      btns.add(
+        actionBtn(
+          ctrl.stepValue == 0 ? 'Manter 1' : 'Levar +${ctrl.stepValue}',
+          ctrl.confirmOccupy,
+          variant: EstButtonVariant.primary,
+        ),
+      );
     } else if (v['step'] == 'attack') {
       if (rng != null) {
         final s = ctrl.sel!;

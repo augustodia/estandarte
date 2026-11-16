@@ -65,6 +65,10 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
       final c = widget.ctrl;
       final fogActive = c.view?['fog'] != null && c.view?['phase'] == 'play';
       final hasSpot = c.spotlightSet != null && c.spotlightUntilMs > _nowMs;
+      final bonusOnlyActive = c.canPlayNow() &&
+          c.view?['step'] == 'reinforce' &&
+          (c.view?['pool']?['free'] as num? ?? 0) == 0 &&
+          !(c.eval?.mustTrade ?? false);
       final needsAnim = c.pulses.isNotEmpty ||
           c.strikes.isNotEmpty ||
           c.arrows.isNotEmpty ||
@@ -73,6 +77,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
           c.impactFx != null ||
           c.incomingTerr != null ||
           c.sel != null ||
+          bonusOnlyActive ||
           hasSpot ||
           fogActive;
       if (needsAnim) {
@@ -711,8 +716,37 @@ class _WorldMapPainter extends CustomPainter {
     }
 
     // 9. Re-draw highlighted territory strokes on top so borders are never clipped
+    final isOccupyOrMove = v != null && (v['occupy'] != null || v['step'] == 'move');
     for (final i in frontOrder) {
-      _drawTerritoryHighlightBorder(canvas, i, can, targets, pk, spot);
+      _drawTerritoryHighlightBorder(canvas, i, can, targets, pk, spot, isOccupyOrMove: isOccupyOrMove);
+    }
+
+    // 9b. When only continent bonus armies remain, highlight those continents with a gentle border glow
+    if (bonusOnly) {
+      final pulse = 0.5 + 0.5 * sin(nowMs * 0.004);
+      for (var ci = 0; ci < md.continents.length; ci++) {
+        final bonusCount = (poolCont['$ci'] as num?)?.toInt() ?? 0;
+        if (bonusCount > 0) {
+          final c = md.continents[ci];
+          canvas.drawPath(
+            c.path,
+            Paint()
+              ..color = c.color.withValues(alpha: 0.22 + 0.20 * pulse)
+              ..style = PaintingStyle.stroke
+              ..strokeJoin = StrokeJoin.round
+              ..strokeWidth = 4.5 / camZ
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+          );
+          canvas.drawPath(
+            c.path,
+            Paint()
+              ..color = Color.lerp(c.color, Colors.white, 0.35 + 0.25 * pulse)!
+              ..style = PaintingStyle.stroke
+              ..strokeJoin = StrokeJoin.round
+              ..strokeWidth = 1.8 / camZ,
+          );
+        }
+      }
     }
 
     // 10. Smoke simulation overlay (above land/shade, below markers/labels)
@@ -745,22 +779,38 @@ class _WorldMapPainter extends CustomPainter {
       }
     }
 
-    // 12. Continent names (.cname)
-    for (final c in md.continents) {
-      _drawContinentLabel(canvas, c);
+    // 12. Continent names (.cname) + Mandatory continent bonus badge
+    for (var ci = 0; ci < md.continents.length; ci++) {
+      final c = md.continents[ci];
+      final bonusCount = (poolCont['$ci'] as num?)?.toInt() ?? 0;
+      _drawContinentLabel(canvas, c, mandatoryBonus: bonusOnly ? bonusCount : 0);
     }
 
-    // 13. Aim lines (.aim & .aim.one)
-    if (can && ctrl.sel != null && v != null && v['step'] != 'reinforce' && v['occupy'] == null) {
+    // 13. Aim lines (.aim & .aim.one) + Occupy / Move troop transfer line
+    if (can && v != null && v['occupy'] != null) {
+      final occ = v['occupy'] as Map<String, dynamic>;
+      final from = (occ['from'] as num).toInt();
+      final to = (occ['to'] as num).toInt();
+      _drawAimLine(
+        canvas,
+        from,
+        to,
+        isChosen: true,
+        isMove: true,
+        color: AppColors.gold,
+      );
+    } else if (can && ctrl.sel != null && v != null && v['step'] != 'reinforce' && v['occupy'] == null) {
       final from = ctrl.sel!;
       final dests = ctrl.target != null ? [ctrl.target!] : targets.toList();
+      final isMoveStep = v['step'] == 'move';
       for (final j in dests) {
         _drawAimLine(
           canvas,
           from,
           j,
           isChosen: ctrl.target != null,
-          color: Colors.white,
+          isMove: isMoveStep,
+          color: isMoveStep ? AppColors.gold : Colors.white,
         );
       }
     } else if (pk != null && pk.target != null && v != null) {
@@ -825,7 +875,7 @@ class _WorldMapPainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _drawContinentLabel(Canvas canvas, ContinentGeo c) {
+  void _drawContinentLabel(Canvas canvas, ContinentGeo c, {int mandatoryBonus = 0}) {
     final text = '${c.name} +${c.bonus}';
     final strokeTp = TextPainter(
       text: TextSpan(
@@ -845,13 +895,18 @@ class _WorldMapPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
 
+    final pulse = mandatoryBonus > 0 ? (0.5 + 0.5 * sin(nowMs * 0.005)) : 0.0;
+    final labelColor = mandatoryBonus > 0
+        ? Color.lerp(c.color, const Color(0xFFFFF3D1), 0.45 + 0.35 * pulse)!
+        : c.color;
+
     final fillTp = TextPainter(
       text: TextSpan(
         text: text,
         style: AppText.serif(
           size: 17,
           letterSpacing: 0.06,
-          color: c.color,
+          color: labelColor,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -860,6 +915,48 @@ class _WorldMapPainter extends CustomPainter {
     final pos = Offset(c.x - fillTp.width / 2, c.y - fillTp.height * 0.72);
     strokeTp.paint(canvas, pos);
     fillTp.paint(canvas, pos);
+
+    if (mandatoryBonus > 0) {
+      final pillTp = TextPainter(
+        text: TextSpan(
+          text: 'BÔNUS RESTANTE: +$mandatoryBonus',
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+            color: AppColors.gold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final pw = pillTp.width + 14;
+      final ph = pillTp.height + 5;
+      // Place above the continent name (in open ocean) so it never collides with territory badges to the right
+      final center = Offset(c.x, pos.dy - ph / 2 - 3);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: center, width: pw, height: ph),
+        const Radius.circular(999),
+      );
+      canvas.drawRRect(
+        rect,
+        Paint()
+          ..color = const Color(0xE60A1526)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
+      canvas.drawRRect(rect, Paint()..color = const Color(0xE60D1B30));
+      canvas.drawRRect(
+        rect,
+        Paint()
+          ..color = AppColors.gold.withValues(alpha: 0.55 + 0.35 * pulse)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2,
+      );
+      pillTp.paint(
+        canvas,
+        Offset(center.dx - pillTp.width / 2, center.dy - pillTp.height / 2),
+      );
+    }
   }
 
   void _drawSeaRoute(Canvas canvas, _ComputedSeaRoute sr, bool lit) {
@@ -878,7 +975,8 @@ class _WorldMapPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeWidth = (lit ? 3.0 : 1.8) / camZ;
 
-    final phase = lit ? (nowMs / 800.0 * 20.0) % 11.0 : 0.0;
+    final dir = (lit && ctrl.sel == sr.route.b) ? 1.0 : -1.0;
+    final phase = lit ? (11.0 + dir * ((nowMs / 800.0 * 20.0) % 11.0)) % 11.0 : 0.0;
     for (final p in sr.paths) {
       _drawDashedPath(
         canvas,
@@ -1054,8 +1152,9 @@ class _WorldMapPainter extends CustomPainter {
     bool can,
     Set<int> targets,
     ({int sel, int? target, int n})? pk,
-    Set<int>? spot,
-  ) {
+    Set<int>? spot, {
+    bool isOccupyOrMove = false,
+  }) {
     final tr = ctrl.mapData.territories[i];
     final isSel = i == ctrl.sel || (pk != null && i == pk.sel);
     final isTgt = (can && (ctrl.target != null ? i == ctrl.target : targets.contains(i))) ||
@@ -1081,17 +1180,18 @@ class _WorldMapPainter extends CustomPainter {
           ..strokeWidth = 3.5 / camZ,
       );
     } else if (isTgt) {
-      final phase = (nowMs / 1000.0 * 20.0) % 10.0;
+      final tgtColor = isOccupyOrMove ? AppColors.gold : Colors.white;
+      final phase = (10.0 - ((nowMs / 1000.0 * 20.0) % 10.0)) % 10.0;
       _drawDashedPath(
         canvas,
         tr.path,
         Paint()
-          ..color = Colors.white
+          ..color = tgtColor
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = 2.5 / camZ,
-        dash: 6,
-        gap: 4,
+          ..strokeWidth = 2.8 / camZ,
+        dash: isOccupyOrMove ? 4 : 6,
+        gap: isOccupyOrMove ? 5 : 4,
         phase: phase,
       );
     } else if (i == hoverTerr) {
@@ -1138,11 +1238,23 @@ class _WorldMapPainter extends CustomPainter {
     }
   }
 
-  void _drawAimLine(Canvas canvas, int a, int b, {required bool isChosen, required Color color}) {
+  void _drawAimLine(
+    Canvas canvas,
+    int a,
+    int b, {
+    required bool isChosen,
+    required Color color,
+    bool isMove = false,
+  }) {
     final ta = ctrl.mapData.territories[a];
     final tb = ctrl.mapData.territories[b];
     if ((ta.x - tb.x).abs() > ctrl.mapData.width / 2) return;
-    final phase = (nowMs / 800.0 * 20.0) % 13.0;
+
+    final dash = isMove ? 3.5 : 7.0;
+    final gap = isMove ? 6.5 : 6.0;
+    final cycle = dash + gap;
+    // Negative phase shift in _drawDashedPath makes dashes advance from A -> B
+    final phase = (cycle - ((nowMs / 750.0 * 20.0) % cycle)) % cycle;
     final path = Path()
       ..moveTo(ta.x, ta.y)
       ..lineTo(tb.x, tb.y);
@@ -1150,12 +1262,12 @@ class _WorldMapPainter extends CustomPainter {
       canvas,
       path,
       Paint()
-        ..color = const Color(0x99000000)
+        ..color = const Color(0xAA000000)
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
-        ..strokeWidth = ((isChosen ? 4.0 : 2.5) + 2.0) / camZ,
-      dash: 7,
-      gap: 6,
+        ..strokeWidth = ((isChosen ? 4.0 : 2.5) + 2.2) / camZ,
+      dash: dash,
+      gap: gap,
       phase: phase,
     );
     _drawDashedPath(
@@ -1166,10 +1278,52 @@ class _WorldMapPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = (isChosen ? 4.0 : 2.5) / camZ,
-      dash: 7,
-      gap: 6,
+      dash: dash,
+      gap: gap,
       phase: phase,
     );
+
+    // Draw directional chevron(s) pointing from A to B when a destination is chosen or during troop movement
+    if (isChosen || isMove) {
+      final dx = tb.x - ta.x;
+      final dy = tb.y - ta.y;
+      final len = sqrt(dx * dx + dy * dy);
+      if (len > 36) {
+        final angle = atan2(dy, dx);
+        final travel = ((nowMs % 1100) / 1100.0);
+        final tPos = isMove ? (0.28 + 0.44 * travel) : 0.54;
+        final cx = ta.x + dx * tPos;
+        final cy = ta.y + dy * tPos;
+        final sz = (isMove ? 7.5 : 6.5) / camZ;
+
+        canvas.save();
+        canvas.translate(cx, cy);
+        canvas.rotate(angle);
+        final chev = Path()
+          ..moveTo(-sz * 0.8, -sz * 0.75)
+          ..lineTo(sz * 0.5, 0)
+          ..lineTo(-sz * 0.8, sz * 0.75);
+        canvas.drawPath(
+          chev,
+          Paint()
+            ..color = const Color(0xBB000000)
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..strokeWidth = 4.6 / camZ,
+        );
+        canvas.drawPath(
+          chev,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..strokeWidth = 2.6 / camZ,
+        );
+        canvas.restore();
+      }
+    }
   }
 
   void _drawSmokeOverlay(Canvas canvas) {

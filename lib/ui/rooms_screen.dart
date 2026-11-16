@@ -98,13 +98,113 @@ class _RoomsScreenState extends State<RoomsScreen> {
           ],
         );
 
+    Widget quickHero() {
+      return Container(
+        padding: EdgeInsets.all(layout.big ? 18 : 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xD8152942), Color(0xBF0B1626)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x99E8B84B), width: 1.2),
+          boxShadow: const [
+            BoxShadow(color: Color(0x44000000), blurRadius: 16, offset: Offset(0, 6)),
+          ],
+        ),
+        child: horizBar
+            ? Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: const [
+                            Text(
+                              '⚡ Partida Rápida',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.gold,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            EstBadge(text: 'fila automática', net: true),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        const Text(
+                          'Entra direto na próxima mesa de 4 jogadores (Quartel ativo, 1 min/turno). Se não fechar em 45 s, bots completam a sala automaticamente.',
+                          style: TextStyle(fontSize: 13, height: 1.35, color: Color(0xFFD6E2F0)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  EstButton(
+                    label: '⚡ Entrar na Fila Rápida',
+                    variant: EstButtonVariant.primary,
+                    height: 48,
+                    fontSize: 15,
+                    onPressed: () {
+                      _syncName();
+                      c.startQuickMatch(_nameCtrl.text);
+                    },
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: const [
+                      Text(
+                        '⚡ Partida Rápida',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.gold,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      EstBadge(text: 'fila automática', net: true),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  const Text(
+                    'Mesa de 4 jogadores (Quartel, 1 min/turno). Se não fechar em 45 s, bots completam a sala.',
+                    style: TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFFD6E2F0)),
+                  ),
+                  const SizedBox(height: 10),
+                  EstButton(
+                    label: '⚡ Entrar na Fila Rápida',
+                    variant: EstButtonVariant.primary,
+                    height: 46,
+                    fontSize: 15,
+                    onPressed: () {
+                      _syncName();
+                      c.startQuickMatch(_nameCtrl.text);
+                    },
+                  ),
+                ],
+              ),
+      );
+    }
+
     Widget rBar() {
       Widget nameField() => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Seu nome', style: TextStyle(fontSize: 13, color: AppColors.mute)),
-              const SizedBox(height: 6),
+              const Text(
+                'Seu nome',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.mute),
+              ),
+              const SizedBox(height: 5),
               TextField(
                 controller: _nameCtrl,
                 maxLength: 14,
@@ -118,8 +218,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
           );
 
       Widget createBtn() => EstButton(
-            label: 'Criar sala',
-            variant: EstButtonVariant.primary,
+            label: '+ Criar sala personalizada',
             onPressed: () {
               _syncName();
               c.createOnlineRoom(_nameCtrl.text, isPublic: true);
@@ -131,10 +230,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Tem um código ou link?',
-                style: TextStyle(fontSize: 13, color: AppColors.mute),
+                'Entrar por código ou link',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.mute),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 5),
               Row(
                 children: [
                   Expanded(
@@ -268,6 +367,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
       final code = r['code'] as String? ?? '';
       final host = r['host'] as String? ?? '';
       final full = r['full'] == true;
+      final isQuick = r['quick'] == true;
       final secs = (r['secs'] as num?)?.toInt() ?? 0;
       final round = (r['round'] as num?)?.toInt() ?? 1;
       final watchers = (r['watchers'] as num?)?.toInt() ?? 0;
@@ -284,8 +384,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
         if (r['hq'] != true) 'cartas',
       ].join(' · ');
 
+      final maxSeats = isQuick ? 4 : 6;
       final meta = wait
-          ? '${players.length} de 6 jogadores · $extras'
+          ? '${players.length} de $maxSeats jogadores · $extras'
           : 'rodada $round · $humans ${humans == 1 ? 'pessoa' : 'pessoas'}'
               '${bots > 0 ? ' e $bots bot${bots == 1 ? '' : 's'}' : ''}'
               ' · 👁 $watchers/${c.maxWatchers} · $extras';
@@ -322,6 +423,25 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        if (isQuick) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0x28E8B84B),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0x88E8B84B)),
+                            ),
+                            child: const Text(
+                              '⚡ RÁPIDA',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.gold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         Text(
                           code,
                           style: const TextStyle(
@@ -485,9 +605,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   topHeader(),
-                  SizedBox(height: layout.big ? 14 : 10),
+                  SizedBox(height: layout.big ? 12 : 8),
+                  quickHero(),
+                  SizedBox(height: layout.big ? 10 : 8),
                   rBar(),
-                  SizedBox(height: layout.big ? 14 : 10),
+                  SizedBox(height: layout.big ? 12 : 8),
                   toolsRow(),
                   if (statusMsg.isNotEmpty) ...[
                     const SizedBox(height: 8),

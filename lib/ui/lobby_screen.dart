@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/map_data.dart';
@@ -16,6 +17,24 @@ class LobbyScreen extends StatefulWidget {
 }
 
 class _LobbyScreenState extends State<LobbyScreen> {
+  Timer? _quickTick;
+
+  @override
+  void initState() {
+    super.initState();
+    _quickTick = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (mounted && widget.ctrl.lobbyQuick && widget.ctrl.lobbyQuickDeadlineMs > 0) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _quickTick?.cancel();
+    super.dispose();
+  }
+
   static const _extrasMeta = [
     (
       'cards',
@@ -74,11 +93,88 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final c = widget.ctrl;
     final layout = EstLayout.of(context);
     final isOnline = c.online != null;
+    final isQuick = c.lobbyQuick;
     final canConfig = isOnline ? c.lobbyOwner : c.role != 'guest';
     final code = c.lobbyCode ?? c.online?.code;
-    final title = isOnline ? (code != null ? 'Sala $code' : 'Sala online') : 'Sala';
-    final sub = 'Jogadores · ${c.seats.length} de 6';
+    final title = isQuick
+        ? (code != null ? '⚡ Partida Rápida ($code)' : '⚡ Partida Rápida')
+        : (isOnline ? (code != null ? 'Sala $code' : 'Sala online') : 'Sala');
+    final maxSeats = isQuick ? 4 : 6;
+    final sub = 'Jogadores · ${c.seats.length} de $maxSeats';
     final extrasOpen = c.extrasOpen ?? layout.big;
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final quickRemMs = isQuick && c.lobbyQuickDeadlineMs > 0
+        ? (c.lobbyQuickDeadlineMs - nowMs).clamp(0, 45000)
+        : 0;
+    final quickSec = (quickRemMs / 1000).ceil();
+
+    Widget? quickBanner() {
+      if (!isQuick) return null;
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xD8152942), Color(0xBF0B1626)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x99E8B84B), width: 1.2),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '⚡ Fila Rápida ativa',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.gold,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0x28E8B84B),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0x88E8B84B)),
+                  ),
+                  child: Text(
+                    quickSec > 0 ? 'Começa em ${quickSec}s' : 'Iniciando…',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.gold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: (quickRemMs / 45000).clamp(0.0, 1.0),
+                minHeight: 5,
+                backgroundColor: const Color(0x33FFFFFF),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Aguardando até 4 comandantes. Quando o tempo zerar (ou se o anfitrião iniciar agora), bots completam os lugares vazios.',
+              style: TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFFD6E2F0)),
+            ),
+          ],
+        ),
+      );
+    }
 
     Widget seatsWidget() {
       final colors = c.engine.constants.colors;
@@ -126,6 +222,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ?connBanner,
+            ?quickBanner(),
             Text(
               isOnline
                   ? 'Tempo por turno: $timeStr.$extraTxt Aguardando quem criou a sala iniciar… Toque na sua bolinha para trocar de cor.'
@@ -155,6 +252,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ?connBanner,
+          ?quickBanner(),
           // Tempo por turno
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -322,9 +420,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
           const SizedBox(height: 8),
           EstButton(
-            label: 'Iniciar partida ($n ${n == 1 ? 'jogador' : 'jogadores'})',
+            label: isQuick && n < 4
+                ? 'Iniciar agora (completar com bots)'
+                : 'Iniciar partida ($n ${n == 1 ? 'jogador' : 'jogadores'})',
             variant: EstButtonVariant.primary,
-            onPressed: n < 2 ? null : c.beginGame,
+            onPressed: (n < 2 && !isQuick) ? null : c.beginGame,
           ),
           const SizedBox(height: 4),
           EstButton(
