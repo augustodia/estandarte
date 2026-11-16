@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -479,43 +478,40 @@ Future<T?> showEstSheet<T>(
     context: context,
     barrierDismissible: dismissible,
     barrierLabel: 'Fechar',
-    barrierColor: const Color(0xB302060C),
-    transitionDuration: const Duration(milliseconds: 220),
-    pageBuilder: (ctx, anim, _) => BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-      child: SafeArea(
-        child: Align(
-          alignment: centered ? Alignment.center : Alignment.bottomCenter,
-          child: Padding(
-            padding: centered ? const EdgeInsets.all(20) : EdgeInsets.zero,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: centered ? (layout.land && !layout.big ? 560 : maxWidth) : 500,
-                maxHeight: MediaQuery.sizeOf(ctx).height * (centered ? 0.90 : 0.92),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: double.infinity,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    gradient: pactTheme
-                        ? const LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xF52A2619), Color(0xF511203A)],
-                          )
-                        : AppColors.glassGradient,
-                    borderRadius: centered
-                        ? BorderRadius.circular(18)
-                        : const BorderRadius.vertical(top: Radius.circular(18)),
-                    border: Border.all(color: AppColors.glassBorder),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0xB3000000), blurRadius: 40, offset: Offset(0, -6)),
-                    ],
-                  ),
-                  child: builder(ctx),
+    barrierColor: const Color(0xCC02060C),
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (ctx, anim, _) => SafeArea(
+      child: Align(
+        alignment: centered ? Alignment.center : Alignment.bottomCenter,
+        child: Padding(
+          padding: centered ? const EdgeInsets.all(20) : EdgeInsets.zero,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: centered ? (layout.land && !layout.big ? 560 : maxWidth) : 500,
+              maxHeight: MediaQuery.sizeOf(ctx).height * (centered ? 0.90 : 0.92),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: double.infinity,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  gradient: pactTheme
+                      ? const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xF52A2619), Color(0xF511203A)],
+                        )
+                      : AppColors.glassGradient,
+                  borderRadius: centered
+                      ? BorderRadius.circular(18)
+                      : const BorderRadius.vertical(top: Radius.circular(18)),
+                  border: Border.all(color: AppColors.glassBorder),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0xB3000000), blurRadius: 40, offset: Offset(0, -6)),
+                  ],
                 ),
+                child: builder(ctx),
               ),
             ),
           ),
@@ -623,7 +619,7 @@ class EstSheetBody extends StatelessWidget {
 
 // ---------- Exact SVG Icon Painters from main.js ----------
 
-enum EstIconKind { goal, cards, menu, extras, pact, fit, crest, cup }
+enum EstIconKind { goal, cards, medal, menu, extras, pact, fit, crest, cup }
 
 class EstIcon extends StatelessWidget {
   const EstIcon(this.kind, {super.key, this.size = 18, this.color = AppColors.ink});
@@ -677,6 +673,19 @@ class _EstIconPainter extends CustomPainter {
           ..arcToPoint(const Offset(20, 5), radius: const Radius.circular(2))
           ..lineTo(20, 18);
         canvas.drawPath(p, stroke);
+      case EstIconKind.medal:
+        // Fita no topo convergente + medalha circular com estrela
+        final ribbon = Path()
+          ..moveTo(7, 3)
+          ..lineTo(17, 3)
+          ..lineTo(14.5, 9.2)
+          ..lineTo(9.5, 9.2)
+          ..close();
+        canvas.drawPath(ribbon, stroke);
+        canvas.drawLine(const Offset(12, 3), const Offset(12, 9), stroke);
+        canvas.drawCircle(const Offset(12, 15), 6, stroke);
+        final star = _starPath(const Offset(12, 15), 3.1, 1.35);
+        canvas.drawPath(star, Paint()..color = color..style = PaintingStyle.fill);
       case EstIconKind.menu:
         canvas.drawLine(const Offset(4, 7), const Offset(20, 7), stroke);
         canvas.drawLine(const Offset(4, 12), const Offset(20, 12), stroke);
@@ -786,6 +795,151 @@ class _EstIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EstIconPainter old) => old.kind != kind || old.color != color;
+}
+
+Path _starPath(Offset center, double outerR, double innerR) {
+  final p = Path();
+  for (var i = 0; i < 10; i++) {
+    final r = i.isEven ? outerR : innerR;
+    final ang = -pi / 2 + i * pi / 5;
+    final pt = Offset(center.dx + cos(ang) * r, center.dy + sin(ang) * r);
+    if (i == 0) {
+      p.moveTo(pt.dx, pt.dy);
+    } else {
+      p.lineTo(pt.dx, pt.dy);
+    }
+  }
+  p.close();
+  return p;
+}
+
+class EstMedalBadge extends StatelessWidget {
+  const EstMedalBadge({super.key, required this.earned, this.size = 28});
+
+  final bool earned;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _EstMedalBadgePainter(earned: earned)),
+    );
+  }
+}
+
+class _EstMedalBadgePainter extends CustomPainter {
+  const _EstMedalBadgePainter({required this.earned});
+
+  final bool earned;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.width / 28.0;
+    canvas.save();
+    canvas.scale(s, s);
+
+    // Fita superior em V (passador + fita militar)
+    final ribbon = Path()
+      ..moveTo(7.5, 2.0)
+      ..lineTo(20.5, 2.0)
+      ..lineTo(17.5, 10.5)
+      ..lineTo(10.5, 10.5)
+      ..close();
+
+    if (earned) {
+      canvas.drawPath(ribbon, Paint()..color = const Color(0xFFB53732));
+      canvas.drawRect(const Rect.fromLTWH(12.2, 2.0, 3.6, 8.5), Paint()..color = const Color(0xFFF3CD78));
+      canvas.drawPath(
+        ribbon,
+        Paint()
+          ..color = const Color(0xCCFFE5A3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..strokeJoin = StrokeJoin.round,
+      );
+    } else {
+      canvas.drawPath(ribbon, Paint()..color = AppColors.deep);
+      canvas.drawPath(
+        ribbon,
+        Paint()
+          ..color = AppColors.line
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    // Argolinha de ligação
+    canvas.drawCircle(
+      const Offset(14, 10.8),
+      1.6,
+      Paint()
+        ..color = earned ? const Color(0xFFF7D98A) : AppColors.line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+
+    // Medalhão circular
+    const c = Offset(14, 18.2);
+    const r = 7.8;
+    if (earned) {
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFEEAD), Color(0xFFE2B04A), Color(0xFFA97015)],
+          ).createShader(Rect.fromCircle(center: c, radius: r)),
+      );
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..color = const Color(0xFFFFF3CC)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2,
+      );
+      canvas.drawCircle(
+        c,
+        r - 2.1,
+        Paint()
+          ..color = const Color(0x665E3D07)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.9,
+      );
+      canvas.drawPath(
+        _starPath(c, 4.1, 1.8),
+        Paint()..color = const Color(0xFF4F3103),
+      );
+    } else {
+      canvas.drawCircle(c, r, Paint()..color = AppColors.deep);
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..color = AppColors.line
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.3,
+      );
+      canvas.drawPath(
+        _starPath(c, 3.7, 1.6),
+        Paint()
+          ..color = AppColors.line.withValues(alpha: 0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _EstMedalBadgePainter old) => old.earned != earned;
 }
 
 class DieFace extends StatelessWidget {

@@ -47,11 +47,14 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
 
   // Continuous repaint ticker for marching ants, pulse, smoke, combat FX, nuke cinema
   late final Ticker _animTicker;
-  int _nowMs = DateTime.now().millisecondsSinceEpoch;
+  final _MapAnimNotifier _animNotifier = _MapAnimNotifier();
+  int _lastSubtleTickMs = 0;
 
-  // Precomputed sea route geometry & label cache
+  // Precomputed sea route geometry & label/paint cache
   List<_ComputedSeaRoute>? _seaCache;
-  final Map<String, Color> _dimColorCache = {};
+  _MapPaintCache? _paintCache;
+
+  _MapPaintCache _getPaintCache() => _paintCache ??= _MapPaintCache(widget.ctrl.mapData);
 
   @override
   void initState() {
@@ -63,27 +66,35 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     _animTicker = createTicker((_) {
       if (!mounted) return;
       final c = widget.ctrl;
+      final now = DateTime.now().millisecondsSinceEpoch;
       final fogActive = c.view?['fog'] != null && c.view?['phase'] == 'play';
-      final hasSpot = c.spotlightSet != null && c.spotlightUntilMs > _nowMs;
-      final bonusOnlyActive = c.canPlayNow() &&
-          c.view?['step'] == 'reinforce' &&
-          (c.view?['pool']?['free'] as num? ?? 0) == 0 &&
-          !(c.eval?.mustTrade ?? false);
-      final needsAnim = c.pulses.isNotEmpty ||
+      final hasSpot = c.spotlightSet != null && c.spotlightUntilMs > now;
+      final hasHeavyFx = c.pulses.isNotEmpty ||
           c.strikes.isNotEmpty ||
           c.arrows.isNotEmpty ||
           c.floats.isNotEmpty ||
           c.missile != null ||
           c.impactFx != null ||
           c.incomingTerr != null ||
-          c.sel != null ||
+          c.smoke.active;
+      final bonusOnlyActive = c.canPlayNow() &&
+          c.view?['step'] == 'reinforce' &&
+          (c.view?['pool']?['free'] as num? ?? 0) == 0 &&
+          !(c.eval?.mustTrade ?? false);
+      final hasSubtleAnim = c.sel != null ||
+          c.trenchMode ||
+          c.airliftMode ||
+          c.nukeMode ||
           bonusOnlyActive ||
           hasSpot ||
           fogActive;
-      if (needsAnim) {
-        setState(() {
-          _nowMs = DateTime.now().millisecondsSinceEpoch;
-        });
+      if (hasHeavyFx) {
+        _lastSubtleTickMs = now;
+        _animNotifier.tick(now);
+      } else if (hasSubtleAnim && now - _lastSubtleTickMs >= 45) {
+        // ~22 FPS is plenty for subtle border dashes & pulses while cutting CPU load by >60%
+        _lastSubtleTickMs = now;
+        _animNotifier.tick(now);
       }
     })
       ..start();
@@ -103,6 +114,8 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     _panTicker?.dispose();
     _shakeCtrl.dispose();
     _animTicker.dispose();
+    _animNotifier.dispose();
+    _paintCache?.dispose();
     if (widget.ctrl.onPanTo == _panTo) widget.ctrl.onPanTo = null;
     if (widget.ctrl.onShake == _triggerShake) widget.ctrl.onShake = null;
     super.dispose();
@@ -304,9 +317,10 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final imp = widget.ctrl.impactFx;
-    final boomActive = imp != null && (_nowMs - imp.startMs) < 2500;
-    final boomAge = imp != null ? ((_nowMs - imp.startMs) / 2500.0).clamp(0.0, 1.0) : 1.0;
+    final c = widget.ctrl;
+    final imp = c.impactFx;
+    final nowSnap = DateTime.now().millisecondsSinceEpoch;
+    final boomActive = imp != null && (nowSnap - imp.startMs) < 2500;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -314,7 +328,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
         if (sz != _viewSize && sz.width > 0 && sz.height > 0) {
           final wasZero = _viewSize == Size.zero;
           _viewSize = sz;
-          widget.ctrl.mapViewportHeight = sz.height;
+          c.mapViewportHeight = sz.height;
           if (wasZero || !_fitted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) fitInitial();
@@ -324,7 +338,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
           }
         }
 
-        final alarmActive = widget.ctrl.incomingTerr != null;
+        final alarmActive = c.incomingTerr != null;
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -332,7 +346,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
               onPointerSignal: _onPointerSignal,
               onPointerDown: (ev) {
                 if ((ev.buttons & kSecondaryMouseButton) != 0) {
-                  widget.ctrl.clearSelection();
+                  c.clearSelection();
                 }
               },
               child: MouseRegion(
@@ -341,13 +355,13 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
                   final hit = _hitTerritory(_screenToMap(ev.localPosition));
                   if (hit != _hoverTerr) {
                     setState(() => _hoverTerr = hit);
-                    widget.ctrl.setHoverInfoTerr(hit);
+                    c.setHoverInfoTerr(hit);
                   }
                 },
                 onExit: (_) {
                   if (_hoverTerr != null) {
                     setState(() => _hoverTerr = null);
-                    widget.ctrl.setHoverInfoTerr(null);
+                    c.setHoverInfoTerr(null);
                   }
                 },
                 child: GestureDetector(
@@ -376,55 +390,45 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
                   },
                   onTapUp: (d) {
                     final mp = _screenToMap(d.localPosition);
-                    if (widget.ctrl.smoke.active) {
-                      widget.ctrl.smoke.poke(mp.dx, mp.dy);
+                    if (c.smoke.active) {
+                      c.smoke.poke(mp.dx, mp.dy);
                     }
                     final t = _hitTerritory(mp);
                     if (t != null) {
-                      widget.ctrl.tapTerritory(t);
+                      c.tapTerritory(t);
                     } else {
-                      widget.ctrl.clearSelection();
+                      c.clearSelection();
                     }
                   },
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge([widget.ctrl, widget.ctrl.smoke, _shakeCtrl]),
-                    builder: (context, _) {
-                      var shakeDx = 0.0;
-                      var shakeDy = 0.0;
-                      if (_shakeCtrl.isAnimating) {
-                        final k = 1 - _shakeCtrl.value;
-                        final amp = (_bigShake ? 9.0 : 4.0) * k;
-                        shakeDx = sin(_shakeCtrl.value * 44) * amp;
-                        shakeDy = cos(_shakeCtrl.value * 37) * amp;
-                      }
-                      return ClipRect(
-                        child: CustomPaint(
-                          size: sz,
-                          painter: _WorldMapPainter(
-                            ctrl: widget.ctrl,
-                            seaRoutes: _getSeaCache(),
-                            dimCache: _dimColorCache,
-                            camX: _camX,
-                            camY: _camY,
-                            camZ: _camZ,
-                            shakeDx: shakeDx,
-                            shakeDy: shakeDy,
-                            hoverTerr: _hoverTerr,
-                            nowMs: DateTime.now().millisecondsSinceEpoch,
-                          ),
+                  child: RepaintBoundary(
+                    child: ClipRect(
+                      child: CustomPaint(
+                        size: sz,
+                        painter: _WorldMapPainter(
+                          repaint: Listenable.merge([c, c.smoke, _shakeCtrl, _animNotifier]),
+                          ctrl: c,
+                          cache: _getPaintCache(),
+                          seaRoutes: _getSeaCache(),
+                          shakeCtrl: _shakeCtrl,
+                          bigShake: () => _bigShake,
+                          animNotifier: _animNotifier,
+                          camX: _camX,
+                          camY: _camY,
+                          camZ: _camZ,
+                          hoverTerr: _hoverTerr,
                         ),
-                      );
-                    },
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
 
             // Tabletop lighting vignette matching #mapwrap::before
-            Positioned.fill(
+            const Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: RadialGradient(
                       center: Alignment(0, -0.15),
                       radius: 1.05,
@@ -440,22 +444,26 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
             if (alarmActive)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFFFF3B2F)
-                            .withValues(alpha: 0.35 + 0.65 * sin(_nowMs * 0.015).abs()),
-                        width: 3.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0x88FF1E1E)
-                              .withValues(alpha: 0.25 + 0.5 * sin(_nowMs * 0.015).abs()),
-                          blurRadius: 90,
-                          blurStyle: BlurStyle.inner,
+                  child: AnimatedBuilder(
+                    animation: _animNotifier,
+                    builder: (context, _) {
+                      final pulse = sin(_animNotifier.nowMs * 0.015).abs();
+                      return Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: const Color(0xFFFF3B2F).withValues(alpha: 0.35 + 0.65 * pulse),
+                            width: 3.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0x88FF1E1E).withValues(alpha: 0.25 + 0.5 * pulse),
+                              blurRadius: 90,
+                              blurStyle: BlurStyle.inner,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -464,27 +472,33 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
             if (boomActive)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: Opacity(
-                    opacity: (1.0 - Curves.easeOut.transform(boomAge)).clamp(0.0, 1.0),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: Alignment(
-                            (((imp.x - _camX) * _camZ / sz.width) * 2 - 1).clamp(-1.0, 1.0),
-                            (((imp.y - _camY) * _camZ / sz.height) * 2 - 1).clamp(-1.0, 1.0),
+                  child: AnimatedBuilder(
+                    animation: _animNotifier,
+                    builder: (context, _) {
+                      final boomAge = ((_animNotifier.nowMs - imp.startMs) / 2500.0).clamp(0.0, 1.0);
+                      return Opacity(
+                        opacity: (1.0 - Curves.easeOut.transform(boomAge)).clamp(0.0, 1.0),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              center: Alignment(
+                                (((imp.x - _camX) * _camZ / sz.width) * 2 - 1).clamp(-1.0, 1.0),
+                                (((imp.y - _camY) * _camZ / sz.height) * 2 - 1).clamp(-1.0, 1.0),
+                              ),
+                              radius: 0.9,
+                              colors: const [
+                                Colors.white,
+                                Color(0xFFFFF7DC),
+                                Color(0xFFFFD98A),
+                                Color(0x55B9FF7A),
+                                Color(0x001D6A26),
+                              ],
+                              stops: const [0.0, 0.09, 0.22, 0.46, 0.78],
+                            ),
                           ),
-                          radius: 0.9,
-                          colors: const [
-                            Colors.white,
-                            Color(0xFFFFF7DC),
-                            Color(0xFFFFD98A),
-                            Color(0x55B9FF7A),
-                            Color(0x001D6A26),
-                          ],
-                          stops: const [0.0, 0.09, 0.22, 0.46, 0.78],
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -492,6 +506,242 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
         );
       },
     );
+  }
+}
+
+class _MapAnimNotifier extends ChangeNotifier {
+  int nowMs = DateTime.now().millisecondsSinceEpoch;
+  void tick(int now) {
+    nowMs = now;
+    notifyListeners();
+  }
+}
+
+class _MapPaintCache {
+  _MapPaintCache(this.md) {
+    final terrs = md.territories;
+    territoryOrder = List<int>.generate(terrs.length, (i) => i);
+    territoryOrder.sort((a, b) {
+      double minD(int idx) {
+        var best = double.infinity;
+        for (var j = 0; j < terrs.length; j++) {
+          if (j == idx) continue;
+          final d = hypot(terrs[j].x - terrs[idx].x, terrs[j].y - terrs[idx].y);
+          if (d < best) best = d;
+        }
+        return best;
+      }
+
+      return minD(a).compareTo(minD(b));
+    });
+
+    terrNameFill = [
+      for (final tr in terrs)
+        TextPainter(
+          text: TextSpan(
+            text: tr.name,
+            style: const TextStyle(
+              fontSize: 8.0,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+    ];
+
+    terrNameStroke = [
+      for (final tr in terrs)
+        TextPainter(
+          text: TextSpan(
+            text: tr.name,
+            style: TextStyle(
+              fontSize: 8.0,
+              fontWeight: FontWeight.w600,
+              foreground: Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2.4
+                ..strokeJoin = StrokeJoin.round
+                ..color = const Color(0xFF0C1626),
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+    ];
+
+    lightPaintsNormal = [for (final tr in terrs) _makeLightPaint(tr.bounds, 1.0)];
+    lightPaintsDim = [for (final tr in terrs) _makeLightPaint(tr.bounds, 0.22)];
+
+    contStroke = [
+      for (final c in md.continents)
+        TextPainter(
+          text: TextSpan(
+            text: '${c.name} +${c.bonus}',
+            style: AppText.serif(
+              size: 17,
+              letterSpacing: 0.06,
+              color: _oceanColor,
+            ).copyWith(
+              foreground: Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 5.0
+                ..strokeJoin = StrokeJoin.round
+                ..color = _oceanColor,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+    ];
+    contFillNormal = [
+      for (final c in md.continents)
+        TextPainter(
+          text: TextSpan(
+            text: '${c.name} +${c.bonus}',
+            style: AppText.serif(
+              size: 17,
+              letterSpacing: 0.06,
+              color: c.color,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+    ];
+
+    compassPicture = _buildCompassPicture();
+  }
+
+  static const Color _oceanColor = AppColors.sea;
+  final MapData md;
+  late final List<int> territoryOrder;
+  late final List<TextPainter> terrNameFill;
+  late final List<TextPainter> terrNameStroke;
+  late final List<Paint> lightPaintsNormal;
+  late final List<Paint> lightPaintsDim;
+  late final List<TextPainter> contStroke;
+  late final List<TextPainter> contFillNormal;
+  late final ui.Picture compassPicture;
+
+  final Map<String, Color> dimColorCache = {};
+  final Map<int, TextPainter> armyNumWhite = {};
+  final Map<int, TextPainter> armyNumRad = {};
+  final Map<int, Path> trenchDashPaths = {};
+  final Map<int, Path> borderDashPaths = {};
+  final Map<int, List<_LabelLayoutEntry>> labelLayoutCache = {};
+
+  static Paint _makeLightPaint(Rect b, double alpha) => Paint()
+    ..shader = ui.Gradient.linear(
+      b.topLeft,
+      b.bottomRight,
+      [
+        Colors.white.withValues(alpha: 0.24 * alpha),
+        Colors.white.withValues(alpha: 0),
+        Colors.black.withValues(alpha: 0),
+        Colors.black.withValues(alpha: 0.30 * alpha),
+      ],
+      const [0.0, 0.42, 0.58, 1.0],
+    );
+
+  static ui.Picture _buildCompassPicture() {
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    const col = Color(0x339FC3FF);
+    final circlePaint = Paint()
+      ..color = col
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawCircle(Offset.zero, 30, circlePaint);
+    canvas.drawCircle(Offset.zero, 23, circlePaint);
+
+    Path starRay(double len, double w) => Path()
+      ..moveTo(0, 0)
+      ..lineTo(w, -w)
+      ..lineTo(0, -len)
+      ..lineTo(-w, -w)
+      ..close();
+
+    final majorPaint = Paint()..color = col..style = PaintingStyle.fill;
+    final minorPaint = Paint()
+      ..color = col
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    final majorPath = starRay(38, 5);
+    final minorPath = starRay(22, 3.2);
+
+    for (var k = 0; k < 8; k++) {
+      canvas.save();
+      canvas.rotate(k * pi / 4);
+      canvas.drawPath(k.isOdd ? minorPath : majorPath, k.isOdd ? minorPaint : majorPaint);
+      canvas.restore();
+    }
+
+    final nTp = TextPainter(
+      text: TextSpan(
+        text: 'N',
+        style: AppText.serif(size: 11, color: col),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    nTp.paint(canvas, Offset(-nTp.width / 2, -42 - nTp.height / 2));
+    return rec.endRecording();
+  }
+
+  TextPainter armyPainter(int armies, bool rad) {
+    final map = rad ? armyNumRad : armyNumWhite;
+    return map.putIfAbsent(armies, () {
+      return TextPainter(
+        text: TextSpan(
+          text: '$armies',
+          style: TextStyle(
+            color: rad ? const Color(0xFFD8FF9A) : Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            height: 1.0,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    });
+  }
+
+  static Path _buildDashed(Path src, double dash, double gap, double phase) {
+    final out = Path();
+    final cycle = dash + gap;
+    final offset = phase % cycle;
+    for (final metric in src.computeMetrics()) {
+      double dist = -offset;
+      while (dist < metric.length) {
+        final start = max(0.0, dist);
+        final end = min(dist + dash, metric.length);
+        if (end > start) {
+          out.addPath(metric.extractPath(start, end), Offset.zero);
+        }
+        dist += cycle;
+      }
+    }
+    return out;
+  }
+
+  Path trenchPathFor(int terrIdx) {
+    return trenchDashPaths.putIfAbsent(
+      terrIdx,
+      () => _buildDashed(md.territories[terrIdx].path, 3, 3, 0),
+    );
+  }
+
+  /// Cached quantized dashed territory border (8 discrete phases per cycle -> eliminates computeMetrics per frame).
+  Path borderDashPathFor(int terrIdx, {required bool isMove, required int bucket}) {
+    final key = (terrIdx << 4) | (isMove ? 8 : 0) | (bucket & 7);
+    return borderDashPaths.putIfAbsent(key, () {
+      final dash = isMove ? 4.0 : 6.0;
+      final gap = isMove ? 5.0 : 4.0;
+      final cycle = dash + gap;
+      final phase = ((8 - (bucket & 7)) / 8.0) * cycle;
+      return _buildDashed(md.territories[terrIdx].path, dash, gap, phase);
+    });
+  }
+
+  void dispose() {
+    compassPicture.dispose();
   }
 }
 
@@ -518,28 +768,31 @@ class _LabelLayoutEntry {
 
 class _WorldMapPainter extends CustomPainter {
   _WorldMapPainter({
+    super.repaint,
     required this.ctrl,
+    required this.cache,
     required this.seaRoutes,
-    required this.dimCache,
+    required this.shakeCtrl,
+    required this.bigShake,
+    required this.animNotifier,
     required this.camX,
     required this.camY,
     required this.camZ,
-    required this.shakeDx,
-    required this.shakeDy,
     required this.hoverTerr,
-    required this.nowMs,
   });
 
   final AppController ctrl;
+  final _MapPaintCache cache;
   final List<_ComputedSeaRoute> seaRoutes;
-  final Map<String, Color> dimCache;
+  final Animation<double> shakeCtrl;
+  final bool Function() bigShake;
+  final _MapAnimNotifier animNotifier;
   final double camX;
   final double camY;
   final double camZ;
-  final double shakeDx;
-  final double shakeDy;
   final int? hoverTerr;
-  final int nowMs;
+  int _nowMs = 0;
+  int get nowMs => _nowMs;
 
   static const Color _oceanColor = AppColors.sea;
 
@@ -571,8 +824,18 @@ class _WorldMapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    _nowMs = DateTime.now().millisecondsSinceEpoch;
     final md = ctrl.mapData;
     final v = ctrl.view;
+
+    var shakeDx = 0.0;
+    var shakeDy = 0.0;
+    if (shakeCtrl.value > 0 && shakeCtrl.value < 1) {
+      final k = 1 - shakeCtrl.value;
+      final amp = (bigShake() ? 9.0 : 4.0) * k;
+      shakeDx = sin(shakeCtrl.value * 44) * amp;
+      shakeDy = cos(shakeCtrl.value * 37) * amp;
+    }
 
     // 1. Ocean background (--sea #0f1c2e so auracut & moat blend seamlessly)
     canvas.drawRect(Offset.zero & size, Paint()..color = _oceanColor);
@@ -593,8 +856,11 @@ class _WorldMapPainter extends CustomPainter {
       canvas.drawLine(Offset(-720, y), Offset(md.width + 720, y), gratPaint);
     }
 
-    // 3. Compass Rose at (985, 590) in Indian Ocean
-    _drawCompassRose(canvas);
+    // 3. Compass Rose at (985, 590) in Indian Ocean (cached Picture)
+    canvas.save();
+    canvas.translate(985, 590);
+    canvas.drawPicture(cache.compassPicture);
+    canvas.restore();
 
     // Compute dynamic contour widths matching scaleMarks()
     final cut = _unitPx(8.0, 9.0);
@@ -678,8 +944,19 @@ class _WorldMapPainter extends CustomPainter {
     // 7. Territories: fill + directional #landlight shading + default 1px border
     final frontOrder = <int>[];
     for (var i = 0; i < md.territories.length; i++) {
-      final isSel = i == ctrl.sel || (pk != null && i == pk.sel);
-      final isTgt = (can && (ctrl.target != null ? i == ctrl.target : targets.contains(i))) ||
+      final isSel = i == ctrl.sel ||
+          (can && ctrl.trenchMode && i == ctrl.pendingTrenchTerr) ||
+          (can && ctrl.airliftMode && i == ctrl.airliftFrom) ||
+          (pk != null && i == pk.sel);
+      final isTgt = (can && ctrl.trenchMode && terrs != null &&
+              (terrs[i]['o'] as num).toInt() == turnIdx &&
+              !(ev?.hq?.trenchBlocks.containsKey(i) ?? false)) ||
+          (can && ctrl.airliftMode && ctrl.airliftFrom != null && terrs != null &&
+              (ctrl.airliftTo != null
+                  ? i == ctrl.airliftTo
+                  : ((terrs[i]['o'] as num).toInt() == turnIdx && i != ctrl.airliftFrom))) ||
+          (can && !ctrl.trenchMode && !ctrl.airliftMode &&
+              (ctrl.target != null ? i == ctrl.target : targets.contains(i))) ||
           (pk != null && i == pk.target);
       final isSpot = spot != null && spot.contains(i);
       if (isSel || isTgt || isSpot || i == hoverTerr) {
@@ -716,9 +993,21 @@ class _WorldMapPainter extends CustomPainter {
     }
 
     // 9. Re-draw highlighted territory strokes on top so borders are never clipped
-    final isOccupyOrMove = v != null && (v['occupy'] != null || v['step'] == 'move');
+    final isOccupyOrMove = (v != null && (v['occupy'] != null || v['step'] == 'move')) ||
+        (can && (ctrl.trenchMode || ctrl.airliftMode));
     for (final i in frontOrder) {
-      _drawTerritoryHighlightBorder(canvas, i, can, targets, pk, spot, isOccupyOrMove: isOccupyOrMove);
+      _drawTerritoryHighlightBorder(
+        canvas,
+        i,
+        can,
+        terrs,
+        turnIdx,
+        ev,
+        targets,
+        pk,
+        spot,
+        isOccupyOrMove: isOccupyOrMove,
+      );
     }
 
     // 9b. When only continent bonus armies remain, highlight those continents with a gentle border glow
@@ -731,11 +1020,10 @@ class _WorldMapPainter extends CustomPainter {
           canvas.drawPath(
             c.path,
             Paint()
-              ..color = c.color.withValues(alpha: 0.22 + 0.20 * pulse)
+              ..color = c.color.withValues(alpha: 0.20 + 0.16 * pulse)
               ..style = PaintingStyle.stroke
               ..strokeJoin = StrokeJoin.round
-              ..strokeWidth = 4.5 / camZ
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+              ..strokeWidth = 5.5 / camZ,
           );
           canvas.drawPath(
             c.path,
@@ -759,35 +1047,38 @@ class _WorldMapPainter extends CustomPainter {
       _drawHazardOutline(canvas, md.territories[fogTerr].path);
     }
 
-    // 11b. Trincheiras do Quartel: contorno tracejado dourado, parado
+    // 11b. Trincheiras do Quartel: contorno tracejado dourado, parado (cached)
     if (v != null && v['phase'] == 'play') {
+      final trenchPaint = Paint()
+        ..color = const Color(0xF0F3CD78)
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = 2.2 / camZ;
       for (final x in v['trenches'] as List<dynamic>? ?? const []) {
         final t = ((x as Map<String, dynamic>)['t'] as num).toInt();
         if (t < 0 || t >= md.territories.length) continue;
-        _drawDashedPath(
-          canvas,
-          md.territories[t].path,
-          Paint()
-            ..color = const Color(0xF0F3CD78)
-            ..style = PaintingStyle.stroke
-            ..strokeJoin = StrokeJoin.round
-            ..strokeWidth = 2.2 / camZ,
-          dash: 3,
-          gap: 3,
-          phase: 0,
-        );
+        canvas.drawPath(cache.trenchPathFor(t), trenchPaint);
       }
     }
 
     // 12. Continent names (.cname) + Mandatory continent bonus badge
     for (var ci = 0; ci < md.continents.length; ci++) {
-      final c = md.continents[ci];
       final bonusCount = (poolCont['$ci'] as num?)?.toInt() ?? 0;
-      _drawContinentLabel(canvas, c, mandatoryBonus: bonusOnly ? bonusCount : 0);
+      _drawContinentLabel(canvas, ci, mandatoryBonus: bonusOnly ? bonusCount : 0);
     }
 
-    // 13. Aim lines (.aim & .aim.one) + Occupy / Move troop transfer line
-    if (can && v != null && v['occupy'] != null) {
+    // 13. Aim lines (.aim & .aim.one) + Occupy / Move / Airlift transfer line
+    if (can && ctrl.airliftMode && ctrl.airliftFrom != null && ctrl.airliftTo != null) {
+      _drawAimLine(
+        canvas,
+        ctrl.airliftFrom!,
+        ctrl.airliftTo!,
+        isChosen: true,
+        isMove: true,
+        allowLong: true,
+        color: AppColors.gold,
+      );
+    } else if (can && v != null && v['occupy'] != null) {
       final occ = v['occupy'] as Map<String, dynamic>;
       final from = (occ['from'] as num).toInt();
       final to = (occ['to'] as num).toInt();
@@ -799,7 +1090,7 @@ class _WorldMapPainter extends CustomPainter {
         isMove: true,
         color: AppColors.gold,
       );
-    } else if (can && ctrl.sel != null && v != null && v['step'] != 'reinforce' && v['occupy'] == null) {
+    } else if (can && !ctrl.trenchMode && !ctrl.airliftMode && ctrl.sel != null && v != null && v['step'] != 'reinforce' && v['occupy'] == null) {
       final from = ctrl.sel!;
       final dests = ctrl.target != null ? [ctrl.target!] : targets.toList();
       final isMoveStep = v['step'] == 'move';
@@ -831,78 +1122,23 @@ class _WorldMapPainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _drawCompassRose(Canvas canvas) {
-    canvas.save();
-    canvas.translate(985, 590);
-    const col = Color(0x339FC3FF);
-    final circlePaint = Paint()
-      ..color = col
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(Offset.zero, 30, circlePaint);
-    canvas.drawCircle(Offset.zero, 23, circlePaint);
-
-    Path starRay(double len, double w) => Path()
-      ..moveTo(0, 0)
-      ..lineTo(w, -w)
-      ..lineTo(0, -len)
-      ..lineTo(-w, -w)
-      ..close();
-
-    final majorPaint = Paint()..color = col..style = PaintingStyle.fill;
-    final minorPaint = Paint()
-      ..color = col
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    final majorPath = starRay(38, 5);
-    final minorPath = starRay(22, 3.2);
-
-    for (var k = 0; k < 8; k++) {
-      canvas.save();
-      canvas.rotate(k * pi / 4);
-      canvas.drawPath(k.isOdd ? minorPath : majorPath, k.isOdd ? minorPaint : majorPaint);
-      canvas.restore();
-    }
-
-    final nTp = TextPainter(
-      text: TextSpan(
-        text: 'N',
-        style: AppText.serif(size: 11, color: col),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    nTp.paint(canvas, Offset(-nTp.width / 2, -42 - nTp.height / 2));
-    canvas.restore();
-  }
-
-  void _drawContinentLabel(Canvas canvas, ContinentGeo c, {int mandatoryBonus = 0}) {
-    final text = '${c.name} +${c.bonus}';
-    final strokeTp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: AppText.serif(
-          size: 17,
-          letterSpacing: 0.06,
-          color: _oceanColor,
-        ).copyWith(
-          foreground: Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 5.0
-            ..strokeJoin = StrokeJoin.round
-            ..color = _oceanColor,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+  void _drawContinentLabel(Canvas canvas, int ci, {int mandatoryBonus = 0}) {
+    final c = ctrl.mapData.continents[ci];
+    final strokeTp = cache.contStroke[ci];
+    final fillNormal = cache.contFillNormal[ci];
+    final pos = Offset(c.x - fillNormal.width / 2, c.y - fillNormal.height * 0.72);
+    strokeTp.paint(canvas, pos);
 
     final pulse = mandatoryBonus > 0 ? (0.5 + 0.5 * sin(nowMs * 0.005)) : 0.0;
-    final labelColor = mandatoryBonus > 0
-        ? Color.lerp(c.color, const Color(0xFFFFF3D1), 0.45 + 0.35 * pulse)!
-        : c.color;
+    if (mandatoryBonus <= 0) {
+      fillNormal.paint(canvas, pos);
+      return;
+    }
 
+    final labelColor = Color.lerp(c.color, const Color(0xFFFFF3D1), 0.45 + 0.35 * pulse)!;
     final fillTp = TextPainter(
       text: TextSpan(
-        text: text,
+        text: '${c.name} +${c.bonus}',
         style: AppText.serif(
           size: 17,
           letterSpacing: 0.06,
@@ -911,52 +1147,41 @@ class _WorldMapPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-
-    final pos = Offset(c.x - fillTp.width / 2, c.y - fillTp.height * 0.72);
-    strokeTp.paint(canvas, pos);
     fillTp.paint(canvas, pos);
 
-    if (mandatoryBonus > 0) {
-      final pillTp = TextPainter(
-        text: TextSpan(
-          text: 'BÔNUS RESTANTE: +$mandatoryBonus',
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
-            color: AppColors.gold,
-          ),
+    final pillTp = TextPainter(
+      text: TextSpan(
+        text: 'BÔNUS RESTANTE: +$mandatoryBonus',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
+          color: AppColors.gold,
         ),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
 
-      final pw = pillTp.width + 14;
-      final ph = pillTp.height + 5;
-      // Place above the continent name (in open ocean) so it never collides with territory badges to the right
-      final center = Offset(c.x, pos.dy - ph / 2 - 3);
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: center, width: pw, height: ph),
-        const Radius.circular(999),
-      );
-      canvas.drawRRect(
-        rect,
-        Paint()
-          ..color = const Color(0xE60A1526)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
-      canvas.drawRRect(rect, Paint()..color = const Color(0xE60D1B30));
-      canvas.drawRRect(
-        rect,
-        Paint()
-          ..color = AppColors.gold.withValues(alpha: 0.55 + 0.35 * pulse)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2,
-      );
-      pillTp.paint(
-        canvas,
-        Offset(center.dx - pillTp.width / 2, center.dy - pillTp.height / 2),
-      );
-    }
+    final pw = pillTp.width + 14;
+    final ph = pillTp.height + 5;
+    // Place above the continent name (in open ocean) so it never collides with territory badges to the right
+    final center = Offset(c.x, pos.dy - ph / 2 - 3);
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: center, width: pw, height: ph),
+      const Radius.circular(999),
+    );
+    canvas.drawRRect(rect, Paint()..color = const Color(0xE60D1B30));
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..color = AppColors.gold.withValues(alpha: 0.55 + 0.35 * pulse)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+    pillTp.paint(
+      canvas,
+      Offset(center.dx - pillTp.width / 2, center.dy - pillTp.height / 2),
+    );
   }
 
   void _drawSeaRoute(Canvas canvas, _ComputedSeaRoute sr, bool lit) {
@@ -1050,7 +1275,7 @@ class _WorldMapPainter extends CustomPainter {
   }
 
   Color _dimColor(String hex, Color base) {
-    return dimCache.putIfAbsent(hex, () {
+    return cache.dimColorCache.putIfAbsent(hex, () {
       // Exact math from main.js dimColor(hex)
       const b = 0.36;
       const s = 0.45;
@@ -1094,6 +1319,18 @@ class _WorldMapPainter extends CustomPainter {
       if (can) {
         if (ctrl.nukeMode) {
           dimmed = ev?.nukeTargetBlocks.containsKey(i) ?? false;
+        } else if (ctrl.trenchMode) {
+          dimmed = (terrs[i]['o'] as num).toInt() != turnIdx ||
+              (ev?.hq?.trenchBlocks.containsKey(i) ?? false);
+        } else if (ctrl.airliftMode) {
+          final own = (terrs[i]['o'] as num).toInt() == turnIdx;
+          if (ctrl.airliftFrom == null) {
+            dimmed = !own ||
+                (ev?.hq?.airliftBlocks.containsKey(i) ?? false) ||
+                (terrs[i]['a'] as num).toInt() < 2;
+          } else {
+            dimmed = !own;
+          }
         } else if (ctrl.sel != null && v['step'] != 'reinforce') {
           dimmed = i != ctrl.sel && !targets.contains(i);
         } else if (bonusOnly) {
@@ -1111,7 +1348,10 @@ class _WorldMapPainter extends CustomPainter {
       }
     }
 
-    final isSel = i == ctrl.sel || (pk != null && i == pk.sel);
+    final isSel = i == ctrl.sel ||
+        (can && ctrl.trenchMode && i == ctrl.pendingTrenchTerr) ||
+        (can && ctrl.airliftMode && i == ctrl.airliftFrom) ||
+        (pk != null && i == pk.sel);
     final isLit = spot != null && spot.contains(i);
     var fillColor = dimmed ? _dimColor(hex, baseColor) : baseColor;
     if (isSel || isLit || (i == hoverTerr && !dimmed)) {
@@ -1120,20 +1360,11 @@ class _WorldMapPainter extends CustomPainter {
 
     canvas.drawPath(tr.path, Paint()..color = fillColor);
 
-    // #landlight diagonal lighting gradient per territory bounding box
-    final shadeAlpha = dimmed ? 0.22 : 1.0;
-    final lightShader = ui.Gradient.linear(
-      tr.bounds.topLeft,
-      tr.bounds.bottomRight,
-      [
-        Colors.white.withValues(alpha: 0.24 * shadeAlpha),
-        Colors.white.withValues(alpha: 0),
-        Colors.black.withValues(alpha: 0),
-        Colors.black.withValues(alpha: 0.30 * shadeAlpha),
-      ],
-      const [0.0, 0.42, 0.58, 1.0],
+    // #landlight diagonal lighting gradient per territory bounding box (pre-cached)
+    canvas.drawPath(
+      tr.path,
+      dimmed ? cache.lightPaintsDim[i] : cache.lightPaintsNormal[i],
     );
-    canvas.drawPath(tr.path, Paint()..shader = lightShader);
 
     // Default 1px territory coast/border
     canvas.drawPath(
@@ -1150,49 +1381,61 @@ class _WorldMapPainter extends CustomPainter {
     Canvas canvas,
     int i,
     bool can,
+    List<dynamic>? terrs,
+    int turnIdx,
+    dynamic ev,
     Set<int> targets,
     ({int sel, int? target, int n})? pk,
     Set<int>? spot, {
     bool isOccupyOrMove = false,
   }) {
     final tr = ctrl.mapData.territories[i];
-    final isSel = i == ctrl.sel || (pk != null && i == pk.sel);
-    final isTgt = (can && (ctrl.target != null ? i == ctrl.target : targets.contains(i))) ||
+    final isSel = i == ctrl.sel ||
+        (can && ctrl.trenchMode && i == ctrl.pendingTrenchTerr) ||
+        (can && ctrl.airliftMode && i == ctrl.airliftFrom) ||
+        (pk != null && i == pk.sel);
+    final isTgt = (can && ctrl.trenchMode && terrs != null &&
+            (terrs[i]['o'] as num).toInt() == turnIdx &&
+            !(ev?.hq?.trenchBlocks.containsKey(i) ?? false)) ||
+        (can && ctrl.airliftMode && ctrl.airliftFrom != null && terrs != null &&
+            (ctrl.airliftTo != null
+                ? i == ctrl.airliftTo
+                : ((terrs[i]['o'] as num).toInt() == turnIdx && i != ctrl.airliftFrom))) ||
+        (can && !ctrl.trenchMode && !ctrl.airliftMode &&
+            (ctrl.target != null ? i == ctrl.target : targets.contains(i))) ||
         (pk != null && i == pk.target);
     final isSpot = spot != null && spot.contains(i);
 
     if (isSel || isSpot) {
+      final glowColor = (ctrl.trenchMode || ctrl.airliftMode)
+          ? AppColors.gold.withValues(alpha: 0.45)
+          : const Color(0x55FFFFFF);
       canvas.drawPath(
         tr.path,
         Paint()
-          ..color = const Color(0x99FFFFFF)
+          ..color = glowColor
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = 5.0 / camZ
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+          ..strokeWidth = 6.0 / camZ,
       );
       canvas.drawPath(
         tr.path,
         Paint()
-          ..color = Colors.white
+          ..color = (ctrl.trenchMode || ctrl.airliftMode) ? AppColors.gold : Colors.white
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = 3.5 / camZ,
+          ..strokeWidth = 3.2 / camZ,
       );
     } else if (isTgt) {
       final tgtColor = isOccupyOrMove ? AppColors.gold : Colors.white;
-      final phase = (10.0 - ((nowMs / 1000.0 * 20.0) % 10.0)) % 10.0;
-      _drawDashedPath(
-        canvas,
-        tr.path,
+      final bucket = ((nowMs / 1000.0 * 2.0 * 8.0).floor()) & 7;
+      canvas.drawPath(
+        cache.borderDashPathFor(i, isMove: isOccupyOrMove, bucket: bucket),
         Paint()
           ..color = tgtColor
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = 2.8 / camZ,
-        dash: isOccupyOrMove ? 4 : 6,
-        gap: isOccupyOrMove ? 5 : 4,
-        phase: phase,
+          ..strokeWidth = 2.6 / camZ,
       );
     } else if (i == hoverTerr) {
       canvas.drawPath(
@@ -1238,6 +1481,37 @@ class _WorldMapPainter extends CustomPainter {
     }
   }
 
+  void _drawStraightDashedLine(
+    Canvas canvas,
+    Offset a,
+    Offset b,
+    Paint paint, {
+    required double dash,
+    required double gap,
+    required double phase,
+  }) {
+    final dx = b.dx - a.dx;
+    final dy = b.dy - a.dy;
+    final len = sqrt(dx * dx + dy * dy);
+    if (len <= 0.1) return;
+    final ux = dx / len;
+    final uy = dy / len;
+    final cycle = dash + gap;
+    var dist = -(phase % cycle);
+    while (dist < len) {
+      final s = max(0.0, dist);
+      final e = min(dist + dash, len);
+      if (e > s) {
+        canvas.drawLine(
+          Offset(a.dx + ux * s, a.dy + uy * s),
+          Offset(a.dx + ux * e, a.dy + uy * e),
+          paint,
+        );
+      }
+      dist += cycle;
+    }
+  }
+
   void _drawAimLine(
     Canvas canvas,
     int a,
@@ -1245,22 +1519,23 @@ class _WorldMapPainter extends CustomPainter {
     required bool isChosen,
     required Color color,
     bool isMove = false,
+    bool allowLong = false,
   }) {
     final ta = ctrl.mapData.territories[a];
     final tb = ctrl.mapData.territories[b];
-    if ((ta.x - tb.x).abs() > ctrl.mapData.width / 2) return;
+    if (!allowLong && (ta.x - tb.x).abs() > ctrl.mapData.width / 2) return;
 
     final dash = isMove ? 3.5 : 7.0;
     final gap = isMove ? 6.5 : 6.0;
     final cycle = dash + gap;
-    // Negative phase shift in _drawDashedPath makes dashes advance from A -> B
+    // Negative phase shift advances dashes from A -> B
     final phase = (cycle - ((nowMs / 750.0 * 20.0) % cycle)) % cycle;
-    final path = Path()
-      ..moveTo(ta.x, ta.y)
-      ..lineTo(tb.x, tb.y);
-    _drawDashedPath(
+    final pa = Offset(ta.x, ta.y);
+    final pb = Offset(tb.x, tb.y);
+    _drawStraightDashedLine(
       canvas,
-      path,
+      pa,
+      pb,
       Paint()
         ..color = const Color(0xAA000000)
         ..style = PaintingStyle.stroke
@@ -1270,9 +1545,10 @@ class _WorldMapPainter extends CustomPainter {
       gap: gap,
       phase: phase,
     );
-    _drawDashedPath(
+    _drawStraightDashedLine(
       canvas,
-      path,
+      pa,
+      pb,
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
@@ -1823,19 +2099,8 @@ class _WorldMapPainter extends CustomPainter {
           ..strokeWidth = 1.7,
       );
 
-      // .num
-      final numTp = TextPainter(
-        text: TextSpan(
-          text: '$armies',
-          style: TextStyle(
-            color: isRad ? const Color(0xFFD8FF9A) : Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            height: 1.0,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      // .num (cached TextPainter)
+      final numTp = cache.armyPainter(armies, isRad);
       numTp.paint(canvas, Offset(-numTp.width / 2, -numTp.height / 2 + 0.5));
 
       // .trefoil radiation badge at (13.5, -13.5)
@@ -1864,105 +2129,79 @@ class _WorldMapPainter extends CustomPainter {
 
     if (far) return;
 
-    // 2. Exact 4-position layoutLabels from main.js
-    final rBox = 13.6 * markK;
-    final order = List<int>.generate(mapTerrs.length, (i) => i);
-    order.sort((a, b) {
-      double minD(int idx) {
-        var best = double.infinity;
+    // 2. Exact 4-position layoutLabels from main.js (cached per zoom level when no earthquake)
+    final markBucket = (markK * 200).round();
+    final canUseCache = imp == null;
+    List<_LabelLayoutEntry>? entries =
+        canUseCache ? cache.labelLayoutCache[markBucket] : null;
+    if (entries == null) {
+      final rBox = 13.6 * markK;
+      final placed = <Rect>[];
+      final built = <_LabelLayoutEntry>[];
+
+      bool hitsMark(Rect b, int self) {
         for (var j = 0; j < mapTerrs.length; j++) {
-          if (j == idx) continue;
-          final d = hypot(mapTerrs[j].x - mapTerrs[idx].x, mapTerrs[j].y - mapTerrs[idx].y);
-          if (d < best) best = d;
+          if (j == self) continue;
+          final t = positions[j];
+          if (t.dx + rBox > b.left &&
+              t.dx - rBox < b.right &&
+              t.dy + rBox > b.top &&
+              t.dy - rBox < b.bottom) {
+            return true;
+          }
         }
-        return best;
+        return false;
       }
-      return minD(a).compareTo(minD(b));
-    });
 
-    final placed = <Rect>[];
-    final entries = <_LabelLayoutEntry>[];
+      bool hitsBox(Rect b) => placed.any((q) => b.overlaps(q));
 
-    bool hitsMark(Rect b, int self) {
-      for (var j = 0; j < mapTerrs.length; j++) {
-        if (j == self) continue;
-        final t = positions[j];
-        if (t.dx + rBox > b.left &&
-            t.dx - rBox < b.right &&
-            t.dy + rBox > b.top &&
-            t.dy - rBox < b.bottom) {
-          return true;
+      for (final i in cache.territoryOrder) {
+        final pos = positions[i];
+        final tp = cache.terrNameFill[i];
+        final w = tp.width + 2.4;
+        const hgt = 9.5;
+        const opts = [
+          (0.0, 24.0, TextAlign.center),
+          (0.0, -18.0, TextAlign.center),
+          (16.5, 3.0, TextAlign.left),
+          (-16.5, 3.0, TextAlign.right),
+        ];
+        for (final opt in opts) {
+          final cx = pos.dx + opt.$1 * markK;
+          final cy = pos.dy + opt.$2 * markK;
+          final x0 = opt.$3 == TextAlign.center
+              ? cx - (w / 2) * markK
+              : (opt.$3 == TextAlign.left ? cx : cx - w * markK);
+          final rect = Rect.fromLTRB(
+            x0 - 1,
+            cy - hgt * markK * 0.8,
+            x0 + w * markK + 1,
+            cy + hgt * markK * 0.35,
+          );
+          if (hitsMark(rect, i) || hitsBox(rect)) continue;
+          placed.add(rect);
+          built.add(
+            _LabelLayoutEntry(
+              terrIndex: i,
+              offset: Offset(cx, cy),
+              align: opt.$3,
+              tp: tp,
+            ),
+          );
+          break;
         }
       }
-      return false;
-    }
-
-    bool hitsBox(Rect b) => placed.any((q) => b.overlaps(q));
-
-    for (final i in order) {
-      final pos = positions[i];
-      final tp = TextPainter(
-        text: TextSpan(
-          text: mapTerrs[i].name,
-          style: const TextStyle(
-            fontSize: 8.0,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final w = tp.width + 2.4;
-      const hgt = 9.5;
-      const opts = [
-        (0.0, 24.0, TextAlign.center),
-        (0.0, -18.0, TextAlign.center),
-        (16.5, 3.0, TextAlign.left),
-        (-16.5, 3.0, TextAlign.right),
-      ];
-      for (final opt in opts) {
-        final cx = pos.dx + opt.$1 * markK;
-        final cy = pos.dy + opt.$2 * markK;
-        final x0 = opt.$3 == TextAlign.center
-            ? cx - (w / 2) * markK
-            : (opt.$3 == TextAlign.left ? cx : cx - w * markK);
-        final rect = Rect.fromLTRB(
-          x0 - 1,
-          cy - hgt * markK * 0.8,
-          x0 + w * markK + 1,
-          cy + hgt * markK * 0.35,
-        );
-        if (hitsMark(rect, i) || hitsBox(rect)) continue;
-        placed.add(rect);
-        entries.add(
-          _LabelLayoutEntry(
-            terrIndex: i,
-            offset: Offset(cx, cy),
-            align: opt.$3,
-            tp: tp,
-          ),
-        );
-        break;
+      entries = built;
+      if (canUseCache) {
+        if (cache.labelLayoutCache.length > 32) {
+          cache.labelLayoutCache.clear();
+        }
+        cache.labelLayoutCache[markBucket] = entries;
       }
     }
 
     for (final e in entries) {
-      final strokeTp = TextPainter(
-        text: TextSpan(
-          text: mapTerrs[e.terrIndex].name,
-          style: TextStyle(
-            fontSize: 8.0,
-            fontWeight: FontWeight.w600,
-            foreground: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 2.4
-              ..strokeJoin = StrokeJoin.round
-              ..color = const Color(0xFF0C1626),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
+      final strokeTp = cache.terrNameStroke[e.terrIndex];
       final dxLocal = e.align == TextAlign.center
           ? -e.tp.width / 2
           : (e.align == TextAlign.left ? 0.0 : -e.tp.width);
@@ -2020,7 +2259,12 @@ class _WorldMapPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _WorldMapPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _WorldMapPainter old) =>
+      old.camX != camX ||
+      old.camY != camY ||
+      old.camZ != camZ ||
+      old.hoverTerr != hoverTerr ||
+      old.ctrl != ctrl;
 }
 
 double hypot(double dx, double dy) => sqrt(dx * dx + dy * dy);

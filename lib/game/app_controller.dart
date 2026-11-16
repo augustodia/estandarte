@@ -99,6 +99,11 @@ class AppController extends ChangeNotifier {
   int stepValue = 1;
   String _stepKey = '';
   bool nukeMode = false;
+  bool trenchMode = false;
+  int? pendingTrenchTerr;
+  bool airliftMode = false;
+  int? airliftFrom;
+  int? airliftTo;
   int? lastTapTerr;
   int lastTapMs = 0;
   int? confirmEndKind; // 0 = endAttack, 1 = endTurn
@@ -1809,7 +1814,20 @@ class AppController extends ChangeNotifier {
       sel = null;
       target = null;
       nukeMode = false;
+      trenchMode = false;
+      pendingTrenchTerr = null;
+      airliftMode = false;
+      airliftFrom = null;
+      airliftTo = null;
     } else {
+      if (v['step'] != 'reinforce') {
+        nukeMode = false;
+        trenchMode = false;
+        pendingTrenchTerr = null;
+        airliftMode = false;
+        airliftFrom = null;
+        airliftTo = null;
+      }
       if (v['occupy'] != null) {
         final occ = v['occupy'] as Map<String, dynamic>;
         sel = (occ['from'] as num).toInt();
@@ -2427,6 +2445,14 @@ class AppController extends ChangeNotifier {
       return hi > lo ? (lo, hi) : null;
     }
     final s = sel;
+    if (airliftMode) {
+      if (airliftFrom != null && airliftTo != null) {
+        final armies = (terrs[airliftFrom!]['a'] as num).toInt();
+        final maxSend = armies - 1;
+        return maxSend >= 1 ? (1, maxSend) : null;
+      }
+      return null;
+    }
     if (s == null) return null;
     final step = v['step'] as String;
     if (step == 'reinforce') {
@@ -2462,12 +2488,16 @@ class AppController extends ChangeNotifier {
     if (v == null) return;
     final rng = canPlayNow() ? stepRange() : null;
     final occ = v['occupy'] as Map<String, dynamic>?;
-    final key = '${v['step']}:${occ != null ? 'o${occ['to']}' : ''}:$sel:$target';
+    final key = airliftMode
+        ? 'airlift:$airliftFrom:$airliftTo'
+        : '${v['step']}:${occ != null ? 'o${occ['to']}' : ''}:$sel:$target';
     if (occ != null && rng == null) {
       stepValue = (occ['min'] as num?)?.toInt() ?? 0;
     } else if (rng != null) {
       if (key != _stepKey) {
-        stepValue = occ != null ? rng.$1 : (v['step'] == 'attack' ? rng.$2 : 1);
+        stepValue = occ != null
+            ? rng.$1
+            : (airliftMode || v['step'] == 'attack' ? rng.$2 : 1);
       }
       stepValue = stepValue.clamp(rng.$1, rng.$2);
     }
@@ -2549,6 +2579,78 @@ class AppController extends ChangeNotifier {
       }
       pendingNukeTerr = t;
       notifyListeners();
+      return;
+    }
+
+    // Trench targeting mode
+    if (trenchMode) {
+      final hq = ev.hq;
+      final blk = hq?.trenchBlocks[t];
+      if (owner != turnIdx) {
+        showToast('Escolha um território seu para proteger com a Trincheira.');
+        notifyListeners();
+        return;
+      }
+      if (blk != null && blk.isNotEmpty) {
+        showToast(blk, 3600);
+        notifyListeners();
+        return;
+      }
+      if (pendingTrenchTerr == t) {
+        confirmTrench();
+      } else {
+        pendingTrenchTerr = t;
+        notifyListeners();
+      }
+      return;
+    }
+
+    // Airlift targeting mode
+    if (airliftMode) {
+      final hq = ev.hq;
+      if (airliftFrom == null) {
+        if (owner != turnIdx) {
+          showToast('Escolha um território seu de origem (2 ou mais exércitos).');
+          notifyListeners();
+          return;
+        }
+        final blk = hq?.airliftBlocks[t];
+        if (blk != null && blk.isNotEmpty) {
+          showToast(blk, 3600);
+          notifyListeners();
+          return;
+        }
+        if (armies < 2) {
+          showToast('É preciso 2 ou mais exércitos para enviar pela Ponte aérea.');
+          notifyListeners();
+          return;
+        }
+        airliftFrom = t;
+        airliftTo = null;
+        _reeval();
+        return;
+      }
+
+      if (t == airliftFrom) {
+        if (airliftTo != null) {
+          changeStep(-1);
+        } else {
+          airliftFrom = null;
+          _reeval();
+        }
+        return;
+      }
+      if (owner != turnIdx) {
+        showToast('Escolha um território seu como destino (ou toque em "Trocar origem").');
+        notifyListeners();
+        return;
+      }
+      if (t == airliftTo) {
+        changeStep(1);
+        return;
+      }
+      airliftTo = t;
+      _reeval();
       return;
     }
 
@@ -2715,6 +2817,29 @@ class AppController extends ChangeNotifier {
       _reeval();
       return;
     }
+    if (trenchMode) {
+      if (pendingTrenchTerr != null) {
+        pendingTrenchTerr = null;
+        notifyListeners();
+      } else {
+        trenchMode = false;
+        _reeval();
+      }
+      return;
+    }
+    if (airliftMode) {
+      if (airliftTo != null) {
+        airliftTo = null;
+        _reeval();
+      } else if (airliftFrom != null) {
+        airliftFrom = null;
+        _reeval();
+      } else {
+        airliftMode = false;
+        _reeval();
+      }
+      return;
+    }
     if (target != null) {
       target = null;
       _updateStepDefault();
@@ -2753,10 +2878,70 @@ class AppController extends ChangeNotifier {
     nukeMode = on;
     pendingNukeTerr = null;
     if (on) {
+      trenchMode = false;
+      pendingTrenchTerr = null;
+      airliftMode = false;
+      airliftFrom = null;
+      airliftTo = null;
       sel = null;
       target = null;
     }
     _reeval();
+  }
+
+  void toggleTrenchMode(bool on) {
+    trenchMode = on;
+    pendingTrenchTerr = null;
+    if (on) {
+      nukeMode = false;
+      pendingNukeTerr = null;
+      airliftMode = false;
+      airliftFrom = null;
+      airliftTo = null;
+      sel = null;
+      target = null;
+    }
+    _reeval();
+  }
+
+  void confirmTrench() {
+    final t = pendingTrenchTerr;
+    if (t == null) return;
+    trenchMode = false;
+    pendingTrenchTerr = null;
+    orderTrench(t);
+  }
+
+  void toggleAirliftMode(bool on) {
+    airliftMode = on;
+    airliftFrom = null;
+    airliftTo = null;
+    if (on) {
+      nukeMode = false;
+      pendingNukeTerr = null;
+      trenchMode = false;
+      pendingTrenchTerr = null;
+      sel = null;
+      target = null;
+    }
+    _reeval();
+  }
+
+  void clearAirliftFrom() {
+    airliftFrom = null;
+    airliftTo = null;
+    _reeval();
+  }
+
+  void confirmAirlift() {
+    final from = airliftFrom;
+    final to = airliftTo;
+    if (from == null || to == null) return;
+    final n = stepValue;
+    airliftMode = false;
+    airliftFrom = null;
+    airliftTo = null;
+    orderAirlift(from, to, n);
   }
 
   /// Partida com Quartel: medalhas e ordens no lugar das cartas.
@@ -3001,6 +3186,11 @@ class AppController extends ChangeNotifier {
     hoverInfoTerr = null;
     nukeMode = false;
     pendingNukeTerr = null;
+    trenchMode = false;
+    pendingTrenchTerr = null;
+    airliftMode = false;
+    airliftFrom = null;
+    airliftTo = null;
     confirmEndKind = null;
     passDevicePlayer = null;
     peekState = null;

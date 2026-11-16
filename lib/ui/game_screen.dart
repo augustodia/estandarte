@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -68,7 +67,11 @@ class _GameScreenState extends State<GameScreen> {
     }
     final step = v['step'] as String;
     if (step == 'reinforce') {
-      if (c.sel != null) {
+      if (c.trenchMode) {
+        if (c.pendingTrenchTerr != null) c.confirmTrench();
+      } else if (c.airliftMode) {
+        if (c.airliftFrom != null && c.airliftTo != null) c.confirmAirlift();
+      } else if (c.sel != null) {
         c.placeReinforce();
       } else if (c.eval?.bestTrade != null) {
         c.autoTrade();
@@ -628,7 +631,7 @@ class _HudPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   iconBtn(
-                    kind: EstIconKind.cards,
+                    kind: hqOn ? EstIconKind.medal : EstIconKind.cards,
                     label: handLabel,
                     tooltip: '$handLabel (C)',
                     badge: '$handSize',
@@ -747,7 +750,7 @@ class _HudPanel extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             iconBtn(
-              kind: EstIconKind.cards,
+              kind: hqOn ? EstIconKind.medal : EstIconKind.cards,
               label: handLabel,
               tooltip: '$handLabel (C)',
               badge: '$handSize',
@@ -1633,6 +1636,8 @@ class _BottomActionBar extends StatelessWidget {
           .join(', ');
       final canNuke = !ctrl.nukeMode && ev.nukeTrade != null && ev.nukeBlock.isEmpty;
 
+      final inOrderMode = ctrl.nukeMode || ctrl.trenchMode || ctrl.airliftMode;
+
       if (ctrl.nukeMode) {
         msgSpans.add(
           const TextSpan(
@@ -1647,6 +1652,91 @@ class _BottomActionBar extends StatelessWidget {
           ),
         );
         btns.add(actionBtn('Cancelar', () => ctrl.toggleNukeMode(false)));
+      } else if (ctrl.trenchMode) {
+        msgSpans.add(
+          const TextSpan(
+            text: '🛡️ Trincheira: ',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+          ),
+        );
+        if (ctrl.pendingTrenchTerr == null) {
+          msgSpans.add(
+            const TextSpan(
+              text:
+                  'toque em um território seu no mapa para protegê-lo contra ataques até seu próximo turno (2 medalhas).',
+            ),
+          );
+        } else {
+          final tName = ctrl.mapData.territories[ctrl.pendingTrenchTerr!].name;
+          msgSpans.add(const TextSpan(text: 'proteger '));
+          msgSpans.add(
+            TextSpan(
+              text: tName,
+              style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+          );
+          msgSpans.add(const TextSpan(text: '? Toque de novo no mapa ou confirme abaixo.'));
+          btns.add(
+            actionBtn(
+              'Proteger $tName',
+              ctrl.confirmTrench,
+              variant: EstButtonVariant.primary,
+            ),
+          );
+        }
+        btns.add(actionBtn('Cancelar', () => ctrl.toggleTrenchMode(false), variant: EstButtonVariant.ghost));
+      } else if (ctrl.airliftMode) {
+        msgSpans.add(
+          const TextSpan(
+            text: '✈️ Ponte aérea: ',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold),
+          ),
+        );
+        if (ctrl.airliftFrom == null) {
+          msgSpans.add(
+            const TextSpan(
+              text: 'toque no território seu de onde sairão os exércitos (2+ exércitos · 2 medalhas).',
+            ),
+          );
+        } else if (ctrl.airliftTo == null) {
+          final fromName = ctrl.mapData.territories[ctrl.airliftFrom!].name;
+          final fromArmies = (terrs[ctrl.airliftFrom!]['a'] as num).toInt();
+          msgSpans.add(const TextSpan(text: 'saindo de '));
+          msgSpans.add(
+            TextSpan(
+              text: '$fromName ($fromArmies)',
+              style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+          );
+          msgSpans.add(const TextSpan(text: ' · toque em qualquer outro território seu de destino.'));
+          btns.add(actionBtn('Trocar origem', ctrl.clearAirliftFrom));
+        } else {
+          final fromName = ctrl.mapData.territories[ctrl.airliftFrom!].name;
+          final toName = ctrl.mapData.territories[ctrl.airliftTo!].name;
+          msgSpans.add(
+            TextSpan(
+              text: '$fromName → $toName',
+              style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+          );
+          msgSpans.add(const TextSpan(text: ' · toque no destino para somar, na origem para tirar'));
+          if (rng != null) {
+            btns.add(_StepperWidget(ctrl: ctrl, range: rng));
+            btns.add(actionBtn('Máx', () {
+              ctrl.stepValue = rng.$2;
+              ctrl.confirmAirlift();
+            }));
+            btns.add(
+              actionBtn(
+                'Enviar ${ctrl.stepValue}',
+                ctrl.confirmAirlift,
+                variant: EstButtonVariant.primary,
+              ),
+            );
+          }
+          btns.add(actionBtn('Trocar origem', ctrl.clearAirliftFrom));
+        }
+        btns.add(actionBtn('Cancelar', () => ctrl.toggleAirliftMode(false), variant: EstButtonVariant.ghost));
       } else if (ev.mustTrade) {
         msgSpans.add(
           TextSpan(
@@ -1705,7 +1795,7 @@ class _BottomActionBar extends StatelessWidget {
         );
       }
 
-      if (!ctrl.nukeMode) {
+      if (!inOrderMode) {
         if (rng != null) {
           btns.add(_StepperWidget(ctrl: ctrl, range: rng));
           btns.add(actionBtn('Máx', ctrl.setMaxReinforce));
@@ -1849,6 +1939,8 @@ class _BottomActionBar extends StatelessWidget {
         v['phase'] == 'play' &&
         opts['pacts'] == true &&
         !ctrl.nukeMode &&
+        !ctrl.trenchMode &&
+        !ctrl.airliftMode &&
         v['occupy'] == null &&
         v['step'] != 'move' &&
         alivePlayers > 2 &&
@@ -2189,29 +2281,26 @@ class _SheetBackdrop extends StatelessWidget {
     final centered = layout.big || layout.land;
     return GestureDetector(
       onTap: onTapOutside,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-        child: Container(
-          color: const Color(0xB302060C),
-          alignment: centered ? Alignment.center : Alignment.bottomCenter,
-          padding: centered ? const EdgeInsets.all(20) : EdgeInsets.zero,
-          child: GestureDetector(
-            onTap: () {},
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: centered ? maxWidth : 500),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: AppColors.glassGradient,
-                  borderRadius: centered
-                      ? BorderRadius.circular(18)
-                      : const BorderRadius.vertical(top: Radius.circular(18)),
-                  border: Border.all(color: AppColors.glassBorder),
-                  boxShadow: AppColors.edgeShadows,
-                ),
-                child: child,
+      child: Container(
+        color: const Color(0xCC02060C),
+        alignment: centered ? Alignment.center : Alignment.bottomCenter,
+        padding: centered ? const EdgeInsets.all(20) : EdgeInsets.zero,
+        child: GestureDetector(
+          onTap: () {},
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: centered ? maxWidth : 500),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: AppColors.glassGradient,
+                borderRadius: centered
+                    ? BorderRadius.circular(18)
+                    : const BorderRadius.vertical(top: Radius.circular(18)),
+                border: Border.all(color: AppColors.glassBorder),
+                boxShadow: AppColors.edgeShadows,
               ),
+              child: child,
             ),
           ),
         ),

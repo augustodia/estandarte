@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import '../core/map_data.dart';
@@ -16,10 +14,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
   if (ctrl.view == null || ctrl.eval?.hq == null) return;
 
   // Estado da janela (fica fora do builder para sobreviver às atualizações da partida).
-  String? picking; // ordem cujo alvo está sendo escolhido: airlift, trench, spy, sabotage
-  int? airFrom;
-  int? airTo;
-  var airN = 1;
+  String? picking; // ordem cujo alvo está sendo escolhido: spy, sabotage
   int? reportFor; // jogador recém-espionado: a janela fica no relatório até o jogador fechar
 
   showEstSheet<void>(
@@ -41,7 +36,6 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
             );
           }
           final players = v['players'] as List<dynamic>;
-          final terr = v['terr'] as List<dynamic>;
           final colors = ctrl.engine.constants.colors;
           final me = ctrl.me;
           final hasMe = me >= 0 && me < players.length;
@@ -52,14 +46,8 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
           Color colorOf(int p) =>
               parseHexColor(colors[((players[p] as Map<String, dynamic>)['color'] as num).toInt()].hex);
           String nameOf(int p) => '${(players[p] as Map<String, dynamic>)['name'] ?? ''}';
-          int armies(int t) => ((terr[t] as Map<String, dynamic>)['a'] as num).toInt();
-          int owner(int t) => ((terr[t] as Map<String, dynamic>)['o'] as num).toInt();
           String terrName(int t) => ctrl.mapData.territories[t].name;
 
-          final mine = <int>[
-            for (var t = 0; t < terr.length; t++)
-              if (hasMe && owner(t) == me) t,
-          ]..sort((a, b) => terrName(a).compareTo(terrName(b)));
           final foes = <int>[
             for (var p = 0; p < players.length; p++)
               if (p != me && (players[p] as Map<String, dynamic>)['alive'] == true) p,
@@ -68,9 +56,6 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
           void back() => setState(() {
                 picking = null;
                 reportFor = null;
-                airFrom = null;
-                airTo = null;
-                airN = 1;
               });
 
           Widget sectionTitle(String text) => Padding(
@@ -104,15 +89,6 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                 ),
               );
 
-          Widget chips(List<Widget> items) => Wrap(spacing: 6, runSpacing: 6, children: items);
-
-          Widget terrChip(int t, VoidCallback? onTap, {bool on = false}) => EstButton(
-                small: true,
-                variant: on ? EstButtonVariant.primary : EstButtonVariant.normal,
-                label: '${terrName(t)} (${armies(t)})',
-                onPressed: onTap,
-              );
-
           // ---------------- escolha do alvo de uma ordem ----------------
           List<Widget> picker(HqOrder o) {
             final out = <Widget>[
@@ -126,163 +102,56 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
               note(o.desc),
               const SizedBox(height: 10),
             ];
-            switch (o.key) {
-              case 'spy' || 'sabotage':
-                final blocks = o.key == 'spy' ? hq.spyBlocks : hq.sabotageBlocks;
-                for (final q in foes) {
-                  final why = blocks[q] ?? '';
-                  out.add(
-                    card(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(color: colorOf(q), shape: BoxShape.circle),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                nameOf(q),
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colorOf(q)),
-                              ),
-                            ),
-                            EstButton(
-                              small: true,
-                              variant: EstButtonVariant.primary,
-                              label: o.key == 'spy'
-                                  ? (hq.intel.any((r) => r.q == q) ? 'Confirmar' : 'Espionar')
-                                  : 'Sabotar',
-                              onPressed: why.isEmpty
-                                  ? () {
-                                      if (o.key == 'spy') {
-                                        // a janela não fecha: passa a mostrar o relatório, que fica até o jogador sair
-                                        setState(() {
-                                          picking = null;
-                                          reportFor = q;
-                                        });
-                                        ctrl.orderSpy(q);
-                                      } else {
-                                        Navigator.pop(ctx);
-                                        ctrl.orderSabotage(q);
-                                      }
-                                    }
-                                  : null,
-                            ),
-                          ],
-                        ),
-                        if (why.isNotEmpty) ...[const SizedBox(height: 4), note(why)],
-                      ],
-                    ),
-                  );
-                }
-              case 'trench':
-                final free = mine.where((t) => !hq.trenchBlocks.containsKey(t)).toList();
-                out.add(note('Escolha o território que ficará protegido:'));
-                out.add(const SizedBox(height: 8));
+            if (o.key == 'spy' || o.key == 'sabotage') {
+              final blocks = o.key == 'spy' ? hq.spyBlocks : hq.sabotageBlocks;
+              for (final q in foes) {
+                final why = blocks[q] ?? '';
                 out.add(
-                  chips([
-                    for (final t in free)
-                      terrChip(t, () {
-                        Navigator.pop(ctx);
-                        ctrl.orderTrench(t);
-                      }),
-                  ]),
-                );
-              case 'airlift':
-                final from = airFrom;
-                final to = airTo;
-                if (from == null || owner(from) != me || armies(from) < 2) {
-                  final srcs = mine.where((t) => !hq.airliftBlocks.containsKey(t)).toList();
-                  out.add(note('De onde saem os exércitos? (um sempre fica)'));
-                  out.add(const SizedBox(height: 8));
-                  if (srcs.isEmpty) {
-                    out.add(note('Nenhum território seu tem 2 exércitos ou mais.'));
-                  } else {
-                    out.add(
-                      chips([
-                        for (final t in srcs)
-                          terrChip(
-                            t,
-                            () => setState(() {
-                              airFrom = t;
-                              airTo = null;
-                              airN = armies(t) - 1;
-                            }),
-                          ),
-                      ]),
-                    );
-                  }
-                } else {
-                  final maxN = armies(from) - 1;
-                  final n = min(max(1, airN), maxN);
-                  out.add(
-                    Text.rich(
-                      TextSpan(
-                        style: const TextStyle(fontSize: 14, color: AppColors.mute),
+                  card(
+                    children: [
+                      Row(
                         children: [
-                          const TextSpan(text: 'Origem: '),
-                          TextSpan(
-                            text: '${terrName(from)} (${armies(from)})',
-                            style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(color: colorOf(q), shape: BoxShape.circle),
                           ),
-                          const TextSpan(text: '. Para onde vão?'),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              nameOf(q),
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colorOf(q)),
+                            ),
+                          ),
+                          EstButton(
+                            small: true,
+                            variant: EstButtonVariant.primary,
+                            label: o.key == 'spy'
+                                ? (hq.intel.any((r) => r.q == q) ? 'Confirmar' : 'Espionar')
+                                : 'Sabotar',
+                            onPressed: why.isEmpty
+                                ? () {
+                                    if (o.key == 'spy') {
+                                      // a janela não fecha: passa a mostrar o relatório, que fica até o jogador sair
+                                      setState(() {
+                                        picking = null;
+                                        reportFor = q;
+                                      });
+                                      ctrl.orderSpy(q);
+                                    } else {
+                                      Navigator.pop(ctx);
+                                      ctrl.orderSabotage(q);
+                                    }
+                                  }
+                                : null,
+                          ),
                         ],
                       ),
-                    ),
-                  );
-                  out.add(const SizedBox(height: 8));
-                  out.add(
-                    chips([
-                      for (final t in mine)
-                        if (t != from) terrChip(t, () => setState(() => airTo = t), on: t == to),
-                    ]),
-                  );
-                  out.add(const SizedBox(height: 10));
-                  out.add(
-                    Row(
-                      children: [
-                        EstButton(
-                          small: true,
-                          label: '−',
-                          onPressed: n > 1 ? () => setState(() => airN = n - 1) : null,
-                        ),
-                        Expanded(
-                          child: Text(
-                            '$n exército${n == 1 ? '' : 's'}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
-                          ),
-                        ),
-                        EstButton(
-                          small: true,
-                          label: '+',
-                          onPressed: n < maxN ? () => setState(() => airN = n + 1) : null,
-                        ),
-                        const SizedBox(width: 6),
-                        EstButton(
-                          small: true,
-                          label: 'Máx',
-                          onPressed: n < maxN ? () => setState(() => airN = maxN) : null,
-                        ),
-                      ],
-                    ),
-                  );
-                  out.add(const SizedBox(height: 10));
-                  out.add(
-                    EstButton(
-                      variant: EstButtonVariant.primary,
-                      label: to == null ? 'Escolha o destino' : 'Levar $n para ${terrName(to)}',
-                      onPressed: to == null
-                          ? null
-                          : () {
-                              Navigator.pop(ctx);
-                              ctrl.orderAirlift(from, to, n);
-                            },
-                    ),
-                  );
-                }
+                      if (why.isNotEmpty) ...[const SizedBox(height: 4), note(why)],
+                    ],
+                  ),
+                );
+              }
             }
             out.add(const SizedBox(height: 10));
             out.add(EstButton(label: 'Voltar', onPressed: back));
@@ -392,22 +261,9 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                 Row(
                   children: [
                     for (var i = 0; i < hq.medalMax; i++)
-                      Container(
-                        width: 22,
-                        height: 22,
-                        margin: const EdgeInsets.only(right: 6),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: i < medals
-                              ? const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [Color(0xFFF7D98A), Color(0xFFC98F26)],
-                                )
-                              : null,
-                          color: i < medals ? null : AppColors.deep,
-                          border: Border.all(color: i < medals ? const Color(0xFFF3CD78) : AppColors.line, width: 1.5),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 5),
+                        child: EstMedalBadge(earned: i < medals, size: 28),
                       ),
                     const SizedBox(width: 4),
                     Expanded(
@@ -495,12 +351,20 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                       EstButton(
                         small: true,
                         variant: o.key == 'nuke' ? EstButtonVariant.rad : EstButtonVariant.normal,
-                        label: o.key == 'nuke' ? 'Escolher alvo no mapa' : 'Usar',
+                        label: (o.key == 'nuke' || o.key == 'trench' || o.key == 'airlift')
+                            ? 'Escolher no mapa'
+                            : 'Usar',
                         onPressed: canAct && o.block.isEmpty
                             ? () {
                                 if (o.key == 'nuke') {
                                   Navigator.pop(ctx);
                                   ctrl.toggleNukeMode(true);
+                                } else if (o.key == 'trench') {
+                                  Navigator.pop(ctx);
+                                  ctrl.toggleTrenchMode(true);
+                                } else if (o.key == 'airlift') {
+                                  Navigator.pop(ctx);
+                                  ctrl.toggleAirliftMode(true);
                                 } else {
                                   setState(() => picking = o.key);
                                 }
