@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../core/map_data.dart';
 import '../engine/game_engine.dart';
 import '../game/app_controller.dart';
 import 'theme.dart';
