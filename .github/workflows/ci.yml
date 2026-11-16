@@ -27,3 +27,9 @@ jobs:
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
       - run: flutter build web --release --base-href "/estandarte/"
+      # o site compilado da branch fica disponível para baixar e testar (Actions → esta execução → Artifacts)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-${{ github.sha }}
+          path: build/web
+          retention-days: 7
