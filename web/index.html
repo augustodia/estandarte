@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Estandarte</title>
+  <meta name="description" content="Jogo de estratégia e conquista de territórios para jogar entre celulares, sem servidor, ou online.">
+  <meta name="theme-color" content="#0f1c2e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Estandarte">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0a1422;
+      color: #f1e6cf;
+      overscroll-behavior: none;
+    }
+    #boot-splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(90% 55% at 50% 0, #22406a 0, #0a1422 70%);
+      z-index: 9999;
+      transition: opacity .25s ease;
+    }
+    #boot-splash.hide { opacity: 0; pointer-events: none; }
+    #boot-splash h1 {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 32px;
+      letter-spacing: .12em;
+      color: #f1e6cf;
+    }
+    #boot-splash small { color: #9db0c8; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="boot-splash">
+    <h1>ESTANDARTE</h1>
+    <small>Carregando motor de regras…</small>
+  </div>
+  <script src="engine/wasm_exec.js"></script>
+  <script>
+    if (window.top !== window.self) {
+      try { window.top.location = location.href; }
+      catch (e) { document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">Abra o Estandarte direto no navegador.</p>'; }
+    }
+    window.__estandarteEngineReady = (async function () {
+      if (window.estandarteEngine) return true;
+      const go = new Go();
+      let result;
+      try {
+        if (WebAssembly.instantiateStreaming) {
+          result = await WebAssembly.instantiateStreaming(fetch('engine/estandarte.wasm'), go.importObject);
+        } else {
+          throw new Error('no-streaming');
+        }
+      } catch (_) {
+        const resp = await fetch('engine/estandarte.wasm');
+        const buf = await resp.arrayBuffer();
+        result = await WebAssembly.instantiate(buf, go.importObject);
+      }
+      go.run(result.instance);
+      for (let i = 0; i < 200; i++) {
+        if (window.estandarteEngine) return true;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      throw new Error('Motor Go WASM não respondeu.');
+    })();
+    window.addEventListener('flutter-first-frame', function () {
+      const s = document.getElementById('boot-splash');
+      if (s) { s.classList.add('hide'); setTimeout(() => s.remove(), 300); }
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Estandarte (Web - Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "preLaunchTask": "Engine: Build WASM"
+    },
+    {
+      "name": "Estandarte (Web - Edge)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "edge",
+      "preLaunchTask": "Engine: Build WASM"
+    },
+    {
+      "name": "Estandarte (Web Server - 8080)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "web-server",
+      "args": [
+        "--web-port",
+        "8080"
+      ],
+      "preLaunchTask": "Engine: Build WASM"
+    },
+    {
+      "name": "Estandarte (Windows Desktop)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "windows",
+      "preLaunchTask": "Engine: Build Native (Windows DLL)"
+    }
+  ]
+}
