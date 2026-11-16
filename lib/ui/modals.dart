@@ -1246,7 +1246,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                                     ),
                                     TextSpan(
                                       text:
-                                          ' · $owned terr. · $cards cartas${p['ctrl'] == 'bot' ? ' · bot' : ''}',
+                                          ' · $owned terr. · $cards ${cards == 1 ? 'carta' : 'cartas'}${p['ctrl'] == 'bot' ? ' · bot' : ''}',
                                     ),
                                     if (offline)
                                       TextSpan(
