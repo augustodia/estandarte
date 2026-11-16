@@ -20,6 +20,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
   int? airFrom;
   int? airTo;
   var airN = 1;
+  int? reportFor; // jogador recém-espionado: a janela fica no relatório até o jogador fechar
 
   showEstSheet<void>(
     context,
@@ -66,6 +67,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
 
           void back() => setState(() {
                 picking = null;
+                reportFor = null;
                 airFrom = null;
                 airTo = null;
                 airN = 1;
@@ -152,10 +154,15 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                               label: o.key == 'spy' ? 'Espionar' : 'Sabotar',
                               onPressed: why.isEmpty
                                   ? () {
-                                      Navigator.pop(ctx);
                                       if (o.key == 'spy') {
+                                        // a janela não fecha: passa a mostrar o relatório, que fica até o jogador sair
+                                        setState(() {
+                                          picking = null;
+                                          reportFor = q;
+                                        });
                                         ctrl.orderSpy(q);
                                       } else {
+                                        Navigator.pop(ctx);
                                         ctrl.orderSabotage(q);
                                       }
                                     }
@@ -280,6 +287,87 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
             return out;
           }
 
+          // um relatório de espionagem: os objetivos possíveis, sem dizer qual é o verdadeiro
+          Widget report(HqIntel r) => card(
+                border: const Color(0x88E2B04A),
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(fontSize: 14, color: AppColors.mute),
+                      children: [
+                        const TextSpan(text: 'O objetivo de '),
+                        TextSpan(
+                          text: nameOf(r.q),
+                          style: TextStyle(fontWeight: FontWeight.w700, color: colorOf(r.q)),
+                        ),
+                        TextSpan(
+                          text: r.texts.length > 1 ? ' é um destes ${r.texts.length}:' : ' é:',
+                        ),
+                      ],
+                    ),
+                  ),
+                  for (var i = 0; i < r.texts.length; i++) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 22,
+                          height: 22,
+                          margin: const EdgeInsets.only(right: 8, top: 1),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0x88E2B04A)),
+                          ),
+                          child: Text(
+                            String.fromCharCode(65 + i),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFFE2A3)),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            r.texts[i],
+                            style: const TextStyle(fontSize: 15, height: 1.35, color: AppColors.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+
+          final spied = reportFor;
+          if (spied != null && spied >= 0 && spied < players.length) {
+            HqIntel? r;
+            for (final x in hq.intel) {
+              if (x.q == spied) r = x;
+            }
+            return EstSheetBody(
+              title: 'Relatório de espionagem',
+              onClose: () => Navigator.pop(ctx),
+              children: [
+                if (r != null) ...[
+                  report(r),
+                  note(
+                    'Um dos dois é falso, e o relatório não diz qual: observe o que ${nameOf(spied)} faz no mapa para descobrir. '
+                    'O relatório fica guardado no Quartel até o fim da partida, e só você o lê.',
+                  ),
+                  const SizedBox(height: 12),
+                  EstButton(
+                    variant: EstButtonVariant.primary,
+                    label: 'Entendi',
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ] else ...[
+                  note('Aguardando o relatório sobre ${nameOf(spied)}…'),
+                  const SizedBox(height: 12),
+                  EstButton(label: 'Voltar', onPressed: back),
+                ],
+              ],
+            );
+          }
+
           HqOrder? pickingOrder;
           for (final o in hq.orders) {
             if (o.key == picking && o.block.isEmpty && canAct) pickingOrder = o;
@@ -289,12 +377,6 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
           }
 
           // ---------------- visão geral ----------------
-          final seen = hasMe
-              ? ((players[me] as Map<String, dynamic>)['seen'] as List<dynamic>? ?? const [])
-                  .map((e) => (e as num).toInt())
-                  .where((q) => q >= 0 && q < players.length)
-                  .toList()
-              : <int>[];
           final trenches = v['trenches'] as List<dynamic>? ?? const [];
 
           return EstSheetBody(
@@ -424,25 +506,11 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                     ],
                   ],
                 ),
-              if (seen.isNotEmpty) ...[
+              if (hasMe && hq.intel.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                sectionTitle('Objetivos espionados'),
-                for (final q in seen)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text.rich(
-                      TextSpan(
-                        style: const TextStyle(fontSize: 14, color: AppColors.ink),
-                        children: [
-                          TextSpan(
-                            text: '${nameOf(q)}: ',
-                            style: TextStyle(fontWeight: FontWeight.w700, color: colorOf(q)),
-                          ),
-                          TextSpan(text: ev.objectiveTexts[q] ?? '—'),
-                        ],
-                      ),
-                    ),
-                  ),
+                sectionTitle('Relatórios de espionagem'),
+                for (final r in hq.intel)
+                  if (r.q >= 0 && r.q < players.length) report(r),
               ],
               const SizedBox(height: 4),
               sectionTitle('Na mesa'),

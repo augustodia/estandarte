@@ -57,6 +57,14 @@ class HqOrder {
   final String block;
 }
 
+/// Relatório de espionagem sobre o jogador [q]: objetivos possíveis, um deles verdadeiro.
+class HqIntel {
+  const HqIntel({required this.q, required this.texts});
+
+  final int q;
+  final List<String> texts;
+}
+
 /// O que o motor diz sobre o Quartel para quem está olhando a partida.
 class HqEval {
   const HqEval({
@@ -69,8 +77,11 @@ class HqEval {
     required this.sabotageBlocks,
     required this.trenchBlocks,
     required this.airliftBlocks,
+    required this.intel,
   });
 
+  /// Relatórios de espionagem de quem está olhando (só ele os recebe).
+  final List<HqIntel> intel;
   final int effort;
   final int medalMax;
   final int mobilizeCost;
@@ -108,6 +119,13 @@ class HqEval {
       sabotageBlocks: strMap('sabotageBlocks'),
       trenchBlocks: strMap('trenchBlocks'),
       airliftBlocks: strMap('airliftBlocks'),
+      intel: (raw['intel'] as List<dynamic>? ?? const []).map((e) {
+        final m = e as Map<String, dynamic>;
+        return HqIntel(
+          q: (m['q'] as num?)?.toInt() ?? -1,
+          texts: (m['texts'] as List<dynamic>? ?? const []).map((t) => t.toString()).toList(),
+        );
+      }).toList(),
     );
   }
 }

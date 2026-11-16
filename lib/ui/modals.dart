@@ -494,35 +494,6 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
           ),
           const SizedBox(height: 12),
         ],
-        if (opts['hq'] == true) ...[
-          Text('Quartel', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
-          const SizedBox(height: 6),
-          Text.rich(
-            TextSpan(
-              style: const TextStyle(fontSize: 14, color: AppColors.mute),
-              children: [
-                const TextSpan(
-                  text:
-                      'Esta partida não tem cartas. Você ganha medalhas conquistando e gasta no início do turno: a Mobilização vale hoje ',
-                ),
-                TextSpan(
-                  text: '${ev.tradeValue}',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
-                ),
-                const TextSpan(text: ' exércitos, e há ordens táticas abertas para todos.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          EstButton(
-            label: 'Abrir o Quartel',
-            onPressed: () {
-              Navigator.pop(ctx);
-              showQuartelModal(context, ctrl);
-            },
-          ),
-          const SizedBox(height: 12),
-        ],
         if (opts['nukes'] == true) ...[
           Text('Ogiva nuclear', style: AppText.serif(size: 19, color: const Color(0xFFFFF3DC))),
           const SizedBox(height: 6),
@@ -1546,8 +1517,8 @@ void showRulesModal(BuildContext context, AppController ctrl) {
           'ao zerar a defesa você ocupa o território com 1 a 3 exércitos e, no fim do turno, ganha uma carta.',
         ),
         const _RuleBullet(
-          'Cartas',
-          'troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória e o jogo faz sozinho no início do turno, escolhendo a melhor trinca. Com menos, o botão “Trocar cartas” aparece no reforço.',
+          'Cartas (regra extra)',
+          'entram no lugar do Quartel. Troque 3 iguais ou 3 diferentes por exércitos (4, 6, 8, 10, 12, 15, depois +5 a cada troca). Com 5 cartas a troca é obrigatória e o jogo faz sozinho no início do turno, escolhendo a melhor trinca. Com menos, o botão “Trocar cartas” aparece no reforço.',
         ),
         const _RuleBullet(
           'Remanejamento',
@@ -1572,12 +1543,12 @@ void showRulesModal(BuildContext context, AppController ctrl) {
           'na sua vez, proponha a outro jogador um pacto de não agressão de ${c.pactRounds} rodadas. Enquanto valer, um não ataca o outro. Cada jogador só pode ter um pacto por vez. Para romper antes, só no início do seu turno, antes de reforçar, ao custo de metade do reforço (no mínimo ${c.pactPenalty}). Com dois jogadores em jogo os pactos acabam.',
         ),
         const _RuleBullet(
-          'Quartel (regra extra)',
-          'troca as cartas por medalhas. Você ganha 1 na primeira conquista do turno, +1 ao fechar um continente e +2 ao eliminar alguém, e guarda até 6. No início do turno, 3 medalhas pagam uma Mobilização, que rende o esforço de guerra: 4 exércitos na rodada 2 e mais 1 a cada rodada. Três ordens táticas ficam abertas para todos (ponte aérea, trincheira, espionagem, sabotagem e, se a partida tiver, a ogiva); cada jogador compra uma por turno e outra entra no lugar. Nada é sorteado na mão de ninguém e todos veem as medalhas de todos.',
+          'Quartel',
+          'você ganha medalhas pelo que faz no mapa: 1 na primeira conquista do turno, +1 ao fechar um continente e +2 ao eliminar alguém, e guarda até 6. No início do turno, 3 medalhas pagam uma Mobilização, que rende o esforço de guerra: 4 exércitos na rodada 2 e mais 1 a cada rodada. Três ordens táticas ficam abertas para todos (ponte aérea, trincheira, sabotagem, espionagem e, se a partida tiver, a ogiva); cada jogador compra uma por turno e outra entra no lugar. A espionagem custa as 6 medalhas e não entrega o objetivo: dá dois objetivos possíveis do adversário, um verdadeiro e um falso. Todos veem as medalhas de todos.',
         ),
         _RuleBullet(
           'Ogiva nuclear',
-          'no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sempre sobra 1) e fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você, mas o dono joga normalmente. Você recebe 75% dos exércitos da troca e segue o turno normalmente, atacando em outros lugares. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.',
+          'no Quartel é uma ordem de 4 medalhas, com dano igual ao dobro da Mobilização e sem devolução. Com cartas: no reforço, em vez de trocar 3 cartas por exércitos, lance a ogiva em qualquer território inimigo. Ele perde o dobro do que a troca valeria (sempre sobra 1) e fica radioativo: até a sua vez voltar, ninguém pode atacá-lo, nem você, mas o dono joga normalmente. Você recebe 75% dos exércitos da troca e segue o turno normalmente, atacando em outros lugares. Só há uma névoa por vez; a primeira troca de cada jogador é normal e, depois de uma ogiva, a seguinte também.',
         ),
         const SizedBox(height: 10),
         Text(

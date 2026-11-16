@@ -60,7 +60,7 @@ class AppController extends ChangeNotifier {
   bool optEvents = false;
   bool optPacts = false;
   bool optNukes = false;
-  bool optHq = false; // Quartel: medalhas e ordens no lugar das cartas
+  bool optHq = true; // Quartel (padrão): medalhas e ordens. Desligado, a partida usa as cartas (o extra)
   bool optPublic = true;
   bool? extrasOpen;
   String? lobbyCode;
@@ -183,7 +183,7 @@ class AppController extends ChangeNotifier {
       optEvents = savedCfg['events'] == true;
       optPacts = savedCfg['pacts'] == true;
       optNukes = savedCfg['nukes'] == true;
-      optHq = savedCfg['hq'] == true;
+      optHq = savedCfg['hq'] != false;
     }
 
     _unsubConn = WebEnv.listenConnectivity((on) {
@@ -1863,9 +1863,9 @@ class AppController extends ChangeNotifier {
                     : '${nm(p)} espionou ${nm(q)}',
             col(p),
             sub: mine(p)
-                ? 'O objetivo de ${nm(q)} está no Quartel'
+                ? 'O relatório sobre ${nm(q)} fica guardado no Quartel'
                 : mine(q)
-                    ? 'Ele agora conhece o seu objetivo'
+                    ? 'Ele recebeu dois objetivos possíveis: um é o seu'
                     : '',
             ms: 1500,
             big: mine(p) || mine(q),

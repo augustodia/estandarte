@@ -430,7 +430,7 @@ class _HudPanel extends StatelessWidget {
         ? players[ctrl.me] as Map<String, dynamic>
         : null;
     final opts = v['opts'] as Map<String, dynamic>? ?? const {};
-    final extras = opts['events'] == true || opts['pacts'] == true || opts['nukes'] == true || opts['hq'] == true;
+    final extras = opts['events'] == true || opts['pacts'] == true || opts['nukes'] == true;
     final pactsCount = opts['pacts'] == true ? (v['pacts'] as List<dynamic>? ?? const []).length : 0;
     final offer = v['offer'] as Map<String, dynamic>?;
     final offerIsMine = offer != null &&

@@ -4,15 +4,16 @@ Jogo de estratégia de conquista de territórios para jogar entre celulares, tab
 
 > **Sobre o nome:** o jogo se chamava Estandarte. O nome que o jogador vê agora é **Ultimato**; os repositórios, o pacote Dart (`estandarte`), o endereço do GitHub Pages e as chaves de armazenamento continuam com o nome antigo por enquanto, para não quebrar links nem partidas salvas.
 
-## Quartel (regra opcional)
+## Quartel
 
-A opção **Quartel** da sala troca as cartas de território por um sistema próprio de medalhas e ordens:
+Toda partida usa o **Quartel**, um sistema próprio de medalhas e ordens:
 
 - **Medalhas:** a 1ª conquista do turno dá 1, fechar um continente dá +1 e eliminar alguém dá +2. Cada jogador guarda no máximo 6, e todos veem as medalhas de todos.
 - **Mobilização** (3 medalhas, sempre disponível): rende o *esforço de guerra*, 4 exércitos na rodada 2 e mais 1 a cada rodada.
-- **Ordens táticas:** 3 ficam abertas para todos; cada jogador compra no máximo uma por turno e outra entra no lugar da comprada. São elas: ponte aérea (2), trincheira (2), espionagem (1), sabotagem (2) e, em partidas com ogiva, a ogiva (4).
+- **Ordens táticas:** 3 ficam abertas para todos; cada jogador compra no máximo uma por turno e outra entra no lugar da comprada. São elas: ponte aérea (2), trincheira (2), sabotagem (2), espionagem (6) e, em partidas com ogiva, a ogiva (4).
+- **Espionagem:** não entrega o objetivo do adversário. Dá um relatório com dois objetivos possíveis, um verdadeiro e um falso, que só quem comprou lê.
 
-Com o Quartel desligado, a partida usa as cartas como antes. As regras ficam em `estandarte-engine/game/hq.go`.
+O extra **Cartas no lugar do Quartel**, na sala, troca tudo isso por cartas de território. As regras do Quartel ficam em `estandarte-engine/game/hq.go`.
 
 ## Arquitetura
 
