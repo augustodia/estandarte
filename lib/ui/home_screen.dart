@@ -28,14 +28,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: widget.ctrl.account?.displayName ?? widget.ctrl.savedName);
+    _nameCtrl = TextEditingController(text: widget.ctrl.account?.username ?? widget.ctrl.savedName);
     widget.ctrl.addListener(_syncAccountName);
   }
 
   // Com conta, o nome vem dela (entrar em outro aparelho ou trocar o nome reflete aqui).
   void _syncAccountName() {
     final a = widget.ctrl.account;
-    if (a != null && _nameCtrl.text != a.displayName) _nameCtrl.text = a.displayName;
+    if (a != null && _nameCtrl.text != a.username) _nameCtrl.text = a.username;
     if (mounted) setState(() {});
   }
 
@@ -236,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Nome do jogador: campo com rótulo, logo abaixo da marca (fica acima do teclado e é o primeiro passo).
   Widget _nameField(bool compact) {
     final acct = c.account;
-    if (acct != null) return _accountRow(compact, acct.displayName, acct.username);
+    if (acct != null) return _accountRow(compact, acct.username, c.accountNeedsConfirm);
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: _nameCtrl,
       builder: (context, value, _) {
@@ -283,8 +283,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Com conta: o nome é o da conta; tocar abre a conta (trocar nome, sair).
-  Widget _accountRow(bool compact, String name, String username) {
+  /// Com conta: o nome é o da conta; tocar abre a conta. E-mail sem confirmar ganha um aviso.
+  Widget _accountRow(bool compact, String name, bool needsConfirm) {
     return Material(
       color: AppColors.panel,
       borderRadius: BorderRadius.circular(Radii.sm),
@@ -296,13 +296,13 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(Radii.sm),
-            border: Border.all(color: AppColors.glassBorder),
+            border: Border.all(color: needsConfirm ? AppColors.medal : AppColors.glassBorder),
           ),
           child: Row(
             children: [
               Text('CONTA', style: AppText.label(size: 12)),
               Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
-              Flexible(
+              Expanded(
                 child: Text(
                   name,
                   maxLines: 1,
@@ -310,15 +310,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
                 ),
               ),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: Text(
-                  '@$username',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.faint),
+              if (needsConfirm)
+                Padding(
+                  padding: const EdgeInsets.only(left: Space.x2),
+                  child: Text('CONFIRMAR E-MAIL', style: AppText.label(size: 11.5, color: AppColors.medal)),
                 ),
-              ),
               const Icon(Icons.chevron_right, size: 18, color: AppColors.faint),
             ],
           ),

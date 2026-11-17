@@ -407,7 +407,7 @@ class AppController extends ChangeNotifier {
 
   // ── Conta ────────────────────────────────────────────────────────────────────
   // Opcional: sem conta, tudo funciona igual (convidado, mesa local, rede de casa).
-  // Com conta, o nome vem dela e o desafio do dia vale em qualquer aparelho.
+  // Com conta: o nome de usuário (único) é o nome no jogo e o desafio do dia vale em qualquer aparelho.
   static const _kAccToken = 'ultimato.account.token';
   static const _kAccUser = 'ultimato.account.user';
 
@@ -415,7 +415,26 @@ class AppController extends ChangeNotifier {
   String? _accountToken;
   bool accountBusy = false;
 
+  /// E-mail novo esperando o código (troca de e-mail de conta já confirmada).
+  String? accountPendingEmail;
+
+  /// Quando dá para pedir outro código.
+  DateTime? accountResendAt;
+
   bool get signedIn => account != null && _accountToken != null;
+
+  /// Falta confirmar o e-mail do cadastro ou o de uma troca.
+  bool get accountNeedsConfirm => signedIn && (!account!.emailVerified || accountPendingEmail != null);
+
+  /// Para onde foi o último código.
+  String get accountCodeEmail => accountPendingEmail ?? account?.email ?? '';
+
+  int get accountResendIn {
+    final at = accountResendAt;
+    if (at == null) return 0;
+    final s = at.difference(DateTime.now()).inMilliseconds;
+    return s <= 0 ? 0 : (s / 1000).ceil();
+  }
 
   void _loadAccount() {
     _accountToken = AppStorage.instance.getString(_kAccToken);
@@ -430,22 +449,23 @@ class AppController extends ChangeNotifier {
     account = u;
     AppStorage.instance.setString(_kAccToken, token);
     AppStorage.instance.setString(_kAccUser, jsonEncode(u.toJson()));
-    savePlayerName(u.displayName);
+    savePlayerName(u.username);
+  }
+
+  void _applyState(acc.AccountState st) {
+    final tok = _accountToken;
+    if (tok != null) _storeAccount(tok, st.user);
+    accountPendingEmail = st.pendingEmail;
+    if (st.resendIn > 0) accountResendAt = DateTime.now().add(Duration(seconds: st.resendIn));
   }
 
   void _clearAccount() {
     _accountToken = null;
     account = null;
+    accountPendingEmail = null;
+    accountResendAt = null;
     AppStorage.instance.remove(_kAccToken);
     AppStorage.instance.remove(_kAccUser);
-  }
-
-  /// Só para as fotos de tela: entra numa conta sem servidor.
-  @visibleForTesting
-  void debugSetAccount(acc.AccountUser? u) {
-    account = u;
-    _accountToken = u == null ? null : 'teste';
-    notifyListeners();
   }
 
   /// Confere a sessão guardada. Sem internet, mantém a conta como estava.
@@ -453,54 +473,81 @@ class AppController extends ChangeNotifier {
     final tok = _accountToken;
     if (tok == null) return;
     try {
-      final u = await acc.accountMe(serverUrl(), tok);
+      final st = await acc.accountMe(serverUrl(), tok);
       if (_accountToken != tok) return;
-      _storeAccount(tok, u);
+      _applyState(st);
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) _clearAccount();
     }
     notifyListeners();
   }
 
-  /// Cria a conta e entra. Devolve a mensagem de erro, ou null se deu certo.
-  Future<String?> accountSignUp(String username, String password, String displayName) =>
-      _accountCall(() => acc.accountRegister(serverUrl(), username.trim(), password, displayName.trim()));
-
-  Future<String?> accountSignIn(String username, String password) =>
-      _accountCall(() => acc.accountLogin(serverUrl(), username.trim(), password));
-
-  Future<String?> _accountCall(Future<acc.AccountSession> Function() run) async {
+  /// Roda um pedido de conta: marca ocupado, devolve o erro (ou null) e sai da conta se o token caiu.
+  Future<acc.AccountError?> _accountRun(Future<void> Function() run) async {
     if (accountBusy) return null;
     accountBusy = true;
     notifyListeners();
     try {
-      final s = await run();
-      _storeAccount(s.token, s.user);
+      await run();
       return null;
     } on acc.AccountError catch (e) {
-      return e.message;
+      if (e.unauthorized && _accountToken != null) _clearAccount();
+      return e;
     } finally {
       accountBusy = false;
       notifyListeners();
     }
   }
 
-  /// Troca o nome no jogo da conta. Devolve a mensagem de erro, ou null.
-  Future<String?> accountRename(String displayName) async {
-    final tok = _accountToken;
-    if (tok == null || accountBusy) return null;
-    accountBusy = true;
-    notifyListeners();
+  /// Cria a conta e entra; o código de confirmação vai para o e-mail.
+  Future<acc.AccountError?> accountSignUp(String email, String username, String password) =>
+      _accountRun(() async {
+        final s = await acc.accountRegister(serverUrl(), email.trim(), username.trim(), password);
+        _storeAccount(s.token, s.user);
+        accountPendingEmail = null;
+        accountResendAt = s.codeSent ? DateTime.now().add(const Duration(seconds: 60)) : null;
+      });
+
+  /// Entra com e-mail ou nome de usuário.
+  Future<acc.AccountError?> accountSignIn(String login, String password) => _accountRun(() async {
+        final s = await acc.accountLogin(serverUrl(), login.trim(), password);
+        _storeAccount(s.token, s.user);
+        accountPendingEmail = null;
+        accountResendAt = null;
+        unawaited(refreshAccount()); // traz troca de e-mail pendente e o tempo do reenvio
+      });
+
+  Future<acc.AccountError?> accountVerify(String code) => _accountRun(() async {
+        final u = await acc.accountVerify(serverUrl(), _accountToken!, code.trim());
+        _storeAccount(_accountToken!, u);
+        accountPendingEmail = null;
+        accountResendAt = null;
+      });
+
+  Future<acc.AccountError?> accountResendCode() => _accountRun(() async {
+        final secs = await acc.accountResendCode(serverUrl(), _accountToken!);
+        accountResendAt = DateTime.now().add(Duration(seconds: secs));
+      });
+
+  /// Troca o e-mail: com e-mail confirmado o novo fica pendente até o código; sem, troca na hora.
+  Future<acc.AccountError?> accountChangeEmail(String email) => _accountRun(() async {
+        final st = await acc.accountChangeEmail(serverUrl(), _accountToken!, email.trim());
+        _applyState(st);
+        if (st.codeSent) accountResendAt = DateTime.now().add(const Duration(seconds: 60));
+      });
+
+  /// Troca o nome de usuário (continua único).
+  Future<acc.AccountError?> accountRename(String username) => _accountRun(() async {
+        final u = await acc.accountRename(serverUrl(), _accountToken!, username.trim());
+        _storeAccount(_accountToken!, u);
+      });
+
+  /// null = nome livre. Sem internet devolve null (o cadastro confere de novo).
+  Future<String?> accountCheckUsername(String username) async {
     try {
-      final u = await acc.accountRename(serverUrl(), tok, displayName.trim());
-      _storeAccount(tok, u);
+      return await acc.accountCheckUsername(serverUrl(), username.trim());
+    } on acc.AccountError {
       return null;
-    } on acc.AccountError catch (e) {
-      if (e.unauthorized) _clearAccount();
-      return e.message;
-    } finally {
-      accountBusy = false;
-      notifyListeners();
     }
   }
 
@@ -514,6 +561,16 @@ class AppController extends ChangeNotifier {
         await acc.accountLogout(serverUrl(), tok);
       } catch (_) {} // sem internet: o token vence sozinho no servidor
     }
+  }
+
+  /// Só para as fotos de tela: entra numa conta sem servidor.
+  @visibleForTesting
+  void debugSetAccount(acc.AccountUser? u, {String? pendingEmail}) {
+    account = u;
+    _accountToken = u == null ? null : 'teste';
+    accountPendingEmail = pendingEmail;
+    accountResendAt = u == null ? null : DateTime.now().add(const Duration(seconds: 42));
+    notifyListeners();
   }
 
   void setHoverInfoTerr(int? t) {

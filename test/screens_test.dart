@@ -114,7 +114,12 @@ void main() {
       showAccountSheet(homeCtx, ctrl, startOnSignUp: true);
       await _shot(tester, 'account_new_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
-      ctrl.debugSetAccount(const AccountUser(id: 1, username: 'luiz_97', displayName: 'Luiz'));
+      ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com'));
+      await _shot(tester, 'home_unconf_$tag');
+      showAccountSheet(homeCtx, ctrl);
+      await _shot(tester, 'account_code_$tag');
+      Navigator.of(homeCtx, rootNavigator: true).pop();
+      ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com', emailVerified: true));
       await _shot(tester, 'home_acct_$tag');
       showAccountSheet(homeCtx, ctrl);
       await _shot(tester, 'account_in_$tag');
