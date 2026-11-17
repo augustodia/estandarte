@@ -163,7 +163,7 @@ class _GameScreenState extends State<GameScreen> {
       final ringSize = layout.wide ? 76.0 : (layout.land ? 54.0 : 60.0);
       final fitLeft = layout.wide ? 42.0 : (layout.land ? 27.0 : 30.0);
       final fitBottom = layout.wide ? 104.0 : (layout.land ? 72.0 : 78.0);
-      final evLeft = layout.wide ? 16.0 : (layout.land ? 78.0 : 84.0);
+      final evLeft = layout.wide ? 16.0 : (layout.land ? 10.0 : 84.0);
       final evBottom = layout.land ? 12.0 : 16.0;
 
       String evtLabel = '';
@@ -181,7 +181,7 @@ class _GameScreenState extends State<GameScreen> {
         children: [
           WorldMapView(
             ctrl: c,
-            bottomReserve: layout.wide ? 96.0 : 0.0,
+            bottomReserve: layout.wide ? 96.0 : (layout.land ? 60.0 : 0.0),
             onControllerReady: (fitFn) => _fitZoom = fitFn,
             onZoomControllerReady: (zoomFn) => _zoomBy = zoomFn,
           ),
@@ -224,8 +224,8 @@ class _GameScreenState extends State<GameScreen> {
               left: evLeft,
               top: layout.wide
                   ? ((c.tutorialGuide != null || c.activeChallenge != null) ? 96.0 : 14.0)
-                  : null,
-              bottom: layout.wide ? null : evBottom,
+                  : (layout.land ? 8.0 : null),
+              bottom: layout.wide || layout.land ? null : evBottom,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: max(120, layout.size.width * 0.42),
@@ -263,6 +263,21 @@ class _GameScreenState extends State<GameScreen> {
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
+
+          // celular deitado: o painel de ação flutua sobre o mapa, à direita do relógio
+          if (layout.land && !layout.wide && v != null)
+            Positioned(
+              left: ringLeft + ringSize + 10,
+              right: 10,
+              bottom: 8,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 660),
+                  child: _BottomActionBar(ctrl: c, layout: layout),
                 ),
               ),
             ),
@@ -365,20 +380,8 @@ class _GameScreenState extends State<GameScreen> {
       if (layout.land) {
         return Column(
           children: [
+            _TopBar(ctrl: c),
             Expanded(child: mapArea()),
-            Container(
-              decoration: const BoxDecoration(
-                gradient: AppColors.hudGradient,
-                border: Border(top: BorderSide(color: AppColors.line)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _HudPanel(ctrl: c, layout: layout),
-                  Expanded(child: _BottomActionBar(ctrl: c, layout: layout)),
-                ],
-              ),
-            ),
           ],
         );
       }
@@ -840,6 +843,194 @@ class _HudPanel extends StatelessWidget {
             label: 'Menu',
             tooltip: 'Menu (M)',
             onTap: () => showMenuModal(context, ctrl),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------- Barra superior (celular deitado) ----------
+
+/// Rodada e de quem é a vez à esquerda, etapas do turno no centro, atalhos à direita. Altura fixa de 40.
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.ctrl});
+
+  final AppController ctrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = ctrl.view;
+    if (v == null) return const SizedBox(height: 40);
+    final players = v['players'] as List<dynamic>;
+    final turnIdx = (v['turn'] as num).toInt();
+    final cur = players[turnIdx] as Map<String, dynamic>;
+    final colors = ctrl.engine.constants.colors;
+    final curCol = parseHexColor(colors[(cur['color'] as num).toInt()].hex);
+    final round = (v['round'] as num).toInt();
+    final step = v['step'] as String? ?? 'reinforce';
+    final playing = v['phase'] == 'play';
+    final mine = ctrl.canPlayNow();
+    final meP = (ctrl.me >= 0 && ctrl.me < players.length) ? players[ctrl.me] as Map<String, dynamic> : null;
+    final opts = v['opts'] as Map<String, dynamic>? ?? const {};
+    final hqOn = opts['hq'] == true;
+    final extras = opts['events'] == true ||
+        opts['pacts'] == true ||
+        opts['nukes'] == true ||
+        (hqOn && opts['spy'] == true);
+    final pactsCount = opts['pacts'] == true ? (v['pacts'] as List<dynamic>? ?? const []).length : 0;
+    final offer = v['offer'] as Map<String, dynamic>?;
+    final offerIsMine = offer != null &&
+        (ctrl.role == 'guest'
+            ? (offer['to'] as num).toInt() == ctrl.me
+            : players[(offer['to'] as num).toInt()]['ctrl'] == 'local');
+    final rawCards = meP?['cards'];
+    final hand = hqOn
+        ? ((meP?['medals'] as num?)?.toInt() ?? 0)
+        : rawCards is List
+            ? rawCards.length
+            : (rawCards is num ? rawCards.toInt() : 0);
+
+    Widget btn(EstIconKind icon, String tip, VoidCallback onTap, {String? badge, bool call = false}) => Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Tooltip(
+            message: tip,
+            child: Material(
+              color: call ? AppColors.panel2 : Colors.transparent,
+              borderRadius: BorderRadius.circular(Radii.sm),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(Radii.sm),
+                child: Container(
+                  height: 30,
+                  constraints: const BoxConstraints(minWidth: 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(Radii.sm),
+                    border: Border.all(color: call ? AppColors.ink : AppColors.line),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      EstIcon(icon, size: 16, color: call ? AppColors.ink : AppColors.mute),
+                      if (badge != null) ...[
+                        const SizedBox(width: 4),
+                        Text(badge, style: AppText.number(size: 15, weight: FontWeight.w700)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    final who = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('R${round + 1}', style: AppText.label(size: 13, color: AppColors.faint)),
+        Container(width: 1, height: 14, margin: const EdgeInsets.symmetric(horizontal: 9), color: AppColors.glassBorder),
+        EstFactionSeal(color: curCol, size: 12),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            !playing ? 'FIM DE JOGO' : (mine ? 'SUA VEZ' : '${cur['name'] ?? ''}'.toUpperCase()),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.label(size: 15, color: AppColors.ink, weight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+
+    Widget steps() {
+      String? special;
+      if (ctrl.nukeMode) special = 'OGIVA · ESCOLHA O ALVO';
+      if (ctrl.trenchMode) special = 'TRINCHEIRA · ESCOLHA O TERRITÓRIO';
+      if (ctrl.airliftMode) special = 'PONTE AÉREA';
+      if (v['occupy'] != null) special = 'AVANÇO DE TROPAS';
+      if (special != null) {
+        return Text(
+          special,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.label(size: 13, color: ctrl.nukeMode ? AppColors.rad : AppColors.ink, weight: FontWeight.w700),
+        );
+      }
+      const order = ['reinforce', 'attack', 'move'];
+      const names = ['Reforço', 'Ataque', 'Manobra'];
+      final at = order.indexOf(step);
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < order.length; i++)
+            Container(
+              height: 40,
+              margin: const EdgeInsets.symmetric(horizontal: 9),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: i == at ? AppColors.action : Colors.transparent, width: 2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (i < at) ...[
+                    const Icon(Icons.check_rounded, size: 13, color: AppColors.faint),
+                    const SizedBox(width: 3),
+                  ],
+                  Text(
+                    names[i].toUpperCase(),
+                    style: AppText.label(size: 13, color: i == at ? AppColors.ink : AppColors.faint),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: const BoxDecoration(
+        color: AppColors.deep,
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Align(alignment: Alignment.centerLeft, child: who)),
+          if (playing) steps(),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (meP != null) ...[
+                  btn(EstIconKind.goal, 'Objetivo (O)', () => showObjectiveModal(context, ctrl)),
+                  btn(
+                    hqOn ? EstIconKind.medal : EstIconKind.cards,
+                    hqOn ? 'Quartel (C)' : 'Cartas (C)',
+                    () => showCardsModal(context, ctrl),
+                    badge: '$hand',
+                  ),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text('ASSISTINDO', style: AppText.label(size: 12, color: AppColors.mute)),
+                  ),
+                if (extras)
+                  btn(
+                    EstIconKind.extras,
+                    'Regras extras',
+                    () => showExtrasModal(context, ctrl),
+                    badge: pactsCount > 0 ? '$pactsCount' : null,
+                    call: offerIsMine,
+                  ),
+                btn(EstIconKind.menu, 'Menu (M)', () => showMenuModal(context, ctrl)),
+              ],
+            ),
           ),
         ],
       ),
@@ -2312,26 +2503,57 @@ class _BottomActionBar extends StatelessWidget {
       );
     }
 
-    // Compact horizontal bar in land/rot mode
+    // Celular deitado: painel flutuante sobre o mapa. Sem botões, vira uma etiqueta curta do tamanho do texto.
     if (layout.land) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(4, 6, 16, 8),
-        child: Row(
+      final quiet = btns.isEmpty && warnRow == null;
+      return Container(
+        constraints: BoxConstraints(minHeight: quiet ? 32 : 48),
+        padding: EdgeInsets.fromLTRB(12, quiet ? 6 : 6, quiet ? 12 : 6, quiet ? 6 : 6),
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: AppColors.line),
+          boxShadow: AppColors.edgeShadows,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  style: const TextStyle(fontSize: 13, height: 1.25, color: AppColors.ink),
-                  children: msgSpans,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Row(
+              mainAxisSize: quiet ? MainAxisSize.min : MainAxisSize.max,
+              children: [
+                EstFactionSeal(color: curCol, size: 10, highlighted: can),
+                const SizedBox(width: 8),
+                if (quiet)
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(style: const TextStyle(fontSize: 13, height: 1.25, color: AppColors.ink), children: msgSpans),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(style: const TextStyle(fontSize: 13, height: 1.25, color: AppColors.ink), children: msgSpans),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (btns.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Wrap(
+                    spacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      for (final b in btns)
+                        if (b is Expanded) b.child else b,
+                    ],
+                  ),
+                ],
+              ],
             ),
-            if (btns.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: btns),
-            ],
+            ?warnRow,
           ],
         ),
       );

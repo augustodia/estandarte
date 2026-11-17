@@ -493,22 +493,6 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
               ),
             ),
 
-            // Tabletop lighting vignette matching #mapwrap::before
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment(0, -0.15),
-                      radius: 1.05,
-                      colors: [Colors.transparent, Colors.transparent, Color(0xB304080F)],
-                      stops: [0.0, 0.52, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
             // Nuke alarm crimson perimeter glow
             if (alarmActive)
               Positioned.fill(

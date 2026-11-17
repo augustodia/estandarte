@@ -12,10 +12,12 @@ import 'package:estandarte/game/app_controller.dart';
 import 'package:estandarte/game/fx_models.dart';
 import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
+import 'package:estandarte/ui/daily_screen.dart';
 import 'package:estandarte/ui/home_screen.dart';
 import 'package:estandarte/ui/lobby_screen.dart';
 import 'package:estandarte/ui/modals.dart';
 import 'package:estandarte/ui/quartel_modal.dart';
+import 'package:estandarte/ui/rooms_screen.dart';
 import 'package:estandarte/ui/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -99,6 +101,12 @@ void main() {
       // início
       await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_$tag');
+
+      // salas online (sem rede no teste: mostra o estado vazio/erro) e desafio do dia
+      await tester.pumpWidget(_app(RoomsScreen(ctrl: ctrl)));
+      await _shot(tester, 'rooms_$tag');
+      await tester.pumpWidget(_app(DailyScreen(ctrl: ctrl)));
+      await _shot(tester, 'daily_$tag');
 
       // sala local com bots
       ctrl.startLocalSetup(withP2p: false, hostName: 'Luiz');
