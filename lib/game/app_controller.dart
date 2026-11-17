@@ -201,6 +201,8 @@ class AppController extends ChangeNotifier {
   int get challengeArmiesLost => _challengeArmiesLost;
   int get challengeOrdersUsed => _challengeOrdersUsed;
   int? challengeServerRank;
+  /// Venceu o desafio sem conta: o resultado não entra no ranking (a tela convida a entrar).
+  bool challengeNeedsAccount = false;
   List<DailyRankEntry> challengeSubmitRanking = [];
   bool challengeResultSubmitted = false;
   String? _challengeRunId;
@@ -422,6 +424,20 @@ class AppController extends ChangeNotifier {
   DateTime? accountResendAt;
 
   bool get signedIn => account != null && _accountToken != null;
+
+  /// Pedido para a tela abrir a janela da conta (com o motivo). A tela limpa depois de abrir.
+  String? accountPrompt;
+
+  /// Online só com conta: sem ela, pede para entrar e não segue.
+  bool _onlineGate() {
+    if (signedIn) return true;
+    accountPrompt = 'Para jogar online, entre ou crie uma conta. É grátis e o seu nome fica só seu.';
+    notifyListeners();
+    return false;
+  }
+
+  /// Nome online: sempre o da conta.
+  String get onlineName => account?.username ?? 'Jogador';
 
   /// Falta confirmar o e-mail do cadastro ou o de uma troca.
   bool get accountNeedsConfirm => signedIn && (!account!.emailVerified || accountPendingEmail != null);
@@ -701,6 +717,7 @@ class AppController extends ChangeNotifier {
     challengeEndReason = '';
     challengeStarsEarned = 0;
     challengeServerRank = null;
+    challengeNeedsAccount = false;
     challengeSubmitRanking = List<DailyRankEntry>.from(dailySnapshot?.ranking ?? const []);
     challengeResultSubmitted = false;
     _challengeStartedMs = DateTime.now().millisecondsSinceEpoch;
@@ -1025,7 +1042,8 @@ class AppController extends ChangeNotifier {
       immediate: !netOnline,
     );
 
-    if (netOnline && !challengeResultSubmitted) {
+    challengeNeedsAccount = netOnline && !signedIn && status.won;
+    if (netOnline && signedIn && !challengeResultSubmitted) {
       challengeResultSubmitted = true;
       final name = cleanName(savedName).isNotEmpty ? cleanName(savedName) : 'Comandante';
       unawaited(
@@ -1396,6 +1414,7 @@ class AppController extends ChangeNotifier {
 
   void updateSeatName(int index, String raw) {
     if (online != null) return;
+    if (index == 0 && (relayCode != null || relayStarting) && signedIn) return; // na mesa pela internet, o seu nome é o da conta
     if (index < 0 || index >= seats.length) return;
     final clean = cleanName(raw);
     if (clean.isEmpty) return;
@@ -1633,6 +1652,11 @@ class AppController extends ChangeNotifier {
     if (!netOnline) {
       showToast('Sem internet: abrir sala por código precisa de conexão.', 4000);
       return;
+    }
+    if (!_onlineGate()) return; // mesa pela internet: quem abre também joga com o nome da conta
+    if (seats.isNotEmpty && seats[0].ctrl == 'local') {
+      seats[0].name = uniqueName(onlineName, seats, (x) => x.name, self: seats[0]);
+      _broadcastLobby();
     }
     SoundPlayer.unlock();
     _relayRetryTimer?.cancel();
@@ -2475,6 +2499,7 @@ class AppController extends ChangeNotifier {
 
   void openRoomsBrowser() {
     SoundPlayer.unlock();
+    if (!_onlineGate()) return;
     screen = AppScreen.rooms;
     roomsError = null;
     notifyListeners();
@@ -2490,9 +2515,8 @@ class AppController extends ChangeNotifier {
   }
 
   void createOnlineRoom(String playerName, {bool isPublic = true, String? pass}) {
-    final nm = cleanName(playerName);
-    final finalName = nm.isNotEmpty ? nm : 'Jogador';
-    savePlayerName(finalName);
+    if (!_onlineGate()) return;
+    final finalName = onlineName;
     final cleanP = pass != null ? _cleanRoomPass(pass) : '';
     _connectOnlineQuery(
       'create=1',
@@ -2505,9 +2529,8 @@ class AppController extends ChangeNotifier {
   }
 
   void startQuickMatch(String playerName) {
-    final nm = cleanName(playerName);
-    final finalName = nm.isNotEmpty ? nm : 'Jogador';
-    savePlayerName(finalName);
+    if (!_onlineGate()) return;
+    final finalName = onlineName;
     _connectOnlineQuery(
       'quick=1',
       host: true,
@@ -2530,9 +2553,8 @@ class AppController extends ChangeNotifier {
       showToast('Digite o código de 5 letras ou cole o link da sala.');
       return;
     }
-    final nm = cleanName(playerName);
-    final finalName = nm.isNotEmpty ? nm : 'Convidado';
-    if (!watchOnly) savePlayerName(finalName);
+    if (!_onlineGate()) return;
+    final finalName = onlineName;
     final srv = serverUrl();
     final tok = token ?? _loadRoomToken(srv, cleanCode);
     final q = StringBuffer('room=${Uri.encodeQueryComponent(cleanCode)}');
@@ -2629,12 +2651,14 @@ class AppController extends ChangeNotifier {
             'name': name,
             if (ses.token != null) 'token': ses.token,
             if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+            if (!isLan && _accountToken != null) 'acc': _accountToken,
           });
         } else {
           link.send({
             't': 'hello',
             'name': name,
             if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+            if (!isLan && _accountToken != null) 'acc': _accountToken,
           });
         }
         if (ses.code != null && !ses.lan) {
@@ -2693,6 +2717,7 @@ class AppController extends ChangeNotifier {
           'name': ses.name,
           'token': ?tok,
           if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+          if (!ses.lan && _accountToken != null) 'acc': _accountToken,
         });
         notifyListeners();
       },
@@ -2796,6 +2821,7 @@ class AppController extends ChangeNotifier {
       'name': ses?.name ?? (savedName.isNotEmpty ? savedName : 'Convidado'),
       if (ses?.token != null) 'token': ses!.token,
       'pass': clean,
+      if (ses != null && !ses.lan && _accountToken != null) 'acc': _accountToken,
     });
   }
 
@@ -2851,6 +2877,11 @@ class AppController extends ChangeNotifier {
     }
     if (t == 'gone') {
       final m = msg['m'] as String? ?? 'Sala encerrada.';
+      if (msg['auth'] == true) {
+        // o servidor não aceitou a conta (sessão vencida ou sem conta): confere e pede para entrar
+        unawaited(refreshAccount());
+        accountPrompt = m;
+      }
       if (online != null) {
         online!.gone = true;
         AppStorage.instance.remove('estandarte.online');
@@ -4623,6 +4654,7 @@ class AppController extends ChangeNotifier {
     challengeEndReason = '';
     challengeStarsEarned = 0;
     challengeServerRank = null;
+    challengeNeedsAccount = false;
     challengeSubmitRanking = [];
     challengeResultSubmitted = false;
     _challengeRunId = null;

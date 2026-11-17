@@ -9,18 +9,19 @@ import '../game/app_controller.dart';
 import '../net/account_api.dart' show AccountError, looksLikeEmail;
 import 'theme.dart';
 
-Future<void> showAccountSheet(BuildContext context, AppController ctrl, {bool startOnSignUp = false}) {
+Future<void> showAccountSheet(BuildContext context, AppController ctrl, {bool startOnSignUp = false, String? reason}) {
   return showEstSheet<void>(
     context,
     maxWidth: 440,
-    builder: (ctx) => _AccountSheet(ctrl: ctrl, startOnSignUp: startOnSignUp),
+    builder: (ctx) => _AccountSheet(ctrl: ctrl, startOnSignUp: startOnSignUp, reason: reason),
   );
 }
 
 class _AccountSheet extends StatefulWidget {
-  const _AccountSheet({required this.ctrl, required this.startOnSignUp});
+  const _AccountSheet({required this.ctrl, required this.startOnSignUp, this.reason});
   final AppController ctrl;
   final bool startOnSignUp;
+  final String? reason; // por que a janela abriu (ex.: tentou jogar online sem conta)
 
   @override
   State<_AccountSheet> createState() => _AccountSheetState();
@@ -263,6 +264,10 @@ class _AccountSheetState extends State<_AccountSheet> {
               },
       ),
       const SizedBox(height: Space.x4),
+      if (widget.reason != null) ...[
+        _Notice(widget.reason!),
+        const SizedBox(height: Space.x3),
+      ],
       if (!c.netOnline) ...[
         const _Notice('Sem internet. Dá para jogar na mesa local e na rede de casa; a conta precisa de conexão.'),
         const SizedBox(height: Space.x3),
@@ -286,7 +291,7 @@ class _AccountSheetState extends State<_AccountSheet> {
       if (busy) const _Hint('Se o servidor estava dormindo, pode levar até um minuto.', center: true),
       const SizedBox(height: Space.x3),
       const Text(
-        'Sem conta você continua jogando como convidado. Com conta, seu nome é só seu e o desafio do dia vale em qualquer aparelho.',
+        'Sem conta dá para jogar na mesa local e na rede de casa. Online, o seu nome de usuário é o seu nome em todas as salas.',
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 12.5, color: AppColors.faint, height: 1.35),
       ),

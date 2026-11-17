@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/map_data.dart';
 import '../game/app_controller.dart';
 import '../net/online_client.dart';
+import 'account_sheet.dart';
 import 'theme.dart';
 
 class RoomsScreen extends StatefulWidget {
@@ -35,9 +36,8 @@ class _RoomsScreenState extends State<RoomsScreen> {
     super.dispose();
   }
 
-  void _syncName() {
-    widget.ctrl.savePlayerName(_nameCtrl.text);
-  }
+  // Online o nome vem da conta: nada a guardar aqui.
+  void _syncName() {}
 
   void _enterCode() {
     final c = roomCode(_codeCtrl.text);
@@ -96,27 +96,19 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 ),
               ),
               const SizedBox(width: 8),
+              // online o nome é sempre o da conta; tocar abre a conta (trocar o nome fica lá)
               Expanded(
-                child: TextField(
-                  controller: _nameCtrl,
-                  maxLength: 14,
-                  onChanged: c.savePlayerName,
-                  textAlign: TextAlign.right,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'Seu apelido',
-                    counterText: '',
-                    filled: false,
-                    isDense: true,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 6),
+                child: InkWell(
+                  onTap: () => showAccountSheet(context, c),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      c.account?.username ?? 'Entrar',
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+                    ),
                   ),
                 ),
               ),
