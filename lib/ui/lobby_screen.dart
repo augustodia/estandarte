@@ -300,14 +300,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
       );
     }
 
-    Widget seatsWidget() {
+    Widget seatsWidget({double gap = 6}) {
       final colors = c.engine.constants.colors;
       final openCount = isQuick ? max(0, 4 - c.seats.length) : 0;
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < c.seats.length; i++) ...[
-            if (i > 0) const SizedBox(height: 6),
+            if (i > 0) SizedBox(height: gap),
             _SeatTile(
               ctrl: c,
               index: i,
@@ -317,7 +317,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
           ],
           for (var k = 0; k < openCount; k++) ...[
-            const SizedBox(height: 6),
+            SizedBox(height: gap),
             Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -350,7 +350,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       );
     }
 
-    Widget actionsWidget() {
+    Widget actionsWidget({bool roomy = false}) {
       final full = c.seats.length >= maxSeats;
       final n = c.seats.length;
       final activeExtras = _extrasMeta.where((e) => _getExtra(e.$1)).map((e) => e.$2).toList();
@@ -484,7 +484,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ?connBanner,
           ?quickBanner(),
           const EstSectionTag('REGRAS DA BATALHA'),
-          const SizedBox(height: 10),
+          SizedBox(height: roomy ? 14 : 10),
           // Tempo por turno
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -514,7 +514,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: roomy ? 14 : 10),
 
           // Collapsible Regras extras
           Container(
@@ -590,7 +590,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
 
           if (isOnline || isRelayHostActive) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: roomy ? 10 : 8),
             Container(
               decoration: BoxDecoration(
                 color: AppColors.obsidian.withValues(alpha: 0.72),
@@ -610,7 +610,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ],
 
           if (!isQuick) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: roomy ? 10 : 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
@@ -745,7 +745,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
           ],
 
-          const SizedBox(height: 10),
+          if (roomy) ...[
+            const SizedBox(height: 32),
+            const EstSectionTag('CHAMAR JOGADORES'),
+            const SizedBox(height: 14),
+          ] else
+            const SizedBox(height: 10),
 
           if (isOnline)
             Row(
@@ -926,7 +931,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 onPressed: (c.relayStarting || c.lanStarting) ? null : c.startRelayHost,
               ),
               if (LanHost.supported) ...[
-                const SizedBox(height: 6),
+                SizedBox(height: roomy ? 10 : 6),
                 EstButton(
                   small: true,
                   icon: EstIconKind.lan,
@@ -935,7 +940,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 ),
               ],
               if (P2P.supported) ...[
-                const SizedBox(height: 6),
+                SizedBox(height: roomy ? 10 : 6),
                 EstButton(
                   small: true,
                   icon: EstIconKind.qr,
@@ -943,7 +948,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   onPressed: full || c.relayStarting ? null : () => showP2pInviteModal(context, c),
                 ),
               ],
-              const SizedBox(height: 8),
+              SizedBox(height: roomy ? 10 : 8),
             ],
             Row(
               children: [
@@ -966,7 +971,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
           ],
 
-          const SizedBox(height: 8),
+          SizedBox(height: roomy ? 36 : 8),
           EstButton(
             icon: EstIconKind.sword,
             label: isQuick && n < 4
@@ -975,7 +980,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             variant: EstButtonVariant.primary,
             onPressed: (n < 2 && !isQuick) ? null : c.beginGame,
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: roomy ? 10 : 4),
           EstButton(
             label: isOnline ? 'Sair da sala' : 'Sair',
             variant: EstButtonVariant.ghost,
@@ -1019,6 +1024,50 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: SingleChildScrollView(child: actionsWidget()),
                 ),
               ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!layout.big) {
+      // celular em pé: cabeçalho fixo no topo e o resto rola embaixo, com respiro entre blocos
+      return Scaffold(
+        backgroundColor: AppColors.deep,
+        body: SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                    child: headerBar(big: false),
+                  ),
+                  Container(height: 1, color: AppColors.line),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (showJoinLocal) ...[
+                            joinLocalBar(inline: false),
+                            const SizedBox(height: 28),
+                          ],
+                          EstSectionTag(sub),
+                          const SizedBox(height: 14),
+                          seatsWidget(gap: 10),
+                          const SizedBox(height: 32),
+                          actionsWidget(roomy: true),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

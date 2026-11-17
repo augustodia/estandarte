@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   right: false,
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(compact ? 20 : 28, compact ? 16 : 28, compact ? 20 : 28, compact ? 10 : 18),
-                    child: _commandColumn(compact: compact, withDaily: false),
+                    child: _commandColumn(compact: compact, withDaily: false, roomy: false),
                   ),
                 ),
               ),
@@ -103,8 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                    child: _commandColumn(compact: compact, withDaily: true),
+                    padding: const EdgeInsets.fromLTRB(24, 36, 24, 20),
+                    child: _commandColumn(compact: compact, withDaily: true, roomy: true),
                   ),
                 ),
               ),
@@ -128,13 +128,18 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () => showRulesModal(context, c),
       );
 
-  Widget _commandColumn({required bool compact, required bool withDaily}) {
+  Widget _commandColumn({required bool compact, required bool withDaily, required bool roomy}) {
+    // Em pé sobra altura: tamanhos cheios e respiro entre os blocos. Deitado, segue enxuto.
+    final dense = compact && !roomy;
+    final gapHead = roomy ? 32.0 : (compact ? 14.0 : 22.0);
+    final gapName = roomy ? 14.0 : (compact ? 8.0 : 12.0);
+    final gapList = roomy ? 22.0 : (compact ? 8.0 : 14.0);
     final items = <Widget>[
       if (c.hasSavedGuest)
         _ModeRow(
           title: 'Voltar à partida online',
           sub: 'Você saiu de uma partida que ainda está em curso',
-          compact: compact,
+          compact: dense,
           strong: true,
           onTap: c.resumeSavedGuest,
         ),
@@ -142,20 +147,20 @@ class _HomeScreenState extends State<HomeScreen> {
         _ModeRow(
           title: 'Continuar partida salva',
           sub: 'Mesa local deste aparelho',
-          compact: compact,
+          compact: dense,
           strong: true,
           onTap: c.resumeSavedLocal,
         ),
       _ModeRow(
         title: 'Mesa local',
         sub: LanHost.supported ? 'Bots, rede local ou código de sala' : 'Bots, QR ou código de sala',
-        compact: compact,
+        compact: dense,
         onTap: () => c.startLocalSetup(hostName: _nameCtrl.text),
       ),
       _ModeRow(
         title: 'Salas online',
         sub: 'Escolha uma mesa ou entre com código',
-        compact: compact,
+        compact: dense,
         onTap: () {
           c.savePlayerName(_nameCtrl.text);
           c.openRoomsBrowser();
@@ -164,29 +169,29 @@ class _HomeScreenState extends State<HomeScreen> {
       _ModeRow(
         title: 'Tutorial',
         sub: 'Aprenda o básico jogando',
-        compact: compact,
+        compact: dense,
         onTap: () => c.startTutorial(playerName: _nameCtrl.text),
       ),
       if (withDaily) ...[
-        const SizedBox(height: Space.x3),
-        _DailyCard(ctrl: c, compact: compact, onTap: _openDaily, floating: false),
-        const SizedBox(height: Space.x2),
+        SizedBox(height: roomy ? 28 : Space.x3),
+        _DailyCard(ctrl: c, compact: dense, onTap: _openDaily, floating: false),
+        SizedBox(height: roomy ? 16 : Space.x2),
         Align(alignment: Alignment.centerLeft, child: _howToPlay()),
       ],
     ];
 
     final head = <Widget>[
-        EstWordmark(size: compact ? 28 : 36),
+        EstWordmark(size: dense ? 28 : 36),
         const SizedBox(height: 6),
         Text(
           'ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(),
           style: AppText.label(size: 11),
         ),
-        SizedBox(height: compact ? 12 : 20),
-        _nameField(compact),
-        SizedBox(height: compact ? 8 : 12),
-        _QuickMatchButton(compact: compact, onTap: () => c.startQuickMatch(_nameCtrl.text)),
-        SizedBox(height: compact ? 4 : 10),
+        SizedBox(height: gapHead),
+        _nameField(dense),
+        SizedBox(height: gapName),
+        _QuickMatchButton(compact: dense, onTap: () => c.startQuickMatch(_nameCtrl.text)),
+        SizedBox(height: gapList),
     ];
     final footer = <Widget>[
         if (!c.netOnline)
