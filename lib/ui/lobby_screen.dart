@@ -1017,9 +1017,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
           SizedBox(height: roomy ? 10 : 4),
           EstButton(
-            label: isOnline ? 'Sair da sala' : 'Sair',
+            label: isCorr ? 'Fechar (fica na lista)' : (isOnline ? 'Sair da sala' : 'Sair'),
             variant: EstButtonVariant.ghost,
-            onPressed: () => c.leaveGame(),
+            onPressed: () => c.leaveGame(keepSeat: true),
           ),
         ],
       );
@@ -1261,6 +1261,8 @@ class _SeatTile extends StatelessWidget {
     } else if (isOnline) {
       if (seat.online) {
         kindLabel = 'online';
+      } else if (ctrl.inCorr) {
+        kindLabel = 'joga quando puder'; // na correspondência, estar fora é o normal
       } else {
         kindLabel = 'desconectado';
         offline = true;

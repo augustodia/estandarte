@@ -252,7 +252,7 @@ class _GameRow extends StatelessWidget {
     final String detail;
     Color statusColor = AppColors.mute;
     if (g.playing) {
-      status = g.yourTurn ? 'SUA VEZ' : 'VEZ DE ${g.turnName.toUpperCase()}';
+      status = g.yourTurn ? 'JOGAR' : 'VEZ DE ${g.turnName.toUpperCase()}';
       detail = corrTimeLeft(g.deadlineMs);
       if (g.yourTurn) statusColor = AppColors.ink;
     } else if (g.waiting) {
