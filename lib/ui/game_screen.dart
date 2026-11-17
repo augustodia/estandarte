@@ -160,10 +160,10 @@ class _GameScreenState extends State<GameScreen> {
       final showEvt = evt != null && v?['phase'] == 'play';
       final ringLeft = layout.wide ? 20.0 : 16.0;
       final ringBottom = layout.wide ? 18.0 : (layout.land ? 12.0 : 10.0);
-      final ringSize = layout.wide ? 82.0 : 68.0;
-      final fitLeft = layout.wide ? 45.0 : 34.0;
-      final fitBottom = layout.wide ? 110.0 : (layout.land ? 88.0 : 86.0);
-      final evLeft = layout.wide ? 16.0 : 92.0;
+      final ringSize = layout.wide ? 76.0 : (layout.land ? 54.0 : 60.0);
+      final fitLeft = layout.wide ? 42.0 : (layout.land ? 27.0 : 30.0);
+      final fitBottom = layout.wide ? 104.0 : (layout.land ? 72.0 : 78.0);
+      final evLeft = layout.wide ? 16.0 : (layout.land ? 78.0 : 84.0);
       final evBottom = layout.land ? 12.0 : 16.0;
 
       String evtLabel = '';
@@ -1267,22 +1267,16 @@ class _TurnRingButton extends StatelessWidget {
                         children: [
                           Text(
                             topText,
-                            style: TextStyle(
-                              fontSize: size >= 80 ? 19 : 16,
-                              fontWeight: FontWeight.w700,
-                              height: 1.0,
-                              color: low ? const Color(0xFFFF6B5E) : AppColors.ink,
+                            style: AppText.number(
+                              size: size >= 70 ? 20 : 17,
+                              weight: FontWeight.w700,
+                              color: low ? AppColors.bad : AppColors.ink,
                             ),
                           ),
                           if (subText.isNotEmpty)
                             Text(
                               subText,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                height: 1.1,
-                                color: AppColors.mute,
-                              ),
+                              style: AppText.label(size: 10, color: AppColors.mute),
                             ),
                         ],
                       ),
@@ -1319,7 +1313,15 @@ class _TurnRingPainter extends CustomPainter {
     canvas.scale(s, s);
 
     // Disc
-    canvas.drawCircle(Offset.zero, 50, Paint()..color = const Color(0xE612171E));
+    canvas.drawCircle(Offset.zero, 50, Paint()..color = AppColors.panel);
+    canvas.drawCircle(
+      Offset.zero,
+      49.5,
+      Paint()
+        ..color = AppColors.line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
 
     // Outer clock track (r=45, width=4)
     canvas.drawCircle(
@@ -1338,9 +1340,9 @@ class _TurnRingPainter extends CustomPainter {
         2 * pi * clockFrac,
         false,
         Paint()
-          ..color = low ? AppColors.bad : AppColors.gold
+          ..color = low ? AppColors.bad : AppColors.action
           ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
+          ..strokeCap = StrokeCap.butt
           ..strokeWidth = 4,
       );
     }
@@ -1364,7 +1366,7 @@ class _TurnRingPainter extends CustomPainter {
           Paint()
             ..color = slices[k].$1
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 10,
+            ..strokeWidth = 6,
         );
         off += sweepAll;
       }

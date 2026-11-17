@@ -1955,8 +1955,8 @@ class _RuleBullet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 6, bottom: 6),
-      child: RichText(
-        text: TextSpan(
+      child: Text.rich(
+        TextSpan(
           style: const TextStyle(fontSize: 13, color: AppColors.ink, height: 1.4),
           children: [
             const TextSpan(text: '• '),

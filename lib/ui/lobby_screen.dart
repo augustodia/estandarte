@@ -973,7 +973,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 ? 'Iniciar agora (completar com bots)'
                 : 'Iniciar Batalha ($n/$maxSeats)',
             variant: EstButtonVariant.primary,
-            height: 48,
             onPressed: (n < 2 && !isQuick) ? null : c.beginGame,
           ),
           const SizedBox(height: 4),
@@ -983,6 +982,46 @@ class _LobbyScreenState extends State<LobbyScreen> {
             onPressed: () => c.leaveGame(),
           ),
         ],
+      );
+    }
+
+    final scr = MediaQuery.sizeOf(context);
+    if (!layout.big && scr.width > scr.height) {
+      // celular deitado: duas colunas na altura toda, sem rolar a tela inteira
+      return Scaffold(
+        backgroundColor: AppColors.deep,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 11,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      headerBar(big: false),
+                      if (showJoinLocal) ...[
+                        const SizedBox(height: 8),
+                        joinLocalBar(inline: false),
+                      ],
+                      const SizedBox(height: 10),
+                      EstSectionTag(sub),
+                      const SizedBox(height: 6),
+                      Expanded(child: SingleChildScrollView(child: seatsWidget())),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 9,
+                  child: SingleChildScrollView(child: actionsWidget()),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
