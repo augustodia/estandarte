@@ -131,6 +131,9 @@ abstract final class Factions {
 
   /// O triângulo tem o centro visual mais baixo: o número desce um pouco.
   static double textNudge(FactionShape k, double r) => k == FactionShape.triangle ? r * 0.2 : 0;
+
+  /// Deslocamento vertical para a forma pequena ficar opticamente centrada (o triângulo pesa embaixo).
+  static double markNudge(FactionShape k, double r) => k == FactionShape.triangle ? r * 0.2 : 0;
 }
 
 /// Espaçamento em múltiplos de 4.
