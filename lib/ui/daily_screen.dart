@@ -707,9 +707,11 @@ class _DailyScreenState extends State<DailyScreen> {
     return Scaffold(
       backgroundColor: AppColors.deep,
       body: SafeArea(
-        child: Center(
+        child: Align(
+          // no celular o topo fica no topo (centralizar deixava o cabeçalho flutuando no meio)
+          alignment: layout.big ? Alignment.center : Alignment.topCenter,
           child: SingleChildScrollView(
-            padding: EdgeInsets.all(layout.big ? 26 : 14),
+            padding: EdgeInsets.all(layout.big ? 26 : 18),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: layout.big ? 1040 : 500),
               child: Column(
