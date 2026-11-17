@@ -950,7 +950,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 Expanded(
                   child: EstButton(
                     small: true,
-                    label: '+ Jogador neste aparelho',
+                    label: '+ Jogador local',
                     onPressed: full ? null : () => _showAddLocalModal(context),
                   ),
                 ),

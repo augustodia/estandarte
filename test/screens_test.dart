@@ -137,7 +137,7 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
       ctrl.dispose();
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(minutes: 3));
     }, skip: !_on);
   }
 }
