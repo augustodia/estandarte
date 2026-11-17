@@ -131,6 +131,26 @@ Future<AccountState> accountChangeEmail(String server, String token, String emai
 Future<AccountUser> accountRename(String server, String token, String username) async =>
     _user(await _call(server, 'POST', '/account/name', token: token, body: {'username': username}));
 
+/// Pede o código de troca de senha (o servidor responde igual exista ou não a conta).
+Future<void> accountForgotPassword(String server, String login) async {
+  await _call(server, 'POST', '/account/password/forgot', body: {'login': login});
+}
+
+/// Troca a senha com o código do e-mail e já entra (as outras sessões caem).
+Future<AccountSession> accountResetPassword(String server, String login, String code, String password) async =>
+    _session(await _call(server, 'POST', '/account/password/reset',
+        body: {'login': login, 'code': code, 'password': password}));
+
+/// Junta o progresso do aparelho com o da conta (fica o melhor de cada dia e crônica) e devolve o resultado.
+Future<({Map<String, dynamic> daily, Map<String, dynamic> codex})> accountSyncProgress(
+    String server, String token, Map<String, dynamic> daily, Map<String, dynamic> codex) async {
+  final j = await _call(server, 'POST', '/account/progress', token: token, body: {'daily': daily, 'codex': codex});
+  return (
+    daily: Map<String, dynamic>.from(j['daily'] as Map? ?? const {}),
+    codex: Map<String, dynamic>.from(j['codex'] as Map? ?? const {}),
+  );
+}
+
 Future<void> accountLogout(String server, String token) async {
   await _call(server, 'POST', '/account/logout', token: token);
 }

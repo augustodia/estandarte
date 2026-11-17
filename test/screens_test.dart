@@ -111,6 +111,15 @@ void main() {
       showAccountSheet(homeCtx, ctrl);
       await _shot(tester, 'account_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
+      showAccountSheet(homeCtx, ctrl);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 600)); // a janela anterior termina de fechar
+      await tester.ensureVisible(find.text('ESQUECI A SENHA').last);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.text('ESQUECI A SENHA').last);
+      await _shot(tester, 'account_forgot_$tag');
+      Navigator.of(homeCtx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 400));
       showAccountSheet(homeCtx, ctrl, startOnSignUp: true);
       await _shot(tester, 'account_new_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
