@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -3452,7 +3453,9 @@ class _TutorialCoachBannerState extends State<_TutorialCoachBanner> {
   }
 }
 
-class _ChallengeHudBanner extends StatelessWidget {
+/// Objetivo do desafio no topo do mapa. Começa aberto para a pessoa ler e recolhe sozinho em poucos segundos
+/// para uma faixa fina (progresso e estrelas ainda valendo), deixando o mapa livre. Tocar abre e fecha.
+class _ChallengeHudBanner extends StatefulWidget {
   const _ChallengeHudBanner({
     required this.spec,
     required this.status,
@@ -3466,117 +3469,171 @@ class _ChallengeHudBanner extends StatelessWidget {
   final VoidCallback onExit;
 
   @override
+  State<_ChallengeHudBanner> createState() => _ChallengeHudBannerState();
+}
+
+class _ChallengeHudBannerState extends State<_ChallengeHudBanner> {
+  bool _open = true;
+  Timer? _auto;
+
+  @override
+  void initState() {
+    super.initState();
+    _auto = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _open = false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChallengeHudBanner old) {
+    super.didUpdateWidget(old);
+    // perdeu uma estrela: abre de novo por alguns segundos para a pessoa ver
+    final lost = (old.status?.star2Active ?? true) && !(widget.status?.star2Active ?? true) ||
+        (old.status?.star3Active ?? true) && !(widget.status?.star3Active ?? true);
+    if (lost && !_open) {
+      _open = true;
+      _auto?.cancel();
+      _auto = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _open = false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _auto?.cancel();
+    super.dispose();
+  }
+
+  void _toggle() {
+    _auto?.cancel();
+    setState(() => _open = !_open);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final spec = widget.spec;
+    final status = widget.status;
     final star2 = status?.star2Active ?? true;
     final star3 = status?.star3Active ?? true;
     final progress = status?.progressText ?? spec.goal.title;
+    final compact = estCompact(context);
+
+    final head = InkWell(
+      onTap: _toggle,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
+        decoration: BoxDecoration(
+          color: const Color(0x880B0F14),
+          border: _open ? const Border(bottom: BorderSide(color: AppColors.line)) : null,
+        ),
+        child: Row(
+          mainAxisSize: _open ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            EstIcon(spec.isHistorical ? EstIconKind.book : EstIconKind.medal, size: 13, color: AppColors.medal),
+            const SizedBox(width: 7),
+            if (_open) ...[
+              Text(
+                spec.isHistorical ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
+                style: AppText.label(size: 11, color: AppColors.medal),
+              ),
+              if (widget.difficulty == 'marechal') ...[
+                const SizedBox(width: 6),
+                Text('MARECHAL', style: AppText.label(size: 10.5, color: AppColors.bad)),
+              ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(spec.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              InkWell(
+                onTap: widget.onExit,
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text('Sair', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mute)),
+                ),
+              ),
+            ] else ...[
+              // recolhido: só o essencial numa linha curta
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: compact ? 190 : 260),
+                child: Text(progress,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink)),
+              ),
+              const SizedBox(width: 8),
+              _StarDot(label: '2★', ok: star2),
+              const SizedBox(width: 4),
+              _StarDot(label: '3★', ok: star3),
+            ],
+            const SizedBox(width: 2),
+            Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: AppColors.mute),
+          ],
+        ),
+      ),
+    );
 
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: estCompact(context) ? 420 : 620),
+      constraints: BoxConstraints(maxWidth: compact ? 420 : 620),
       child: EstGlassCard(
         highlight: spec.isHistorical,
         ornate: false,
         borderRadius: 6,
         padding: EdgeInsets.zero,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 6, 10, 6),
-              decoration: const BoxDecoration(
-                color: Color(0x880B0F14),
-                border: Border(bottom: BorderSide(color: AppColors.line)),
-              ),
-              child: Row(
-                children: [
-                  EstIcon(
-                    spec.isHistorical ? EstIconKind.book : EstIconKind.medal,
-                    size: 13,
-                    color: AppColors.medal,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    spec.isHistorical ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1,
-                      color: AppColors.medal,
-                    ),
-                  ),
-                  if (difficulty == 'marechal') ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: AppColors.bad.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(2),
-                        border: Border.all(color: AppColors.bad.withValues(alpha: 0.6)),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topLeft,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: _open ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
+            children: [
+              head,
+              if (_open)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(progress,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink)),
                       ),
-                      child: const Text(
-                        'MARECHAL',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFFE8ECF1),
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      spec.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                      ),
-                    ),
+                      const SizedBox(width: 10),
+                      _MiniStarChip(label: '2★ ≤R${spec.goal.star2MaxRound}', ok: star2),
+                      const SizedBox(width: 6),
+                      _MiniStarChip(label: '3★ ${status?.star3Reason ?? 'Extra'}', ok: star3),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: onExit,
-                    borderRadius: BorderRadius.circular(4),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Text(
-                        'Sair',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mute),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      progress,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFE8ECF1),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _MiniStarChip(label: '2★ ≤R${spec.goal.star2MaxRound}', ok: star2),
-                  const SizedBox(width: 6),
-                  _MiniStarChip(label: '3★ ${status?.star3Reason ?? 'Extra'}', ok: star3),
-                ],
-              ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Estrela ainda valendo (cor de medalha) ou perdida (riscada), em tamanho mínimo para a faixa recolhida.
+class _StarDot extends StatelessWidget {
+  const _StarDot({required this.label, required this.ok});
+  final String label;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: ok ? AppColors.medal : AppColors.faint,
+        decoration: ok ? null : TextDecoration.lineThrough,
       ),
     );
   }
@@ -3761,23 +3818,16 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 if (won) ...[
-                  EstButton(
-                    icon: EstIconKind.qr,
-                    label: 'Copiar relatório tático',
-                    variant: EstButtonVariant.pact,
-                    onPressed: () {
-                      final report = buildChallengeShareReport(
-                        spec: spec,
-                        stars: stars,
-                        rounds: round,
-                        armiesLost: ctrl.challengeArmiesLost,
-                        ordersUsed: ctrl.challengeOrdersUsed,
-                        difficulty: ctrl.challengeDifficulty,
-                        serverRank: rank,
-                      );
-                      Clipboard.setData(ClipboardData(text: report));
-                      ctrl.showToast('Relatório tático copiado!');
-                    },
+                  _CopyReportButton(
+                    buildReport: () => buildChallengeShareReport(
+                      spec: spec,
+                      stars: stars,
+                      rounds: round,
+                      armiesLost: ctrl.challengeArmiesLost,
+                      ordersUsed: ctrl.challengeOrdersUsed,
+                      difficulty: ctrl.challengeDifficulty,
+                      serverRank: rank,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -3789,7 +3839,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: EstButton(
-                        label: won ? 'Tentar 3★' : 'Tentar de novo',
+                        label: won ? (stars >= 3 ? 'Jogar de novo' : 'Tentar 3★') : 'Tentar de novo',
                         variant: EstButtonVariant.primary,
                         onPressed: ctrl.requestPlayAgainOnline,
                       ),
@@ -3857,6 +3907,58 @@ class _MapLensBar extends StatelessWidget {
             cell(EstIconKind.minus, 'Afastar mapa', onZoomOut),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Copiar o relatório do desafio, com retorno no próprio botão (o aviso geral ficava atrás da tela de resultado).
+class _CopyReportButton extends StatefulWidget {
+  const _CopyReportButton({required this.buildReport});
+  final String Function() buildReport;
+
+  @override
+  State<_CopyReportButton> createState() => _CopyReportButtonState();
+}
+
+class _CopyReportButtonState extends State<_CopyReportButton> {
+  String? _done; // texto de retorno enquanto aparece
+  Timer? _t;
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    HapticFeedback.selectionClick();
+    String msg;
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.buildReport()));
+      msg = 'Copiado ✓';
+    } catch (_) {
+      msg = 'Não deu para copiar aqui';
+    }
+    if (!mounted) return;
+    setState(() => _done = msg);
+    _t?.cancel();
+    _t = Timer(const Duration(milliseconds: 2400), () {
+      if (mounted) setState(() => _done = null);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final done = _done != null;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 160),
+      child: EstButton(
+        key: ValueKey(done),
+        icon: done ? null : EstIconKind.qr,
+        label: _done ?? 'Copiar relatório tático',
+        variant: done ? EstButtonVariant.primary : EstButtonVariant.pact,
+        onPressed: _copy,
       ),
     );
   }
