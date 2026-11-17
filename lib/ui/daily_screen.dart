@@ -97,7 +97,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppColors.panel,
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: snap.fromServer ? AppColors.line : AppColors.brassDim,
                   ),
@@ -116,7 +116,7 @@ class _DailyScreenState extends State<DailyScreen> {
             ],
             Material(
               color: AppColors.panel,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               child: InkWell(
                 onTap: c.dailyLoading
                     ? null
@@ -124,14 +124,14 @@ class _DailyScreenState extends State<DailyScreen> {
                         _elapsedSecs = 0;
                         c.refreshDailyChallenge();
                       },
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 child: Tooltip(
                   message: 'Sincronizar com servidor',
                   child: Container(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppColors.line),
                     ),
                     alignment: Alignment.center,
@@ -159,7 +159,7 @@ class _DailyScreenState extends State<DailyScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     letterSpacing: 1.0,
-                    color: achieved ? AppColors.gold : const Color(0xFF54637B),
+                    color: achieved ? AppColors.gold : const Color(0xFF7D8796),
                   ),
                 ),
               ),
@@ -180,13 +180,13 @@ class _DailyScreenState extends State<DailyScreen> {
         );
 
     Widget ruleBadge(ChallengeRuleTag tag, {required bool isMutation}) {
-      final accent = isMutation ? AppColors.bad : const Color(0xFF56B870);
+      final accent = isMutation ? AppColors.bad : const Color(0xFF9AA4B2);
       return Container(
         margin: const EdgeInsets.only(bottom: 7),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: accent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: accent.withValues(alpha: 0.35)),
         ),
         child: Column(
@@ -197,7 +197,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 Text(
                   isMutation ? 'RESTRIÇÃO' : 'DOUTRINA',
                   style: TextStyle(
-                    fontSize: 9.5,
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
                     color: accent,
@@ -208,7 +208,7 @@ class _DailyScreenState extends State<DailyScreen> {
                   child: Text(
                     tag.name,
                     style: const TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
@@ -243,7 +243,7 @@ class _DailyScreenState extends State<DailyScreen> {
                   height: 44,
                   decoration: BoxDecoration(
                     color: AppColors.obsidian,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppColors.brassDim),
                   ),
                   alignment: Alignment.center,
@@ -266,7 +266,7 @@ class _DailyScreenState extends State<DailyScreen> {
                     ? 'Buscando a semente oficial e o ranking de hoje.'
                     : (c.dailyError ?? 'Conecte-se à internet para baixar a missão de hoje.'),
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13.5, height: 1.4, color: AppColors.mute),
+                style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
               ),
               const SizedBox(height: 18),
               Center(
@@ -311,7 +311,7 @@ class _DailyScreenState extends State<DailyScreen> {
                         ? 'CRÔNICA CANÔNICA · ${spec.era.isNotEmpty ? spec.era : spec.date}'
                         : 'SEMENTE ${spec.date}',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
                       color: isHist ? AppColors.gold : AppColors.mute,
@@ -322,7 +322,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 if (todayStars > 0)
                   Text(
                     '★' * todayStars + '☆' * (3 - todayStars),
-                    style: const TextStyle(fontSize: 14, color: AppColors.gold, letterSpacing: 1.5),
+                    style: const TextStyle(fontSize: 13, color: AppColors.gold, letterSpacing: 1.5),
                   ),
               ],
             ),
@@ -339,7 +339,7 @@ class _DailyScreenState extends State<DailyScreen> {
             const SizedBox(height: 10),
             Text(
               spec.briefing,
-              style: const TextStyle(fontSize: 13.5, height: 1.42, color: Color(0xFFD5DCE8)),
+              style: const TextStyle(fontSize: 13, height: 1.42, color: Color(0xFFE8ECF1)),
             ),
             const SizedBox(height: 14),
             const EstSectionTag('OBJETIVO & MEDALHAS'),
@@ -348,7 +348,7 @@ class _DailyScreenState extends State<DailyScreen> {
               padding: const EdgeInsets.all(11),
               decoration: BoxDecoration(
                 color: AppColors.obsidian,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.line),
               ),
               child: Column(
@@ -357,7 +357,7 @@ class _DailyScreenState extends State<DailyScreen> {
                   Text(
                     spec.goal.title,
                     style: const TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
@@ -407,7 +407,7 @@ class _DailyScreenState extends State<DailyScreen> {
               c.challengeDifficulty == 'marechal'
                   ? 'Fronteiras inimigas recebem +1 tropa, bots ganham medalha inicial extra e sua vitória pontua acima no ranking.'
                   : 'Equilíbrio oficial da missão de hoje.',
-              style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+              style: const TextStyle(fontSize: 11, color: AppColors.mute),
             ),
             const SizedBox(height: 14),
             EstButton(
@@ -428,7 +428,7 @@ class _DailyScreenState extends State<DailyScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
           decoration: BoxDecoration(
             color: AppColors.obsidian.withValues(alpha: 0.72),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: AppColors.line),
           ),
           child: const Text(
@@ -448,7 +448,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 color: e.rank == 1
                     ? AppColors.gold.withValues(alpha: 0.10)
                     : AppColors.obsidian.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: e.rank == 1 ? AppColors.brassDim : AppColors.line,
                 ),
@@ -460,7 +460,7 @@ class _DailyScreenState extends State<DailyScreen> {
                     child: Text(
                       '#${e.rank}',
                       style: TextStyle(
-                        fontSize: 13.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: e.rank == 1
                             ? AppColors.gold
@@ -480,7 +480,7 @@ class _DailyScreenState extends State<DailyScreen> {
                                 e.playerName,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 13.5,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.ink,
                                 ),
@@ -492,13 +492,13 @@ class _DailyScreenState extends State<DailyScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: AppColors.gold.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(3),
+                                  borderRadius: BorderRadius.circular(2),
                                   border: Border.all(color: AppColors.brassDim),
                                 ),
                                 child: const Text(
                                   'MARECHAL',
                                   style: TextStyle(
-                                    fontSize: 8.5,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.gold,
                                     letterSpacing: 0.6,
@@ -511,14 +511,14 @@ class _DailyScreenState extends State<DailyScreen> {
                         const SizedBox(height: 1),
                         Text(
                           '${e.rounds} rodadas · −${e.armiesLost} baixas · ${_formatDuration(e.durationSec)}',
-                          style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                          style: const TextStyle(fontSize: 11, color: AppColors.mute),
                         ),
                       ],
                     ),
                   ),
                   Text(
                     '★' * e.stars + '☆' * (3 - e.stars),
-                    style: const TextStyle(fontSize: 13.5, color: AppColors.gold, letterSpacing: 1.0),
+                    style: const TextStyle(fontSize: 13, color: AppColors.gold, letterSpacing: 1.0),
                   ),
                 ],
               ),
@@ -538,7 +538,7 @@ class _DailyScreenState extends State<DailyScreen> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.obsidian,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: weekDone >= 4 ? AppColors.brass : AppColors.line),
             ),
             child: Column(
@@ -549,7 +549,7 @@ class _DailyScreenState extends State<DailyScreen> {
                     const Text(
                       'META SEMANAL',
                       style: TextStyle(
-                        fontSize: 10.5,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
                         color: AppColors.gold,
@@ -558,7 +558,7 @@ class _DailyScreenState extends State<DailyScreen> {
                     const Spacer(),
                     Text(
                       '$weekDone / 4 dias recomendados (últimos 7 dias)',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 11, color: AppColors.mute),
                     ),
                   ],
                 ),
@@ -571,7 +571,7 @@ class _DailyScreenState extends State<DailyScreen> {
                         child: Container(
                           height: 8,
                           decoration: BoxDecoration(
-                            color: i < weekDone ? AppColors.gold : const Color(0xFF1D293D),
+                            color: i < weekDone ? AppColors.gold : const Color(0xFF262E39),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -597,7 +597,7 @@ class _DailyScreenState extends State<DailyScreen> {
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
                     color: AppColors.obsidian.withValues(alpha: unlocked ? 0.9 : 0.45),
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(
                       color: unlocked ? AppColors.brassDim : AppColors.line,
                     ),
@@ -610,7 +610,7 @@ class _DailyScreenState extends State<DailyScreen> {
                           Text(
                             meta.era.toUpperCase(),
                             style: TextStyle(
-                              fontSize: 9.5,
+                              fontSize: 10,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.0,
                               color: unlocked ? AppColors.gold : AppColors.mute,
@@ -620,9 +620,9 @@ class _DailyScreenState extends State<DailyScreen> {
                           Text(
                             unlocked ? '${'★' * bStars} · R$bRounds' : 'Bloqueado',
                             style: TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: unlocked ? AppColors.gold : const Color(0xFF56667D),
+                              color: unlocked ? AppColors.gold : const Color(0xFF7D8796),
                             ),
                           ),
                         ],
@@ -631,7 +631,7 @@ class _DailyScreenState extends State<DailyScreen> {
                       Text(
                         meta.title,
                         style: TextStyle(
-                          fontSize: 13.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: unlocked ? AppColors.ink : AppColors.mute,
                         ),
@@ -667,7 +667,7 @@ class _DailyScreenState extends State<DailyScreen> {
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 color: AppColors.panel,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.line),
               ),
               child: Row(
@@ -693,7 +693,7 @@ class _DailyScreenState extends State<DailyScreen> {
             if (_rightTab == 'ranking') ...[
               const Text(
                 'Ranking aberto de testes (sem conta por enquanto — futuramente vinculado ao perfil). Ordenado por Estrelas → Marechal → Menos rodadas → Baixas.',
-                style: TextStyle(fontSize: 11.5, height: 1.35, color: AppColors.mute),
+                style: TextStyle(fontSize: 11, height: 1.35, color: AppColors.mute),
               ),
               const SizedBox(height: 10),
               rankingList(entries),
@@ -761,7 +761,7 @@ class _DailyTab extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppColors.panel2 : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          border: active ? Border.all(color: const Color(0xFF6B5734)) : null,
+          border: active ? Border.all(color: const Color(0xFF7D8796)) : null,
         ),
         alignment: Alignment.center,
         child: Text(

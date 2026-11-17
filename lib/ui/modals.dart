@@ -67,8 +67,8 @@ void showObjectiveModal(BuildContext context, AppController ctrl) {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.obsidian,
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: const Color(0xFF7D663D)),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFF9AA4B2)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -81,7 +81,7 @@ void showObjectiveModal(BuildContext context, AppController ctrl) {
                     child: Text(
                       '${meP['name'] ?? ''}',
                       style: const TextStyle(
-                        fontSize: 14.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
@@ -97,7 +97,7 @@ void showObjectiveModal(BuildContext context, AppController ctrl) {
                     child: const Text(
                       'SIGILOSO',
                       style: TextStyle(
-                        fontSize: 9.5,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.0,
                         color: AppColors.gold,
@@ -111,7 +111,7 @@ void showObjectiveModal(BuildContext context, AppController ctrl) {
               const SizedBox(height: 10),
               Text(
                 text,
-                style: const TextStyle(fontSize: 15.5, height: 1.42, color: AppColors.ink),
+                style: const TextStyle(fontSize: 15, height: 1.42, color: AppColors.ink),
               ),
             ],
           ),
@@ -125,7 +125,7 @@ void showObjectiveModal(BuildContext context, AppController ctrl) {
           children: [
             const Text(
               'Mantenha em segredo dos adversários.',
-              style: TextStyle(fontSize: 12.5, color: AppColors.mute),
+              style: TextStyle(fontSize: 12, color: AppColors.mute),
             ),
             const Spacer(),
             Text(
@@ -281,17 +281,17 @@ void showCardsModal(BuildContext context, AppController ctrl) {
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFF7EEDB), Color(0xFFE3D3B3)],
+                        colors: [Color(0xFFE8ECF1), Color(0xFFE8ECF1)],
                       ),
-                      borderRadius: BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: isOn ? AppColors.gold : const Color(0xFFB39D74),
+                        color: isOn ? AppColors.gold : const Color(0xFF9AA4B2),
                         width: isOn ? 2.4 : 1.4,
                       ),
                       boxShadow: isOn
                           ? const [
                               BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 8)),
-                              BoxShadow(color: Color(0x66D9B25F), spreadRadius: 2),
+                              BoxShadow(color: Color(0x66F2EEE6), spreadRadius: 2),
                             ]
                           : const [
                               BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2)),
@@ -332,10 +332,10 @@ void showCardsModal(BuildContext context, AppController ctrl) {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 11.5,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   height: 1.18,
-                                  color: Color(0xFF1C1408),
+                                  color: Color(0xFF12171E),
                                 ),
                               ),
                             ],
@@ -351,17 +351,17 @@ void showCardsModal(BuildContext context, AppController ctrl) {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.obsidian,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: ok
-                      ? const Color(0xFF7D663D)
+                      ? const Color(0xFF9AA4B2)
                       : (threePicked && !validSet ? AppColors.bad.withValues(alpha: 0.6) : AppColors.line),
                 ),
               ),
               child: Text(
                 statusMsg,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: statusColor),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusColor),
               ),
             ),
             const SizedBox(height: 12),
@@ -403,13 +403,13 @@ class _CardSymbolPainter extends CustomPainter {
     canvas.save();
     canvas.scale(s, s);
     final p = Paint()
-      ..color = const Color(0xFF2A1F0E)
+      ..color = const Color(0xFF262E39)
       ..style = PaintingStyle.fill;
     if (symbol == 0) {
       canvas.drawCircle(const Offset(12, 12), 9.5, p);
     } else if (symbol == 1) {
       canvas.drawRRect(
-        RRect.fromRectAndRadius(const Rect.fromLTWH(3.5, 3.5, 17, 17), const Radius.circular(1.5)),
+        RRect.fromRectAndRadius(const Rect.fromLTWH(3.5, 3.5, 17, 17), const Radius.circular(2)),
         p,
       );
     } else if (symbol == 2) {
@@ -484,9 +484,9 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.obsidian,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: v['event'] != null ? const Color(0xFF7D663D) : AppColors.line,
+                color: v['event'] != null ? const Color(0xFF9AA4B2) : AppColors.line,
               ),
             ),
             child: Column(
@@ -508,12 +508,12 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                 else
                   const Text(
                     'Rodada calma: nenhum evento em vigor.',
-                    style: TextStyle(fontSize: 13.5, color: AppColors.mute),
+                    style: TextStyle(fontSize: 13, color: AppColors.mute),
                   ),
                 const SizedBox(height: 8),
                 const Text(
                   'Os eventos surgem a partir da 2ª rodada, valem para todos por uma rodada e são seguidos de ao menos uma rodada calma:',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.mute),
+                  style: TextStyle(fontSize: 12, color: AppColors.mute),
                 ),
                 const SizedBox(height: 6),
                 for (final x in ctrl.engine.constants.events)
@@ -536,7 +536,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.obsidian,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: AppColors.line),
             ),
             child: Column(
@@ -545,12 +545,12 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                 if (pacts.isEmpty)
                   const Text(
                     'Nenhum pacto em vigor.',
-                    style: TextStyle(fontSize: 13.5, color: AppColors.mute),
+                    style: TextStyle(fontSize: 13, color: AppColors.mute),
                   )
                 else
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(fontSize: 13.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 13, color: AppColors.mute),
                       children: [
                         for (var i = 0; i < pacts.length; i++) ...[
                           if (i > 0) const TextSpan(text: '; '),
@@ -567,7 +567,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                   const SizedBox(height: 6),
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(fontSize: 13.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 13, color: AppColors.mute),
                       children: [
                         playerTag((offer['from'] as num).toInt()),
                         const TextSpan(text: ' propôs um pacto a '),
@@ -608,7 +608,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.obsidian,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: v['fog'] != null ? AppColors.rad.withValues(alpha: 0.55) : AppColors.line,
               ),
@@ -619,7 +619,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                 if (v['fog'] != null) ...[
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(fontSize: 14.5, color: AppColors.ink),
+                      style: const TextStyle(fontSize: 15, color: AppColors.ink),
                       children: [
                         TextSpan(
                           text: 'Névoa sobre ${ctrl.mapData.territories[(v['fog']['t'] as num).toInt()].name}',
@@ -635,7 +635,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                 ],
                 Text.rich(
                   TextSpan(
-                    style: const TextStyle(fontSize: 13.5, color: AppColors.mute),
+                    style: const TextStyle(fontSize: 13, color: AppColors.mute),
                     children: [
                       TextSpan(
                         text: opts['hq'] == true
@@ -665,11 +665,11 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: 3),
-                    child: Text('• $b', style: const TextStyle(fontSize: 12.5, color: AppColors.mute)),
+                    child: Text('• $b', style: const TextStyle(fontSize: 12, color: AppColors.mute)),
                   ),
                 if (myTurn && ev.nukeBlock.isNotEmpty && v['step'] == 'reinforce') ...[
                   const SizedBox(height: 6),
-                  Text(ev.nukeBlock, style: const TextStyle(fontSize: 12.5, color: AppColors.bad)),
+                  Text(ev.nukeBlock, style: const TextStyle(fontSize: 12, color: AppColors.bad)),
                 ],
               ],
             ),
@@ -683,7 +683,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.obsidian,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: AppColors.line),
             ),
             child: Column(
@@ -697,7 +697,7 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: 3),
-                    child: Text('• $b', style: const TextStyle(fontSize: 12.5, color: AppColors.mute)),
+                    child: Text('• $b', style: const TextStyle(fontSize: 12, color: AppColors.mute)),
                   ),
               ],
             ),
@@ -752,7 +752,7 @@ class _PactPairWidget extends StatelessWidget {
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
             ),
             Text(
               '$terrs terr. · ${_handLabel(v, p)}',
@@ -781,9 +781,9 @@ class _PactPairWidget extends StatelessWidget {
                 Text(
                   note!,
                   style: const TextStyle(
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFFFFE2A3),
+                    color: Color(0xFFF2EEE6),
                   ),
                 ),
               ],
@@ -932,9 +932,9 @@ void showPactsModal(BuildContext context, AppController ctrl) {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.obsidian,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(
-          color: highlight ? const Color(0xFF7D663D) : AppColors.line,
+          color: highlight ? const Color(0xFF9AA4B2) : AppColors.line,
         ),
       ),
       child: child,
@@ -1106,7 +1106,7 @@ void showPactsModal(BuildContext context, AppController ctrl) {
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
                                 color: AppColors.obsidian,
-                                borderRadius: BorderRadius.circular(5),
+                                borderRadius: BorderRadius.circular(4),
                                 border: Border.all(color: AppColors.line),
                               ),
                               child: Row(
@@ -1120,7 +1120,7 @@ void showPactsModal(BuildContext context, AppController ctrl) {
                                         Text(
                                           '${p['name'] ?? ''}',
                                           style: const TextStyle(
-                                            fontSize: 14,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w700,
                                             color: AppColors.ink,
                                           ),
@@ -1314,7 +1314,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                       clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         color: AppColors.obsidian,
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: isNow ? col.withValues(alpha: 0.7) : AppColors.line,
                         ),
@@ -1435,7 +1435,7 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppColors.obsidian,
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: AppColors.line),
                 ),
                 child: SingleChildScrollView(
@@ -1461,8 +1461,8 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.obsidian,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: const Color(0xFF7D663D)),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF9AA4B2)),
                 ),
                 child: Row(
                   children: [
@@ -1472,8 +1472,8 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                       child: SelectableText(
                         'Sala por código: #${ctrl.relayCode}',
                         style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12.5,
+                          fontFamily: AppText.cond, fontFeatures: AppText.tabular,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: AppColors.ink,
                         ),
@@ -1509,8 +1509,8 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.obsidian,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: const Color(0xFF7D663D)),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF9AA4B2)),
                 ),
                 child: Row(
                   children: [
@@ -1520,8 +1520,8 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                       child: SelectableText(
                         'Host LAN: ${ctrl.lanHostAddr}',
                         style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12.5,
+                          fontFamily: AppText.cond, fontFeatures: AppText.tabular,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: AppColors.ink,
                         ),
@@ -1647,7 +1647,7 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
       title: watching ? 'Parar de assistir?' : 'Sair da partida?',
       onClose: () => Navigator.pop(ctx),
       children: [
-        Text(desc, style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.mute)),
+        Text(desc, style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute)),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -1688,7 +1688,7 @@ void showRulesModal(BuildContext context, AppController ctrl) {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.obsidian,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AppColors.line),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
@@ -1710,7 +1710,7 @@ void showRulesModal(BuildContext context, AppController ctrl) {
               Text(
                 '$numStr. $title',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink),
               ),
             ],
           ),
@@ -1728,13 +1728,13 @@ void showRulesModal(BuildContext context, AppController ctrl) {
               decoration: BoxDecoration(
                 color: AppColors.panel2,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF455B7A)),
+                border: Border.all(color: const Color(0xFF7D8796)),
               ),
               child: Text(
                 keys,
                 style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11.5,
+                  fontFamily: AppText.cond, fontFeatures: AppText.tabular,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: AppColors.gold,
                 ),
@@ -1911,7 +1911,7 @@ void showRulesModal(BuildContext context, AppController ctrl) {
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 color: AppColors.obsidian,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.line),
               ),
               child: Wrap(
@@ -1927,7 +1927,7 @@ void showRulesModal(BuildContext context, AppController ctrl) {
                         decoration: BoxDecoration(
                           color: tab == i ? AppColors.panel2 : Colors.transparent,
                           borderRadius: BorderRadius.circular(4),
-                          border: tab == i ? Border.all(color: const Color(0xFF7D663D)) : null,
+                          border: tab == i ? Border.all(color: const Color(0xFF9AA4B2)) : null,
                         ),
                         child: Text(
                           tabs[i],
@@ -1972,7 +1972,7 @@ class _RuleBullet extends StatelessWidget {
       padding: const EdgeInsets.only(left: 6, bottom: 6),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 14, color: AppColors.ink, height: 1.4),
+          style: const TextStyle(fontSize: 13, color: AppColors.ink, height: 1.4),
           children: [
             const TextSpan(text: '• '),
             TextSpan(text: '$title: ', style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -2000,7 +2000,7 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
       children: [
         const Text(
           'Compartilhe o link ou o QR abaixo. Quem abrir entra direto nesta sala; também dá para digitar o código em Salas Online.',
-          style: TextStyle(fontSize: 13.5, height: 1.4, color: AppColors.mute),
+          style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
         ),
         const SizedBox(height: 12),
         Center(
@@ -2008,7 +2008,7 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: AppColors.brass),
             ),
             child: Builder(
@@ -2130,16 +2130,16 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
                 child: Center(child: CircularProgressIndicator(color: AppColors.gold)),
               )
             else if (err != null)
-              Text(err!, style: const TextStyle(fontSize: 14, color: AppColors.bad))
+              Text(err!, style: const TextStyle(fontSize: 13, color: AppColors.bad))
             else ...[
               Text(
                 '1. O convidado abre o jogo, toca em “${ctrl.view != null ? 'Reconectar à partida' : 'Conectar por QR Code'}” e lê este QR.',
-                style: const TextStyle(fontSize: 13.5, color: AppColors.ink),
+                style: const TextStyle(fontSize: 13, color: AppColors.ink),
               ),
               const SizedBox(height: 4),
               const Text(
                 '2. O aparelho dele mostra um QR de resposta: aponte a câmera deste aparelho para ele ou cole o código abaixo.',
-                style: TextStyle(fontSize: 13.5, color: AppColors.ink),
+                style: TextStyle(fontSize: 13, color: AppColors.ink),
               ),
               const SizedBox(height: 10),
               Center(
@@ -2147,7 +2147,7 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppColors.brass),
                   ),
                   child: Builder(
@@ -2166,7 +2166,7 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
               if (QrScannerView.supported) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                   child: Builder(
                     builder: (sCtx) {
                       final l = EstLayout.of(sCtx);
@@ -2207,7 +2207,7 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
               TextField(
                 controller: ansCtrl,
                 maxLines: 2,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                style: const TextStyle(fontFamily: AppText.cond, fontFeatures: AppText.tabular, fontSize: 12),
               ),
               const SizedBox(height: 8),
               Row(
@@ -2309,7 +2309,7 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
             if (result != null) ...[
               const Text(
                 'No aparelho dele, aponte para este QR. A conexão abre sozinha em seguida.',
-                style: TextStyle(fontSize: 13.5, color: AppColors.mute),
+                style: TextStyle(fontSize: 13, color: AppColors.mute),
               ),
               const SizedBox(height: 12),
               Center(
@@ -2317,7 +2317,7 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppColors.brass),
                   ),
                   child: Builder(
@@ -2374,7 +2374,7 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
               if (QrScannerView.supported && initialOffer == null) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                   child: Builder(
                     builder: (sCtx) {
                       final l = EstLayout.of(sCtx);
@@ -2398,7 +2398,7 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
               TextField(
                 controller: offerCtrl,
                 maxLines: 2,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                style: const TextStyle(fontFamily: AppText.cond, fontFeatures: AppText.tabular, fontSize: 12),
               ),
               const SizedBox(height: 10),
               Row(
@@ -2455,10 +2455,10 @@ void showLanJoinModal(BuildContext context, AppController ctrl) {
       children: [
         const Text(
           'Conecte diretamente ao IP exibido na tela do anfitrião (mesmo Wi-Fi ou cabo, sem QR Code e sem servidor externo).',
-          style: TextStyle(fontSize: 13.5, height: 1.4, color: AppColors.mute),
+          style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
         ),
         const SizedBox(height: 12),
-        const Text('Seu nome', style: TextStyle(fontSize: 12.5, color: AppColors.mute)),
+        const Text('Seu nome', style: TextStyle(fontSize: 12, color: AppColors.mute)),
         const SizedBox(height: 5),
         EstTextField(
           controller: nameCtrl,
@@ -2466,17 +2466,17 @@ void showLanJoinModal(BuildContext context, AppController ctrl) {
           hintText: 'Seu apelido',
         ),
         const SizedBox(height: 10),
-        const Text('Endereço do anfitrião (IP ou IP:Porta)', style: TextStyle(fontSize: 12.5, color: AppColors.mute)),
+        const Text('Endereço do anfitrião (IP ou IP:Porta)', style: TextStyle(fontSize: 12, color: AppColors.mute)),
         const SizedBox(height: 5),
         EstTextField(
           controller: addrCtrl,
           autofocus: true,
           hintText: 'Ex.: 192.168.1.15 ou 192.168.1.15:7788',
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+          style: const TextStyle(fontFamily: AppText.cond, fontFeatures: AppText.tabular, fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
           onSubmitted: (_) => connect(ctx),
         ),
         const SizedBox(height: 10),
-        const Text('Senha da sala (se houver)', style: TextStyle(fontSize: 12.5, color: AppColors.mute)),
+        const Text('Senha da sala (se houver)', style: TextStyle(fontSize: 12, color: AppColors.mute)),
         const SizedBox(height: 5),
         EstTextField(
           controller: passCtrl,

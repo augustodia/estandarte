@@ -239,8 +239,8 @@ class _GameScreenState extends State<GameScreen> {
                       padding: const EdgeInsets.only(left: 8, right: 11),
                       decoration: BoxDecoration(
                         color: AppColors.obsidian.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(color: const Color(0xFF7D663D)),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF9AA4B2)),
                         boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 12)],
                       ),
                       child: Row(
@@ -422,7 +422,7 @@ class _GameScreenState extends State<GameScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                         decoration: BoxDecoration(
                           color: AppColors.obsidian.withValues(alpha: 0.95),
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: AppColors.brass),
                           boxShadow: const [
                             BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
@@ -542,27 +542,27 @@ class _HudPanel extends StatelessWidget {
         message: tooltip,
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             child: Ink(
               height: layout.wide ? 50 : (layout.land ? 36 : 38),
               padding: EdgeInsets.symmetric(horizontal: layout.wide ? 6 : (layout.land ? 6 : 8)),
               decoration: BoxDecoration(
                 gradient: callPulse
                     ? const LinearGradient(
-                        colors: [Color(0xFF3E3012), Color(0xFF231A09)],
+                        colors: [Color(0xFF3A4452), Color(0xFF1A2029)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       )
                     : const LinearGradient(
-                        colors: [Color(0xFF1A283E), Color(0xFF101928)],
+                        colors: [Color(0xFF262E39), Color(0xFF1A2029)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: callPulse ? AppColors.gold : const Color(0xFF2D405C)),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: callPulse ? AppColors.gold : const Color(0xFF3A4452)),
                 boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 4, offset: Offset(0, 2))],
               ),
               child: layout.wide
@@ -642,7 +642,7 @@ class _HudPanel extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         decoration: const BoxDecoration(
           gradient: AppColors.wideHudGradient,
-          border: Border(bottom: BorderSide(color: Color(0x332D4A72))),
+          border: Border(bottom: BorderSide(color: Color(0x337D8796))),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -696,22 +696,22 @@ class _HudPanel extends StatelessWidget {
                     child: Container(
                       height: 50,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF102037),
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(color: const Color(0xFF2D4B73)),
+                        color: const Color(0xFF1A2029),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF7D8796)),
                       ),
                       alignment: Alignment.center,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.visibility_outlined, size: 15, color: Color(0xFFA9CDFB)),
+                          Icon(Icons.visibility_outlined, size: 15, color: Color(0xFFE8ECF1)),
                           SizedBox(width: 6),
                           Text(
                             'Assistindo',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFFA9CDFB),
+                              color: Color(0xFFE8ECF1),
                             ),
                           ),
                         ],
@@ -752,7 +752,7 @@ class _HudPanel extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: layout.land ? null : AppColors.hudGradient,
         border: layout.land
-            ? const Border(right: BorderSide(color: Color(0xFF2D4A72)))
+            ? const Border(right: BorderSide(color: Color(0xFF7D8796)))
             : const Border(bottom: BorderSide(color: AppColors.line)),
       ),
       child: Row(
@@ -820,19 +820,19 @@ class _HudPanel extends StatelessWidget {
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF102037),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: const Color(0xFF2D4B73)),
+                color: const Color(0xFF1A2029),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFF7D8796)),
               ),
               alignment: Alignment.center,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Icon(Icons.visibility_outlined, size: 14, color: Color(0xFFA9CDFB)),
+                  Icon(Icons.visibility_outlined, size: 14, color: Color(0xFFE8ECF1)),
                   SizedBox(width: 5),
                   Text(
                     'Assistindo',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFA9CDFB)),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE8ECF1)),
                   ),
                 ],
               ),
@@ -890,7 +890,7 @@ class _SidePanel extends StatelessWidget {
                 ? Text(
                     right.toUpperCase(),
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
                       color: AppColors.mute,
@@ -949,16 +949,16 @@ class _SidePanel extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 5),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: isNow ? null : const Color(0x88070E18),
+            color: isNow ? null : const Color(0x880B0F14),
             gradient: isNow
                 ? LinearGradient(
                     colors: [
-                      Color.lerp(const Color(0xFF0A121E), col, 0.22)!,
-                      const Color(0xD80A121E),
+                      Color.lerp(const Color(0xFF0B0F14), col, 0.22)!,
+                      const Color(0xD80B0F14),
                     ],
                   )
                 : null,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isWon
                   ? AppColors.gold
@@ -1003,7 +1003,7 @@ class _SidePanel extends StatelessWidget {
                                   '${p['name'] ?? ''}',
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     decoration: dead ? TextDecoration.lineThrough : null,
                                     color: AppColors.ink,
@@ -1015,14 +1015,14 @@ class _SidePanel extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: const Color(0x28E6B652),
-                                    borderRadius: BorderRadius.circular(3),
+                                    color: const Color(0x28F2EEE6),
+                                    borderRadius: BorderRadius.circular(2),
                                     border: Border.all(color: AppColors.brassDim),
                                   ),
                                   child: const Text(
                                     'VOCÊ',
                                     style: TextStyle(
-                                      fontSize: 9,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.6,
                                       color: AppColors.gold,
@@ -1034,7 +1034,7 @@ class _SidePanel extends StatelessWidget {
                           ),
                           Text.rich(
                             TextSpan(
-                              style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                              style: const TextStyle(fontSize: 11, color: AppColors.mute),
                               children: [
                                 TextSpan(text: tags),
                                 if (off)
@@ -1076,7 +1076,7 @@ class _SidePanel extends StatelessWidget {
                         '${(100 * owned / totalTerr).round()}%',
                         textAlign: TextAlign.right,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -1110,7 +1110,7 @@ class _SidePanel extends StatelessWidget {
                   ? BoxDecoration(
                       color: AppColors.obsidian.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF2E3D52)),
+                      border: Border.all(color: const Color(0xFF3A4452)),
                     )
                   : null,
               child: Row(
@@ -1129,7 +1129,7 @@ class _SidePanel extends StatelessWidget {
                     child: Text(
                       '${log[k]}',
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         height: 1.38,
                         fontWeight: k == 0 ? FontWeight.w600 : FontWeight.w400,
                         color: k == 0 ? AppColors.ink : AppColors.mute,
@@ -1171,7 +1171,7 @@ class _SidePanel extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: AppColors.wideHudGradient,
-        border: Border(top: BorderSide(color: Color(0xFF2D4A72))),
+        border: Border(top: BorderSide(color: Color(0xFF7D8796))),
       ),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Row(
@@ -1298,14 +1298,14 @@ class _TurnRingButton extends StatelessWidget {
                               fontSize: size >= 80 ? 19 : 16,
                               fontWeight: FontWeight.w700,
                               height: 1.0,
-                              color: low ? const Color(0xFFFF8A7A) : AppColors.ink,
+                              color: low ? const Color(0xFFFF6B5E) : AppColors.ink,
                             ),
                           ),
                           if (subText.isNotEmpty)
                             Text(
                               subText,
                               style: const TextStyle(
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 height: 1.1,
                                 color: AppColors.mute,
@@ -1346,7 +1346,7 @@ class _TurnRingPainter extends CustomPainter {
     canvas.scale(s, s);
 
     // Disc
-    canvas.drawCircle(Offset.zero, 50, Paint()..color = const Color(0xE60A1422));
+    canvas.drawCircle(Offset.zero, 50, Paint()..color = const Color(0xE612171E));
 
     // Outer clock track (r=45, width=4)
     canvas.drawCircle(
@@ -1495,9 +1495,9 @@ class _DiceTray extends StatelessWidget {
               lost > 0 ? '−$lost' : '✓',
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: lost > 0 ? const Color(0xFFFF8A7A) : const Color(0xFF8DFFB0),
+                color: lost > 0 ? const Color(0xFFFF6B5E) : const Color(0xFFE8ECF1),
               ),
             ),
           ),
@@ -1509,7 +1509,7 @@ class _DiceTray extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         gradient: AppColors.glassGradient,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.glassBorder),
         boxShadow: AppColors.edgeShadows,
       ),
@@ -1564,7 +1564,7 @@ class _FlashOverlay extends StatelessWidget {
                   banner.title,
                   textAlign: TextAlign.center,
                   style: isMini
-                      ? TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: banner.color)
+                      ? TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: banner.color)
                       : AppText.serif(size: 24, color: banner.color, letterSpacing: 0.03),
                 ),
                 if (banner.sub.isNotEmpty) ...[
@@ -1701,7 +1701,7 @@ class _PhaseTrack extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.1,
               color: col,
@@ -1725,7 +1725,7 @@ class _PhaseTrack extends StatelessWidget {
               applyHeightToLastDescent: false,
             ),
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.0,
               height: 1.15,
@@ -1778,7 +1778,7 @@ class _PhaseTrack extends StatelessWidget {
                         Text(
                           stages[i].$2.toUpperCase(),
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                             letterSpacing: 0.8,
                             color: active ? AppColors.ink : AppColors.mute.withValues(alpha: 0.55),
@@ -2294,14 +2294,14 @@ class _BottomActionBar extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const EstIcon(EstIconKind.pact, size: 16, color: Color(0xFFFFE2A3)),
+              const EstIcon(EstIconKind.pact, size: 16, color: Color(0xFFF2EEE6)),
               const SizedBox(width: 6),
               Text(
                 busy ? 'Pacto ativo' : 'Propor pacto',
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFFFFE2A3),
+                  color: Color(0xFFF2EEE6),
                 ),
               ),
             ],
@@ -2376,7 +2376,7 @@ class _BottomActionBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.obsidian.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: curCol.withValues(alpha: 0.55)),
             boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 6))],
           ),
@@ -2422,7 +2422,7 @@ class _BottomActionBar extends StatelessWidget {
             ],
             Text.rich(
               TextSpan(
-                style: const TextStyle(fontSize: 13.5, height: 1.3, color: AppColors.ink),
+                style: const TextStyle(fontSize: 13, height: 1.3, color: AppColors.ink),
                 children: msgSpans,
               ),
               textAlign: TextAlign.center,
@@ -2630,9 +2630,9 @@ class _StepperWidget extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF141F31), Color(0xFF0A111D)],
+          colors: [Color(0xFF1A2029), Color(0xFF0B0F14)],
         ),
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.line),
         boxShadow: const [BoxShadow(color: Color(0x77000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
@@ -2662,7 +2662,7 @@ class _StepperWidget extends StatelessWidget {
                     applyHeightToLastDescent: false,
                   ),
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                     height: 1.05,
                     color: AppColors.ink,
@@ -2677,7 +2677,7 @@ class _StepperWidget extends StatelessWidget {
                       applyHeightToLastDescent: false,
                     ),
                     style: const TextStyle(
-                      fontSize: 9,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                       height: 1.1,
                       color: AppColors.mute,
@@ -2715,7 +2715,7 @@ class _SheetBackdrop extends StatelessWidget {
     return GestureDetector(
       onTap: onTapOutside,
       child: Container(
-        color: const Color(0xCC02060C),
+        color: const Color(0xCC0B0F14),
         alignment: centered ? Alignment.center : Alignment.bottomCenter,
         padding: centered
             ? EdgeInsets.symmetric(horizontal: compactLand ? 16 : 20, vertical: compactLand ? 10 : 20)
@@ -2759,7 +2759,7 @@ class _PassDeviceOverlay extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Passe o aparelho', style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC))),
+          Text('Passe o aparelho', style: AppText.serif(size: 21, color: const Color(0xFFE8ECF1))),
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
@@ -2817,7 +2817,7 @@ class _ConfirmNukeOverlay extends StatelessWidget {
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
-              style: const TextStyle(fontSize: 16, color: AppColors.ink),
+              style: const TextStyle(fontSize: 15, color: AppColors.ink),
               children: [
                 const TextSpan(text: 'Alvo: '),
                 TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -2848,7 +2848,7 @@ class _ConfirmNukeOverlay extends StatelessWidget {
           ])
             Padding(
               padding: const EdgeInsets.only(left: 8, bottom: 3),
-              child: Text('• $b', style: const TextStyle(fontSize: 13.5, color: AppColors.ink)),
+              child: Text('• $b', style: const TextStyle(fontSize: 13, color: AppColors.ink)),
             ),
           const SizedBox(height: 14),
           Row(
@@ -2888,14 +2888,14 @@ class _ConfirmEndOverlay extends StatelessWidget {
         children: [
           Text(
             atk ? 'Encerrar os ataques?' : 'Encerrar o turno?',
-            style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
+            style: AppText.serif(size: 21, color: const Color(0xFFE8ECF1)),
           ),
           const SizedBox(height: 8),
           Text(
             atk
                 ? 'Você passa para o remanejamento e não ataca mais neste turno.'
                 : 'A vez passa para o próximo jogador.',
-            style: const TextStyle(fontSize: 14, color: AppColors.mute),
+            style: const TextStyle(fontSize: 13, color: AppColors.mute),
           ),
           const SizedBox(height: 14),
           Row(
@@ -3008,7 +3008,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
       });
 
     return Container(
-      color: const Color(0xEE050A13),
+      color: const Color(0xEE0B0F14),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -3054,7 +3054,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                     Text(
                       mine ? 'Você venceu!' : 'Vitória de',
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         letterSpacing: 2.0,
                         color: AppColors.mute,
                       ),
@@ -3080,7 +3080,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                       Text(
                         objTxt,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14, height: 1.35, color: AppColors.ink),
+                        style: const TextStyle(fontSize: 13, height: 1.35, color: AppColors.ink),
                       ),
                     ],
                     const SizedBox(height: 14),
@@ -3097,7 +3097,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                             decoration: BoxDecoration(
                               color: isFirst ? wCol.withValues(alpha: 0.16) : AppColors.obsidian.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(5),
+                              borderRadius: BorderRadius.circular(4),
                               border: Border.all(
                                 color: isFirst ? wCol.withValues(alpha: 0.6) : AppColors.line,
                               ),
@@ -3111,7 +3111,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                                     '${p['name'] ?? ''}',
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
                                       color: isFirst ? AppColors.ink : AppColors.mute,
                                     ),
@@ -3120,7 +3120,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                                 Text(
                                   p['alive'] == true ? '${owned(i)} territórios' : 'eliminado',
                                   style: TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: isFirst ? FontWeight.w700 : FontWeight.w400,
                                     color: isFirst ? AppColors.ink : AppColors.mute,
                                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -3225,7 +3225,7 @@ class _TutorialCoachBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
               decoration: const BoxDecoration(
-                color: Color(0x88060A12),
+                color: Color(0x880B0F14),
                 border: Border(bottom: BorderSide(color: AppColors.line)),
               ),
               child: Row(
@@ -3235,7 +3235,7 @@ class _TutorialCoachBanner extends StatelessWidget {
                   Text(
                     'PASSO ${guide.step}/${guide.total}',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
                       color: AppColors.gold,
@@ -3253,7 +3253,7 @@ class _TutorialCoachBanner extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
@@ -3283,9 +3283,9 @@ class _TutorialCoachBanner extends StatelessWidget {
               child: Text(
                 guide.body,
                 style: const TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 12,
                   height: 1.38,
-                  color: Color(0xFFD9E1ED),
+                  color: Color(0xFFE8ECF1),
                 ),
               ),
             ),
@@ -3329,7 +3329,7 @@ class _ChallengeHudBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 6, 10, 6),
               decoration: const BoxDecoration(
-                color: Color(0x88060A12),
+                color: Color(0x880B0F14),
                 border: Border(bottom: BorderSide(color: AppColors.line)),
               ),
               child: Row(
@@ -3343,7 +3343,7 @@ class _ChallengeHudBanner extends StatelessWidget {
                   Text(
                     spec.isHistorical ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
                       color: AppColors.gold,
@@ -3355,15 +3355,15 @@ class _ChallengeHudBanner extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
                         color: AppColors.bad.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: BorderRadius.circular(2),
                         border: Border.all(color: AppColors.bad.withValues(alpha: 0.6)),
                       ),
                       child: const Text(
                         'MARECHAL',
                         style: TextStyle(
-                          fontSize: 8.5,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFFFFB2A8),
+                          color: Color(0xFFE8ECF1),
                         ),
                       ),
                     ),
@@ -3406,9 +3406,9 @@ class _ChallengeHudBanner extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFFD9E1ED),
+                        color: Color(0xFFE8ECF1),
                       ),
                     ),
                   ),
@@ -3434,7 +3434,7 @@ class _MiniStarChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final col = ok ? AppColors.gold : const Color(0xFF6B778D);
+    final col = ok ? AppColors.gold : const Color(0xFF7D8796);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
@@ -3445,7 +3445,7 @@ class _MiniStarChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: FontWeight.w700,
           color: col,
           decoration: ok ? null : TextDecoration.lineThrough,
@@ -3474,7 +3474,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
     final st = ctrl.challengeStatus;
 
     return Container(
-      color: const Color(0xEE050A13),
+      color: const Color(0xEE0B0F14),
       child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -3527,7 +3527,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                   Text(
                     ctrl.challengeEndReason,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13.5, color: Color(0xFFFFB2A8)),
+                    style: const TextStyle(fontSize: 13, color: Color(0xFFE8ECF1)),
                   ),
                 if (won && rank != null && rank > 0) ...[
                   const SizedBox(height: 8),
@@ -3535,7 +3535,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                       color: AppColors.gold.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppColors.brass),
                     ),
                     child: Text(
@@ -3553,7 +3553,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
                     color: AppColors.obsidian,
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppColors.line),
                   ),
                   child: Column(
@@ -3563,7 +3563,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                         'Rodada $round · Baixas: ${ctrl.challengeArmiesLost} · Ordens do Quartel: ${ctrl.challengeOrdersUsed}',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.ink,
                         ),
@@ -3677,10 +3677,10 @@ class _MapLensBar extends StatelessWidget {
 
     return Material(
       color: AppColors.obsidian.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(5),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AppColors.line),
           boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 3))],
         ),

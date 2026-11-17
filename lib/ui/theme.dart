@@ -2,23 +2,33 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+/// Sistema "Centro de Operações": a cor fica no mapa (facções); a interface é neutra.
+/// Regra: um único botão claro (ação) por tela; o metal só aparece nas medalhas.
 abstract final class AppColors {
-  static const sea = Color(0xFF0F1C2E);
-  static const obsidian = Color(0xFF060A12);
-  static const deep = Color(0xFF09101B);
-  static const panel = Color(0xFF101928);
-  static const panel2 = Color(0xFF172438);
-  static const line = Color(0xFF26364D);
-  static const glassBorder = Color(0xFF344966);
-  static const ink = Color(0xFFEFE4CE);
-  static const mute = Color(0xFF8FA1B9);
-  static const gold = Color(0xFFD9B25F);
-  static const brass = Color(0xFFB38B45);
-  static const brassDim = Color(0x4CB38B45);
-  static const bad = Color(0xFFD65E52);
-  static const rad = Color(0xFF7DFF4A);
+  // chão e superfícies
+  static const sea = Color(0xFF0A0E13); // mar do mapa
+  static const obsidian = Color(0xFF0B0F14); // fundo da tela
+  static const deep = Color(0xFF0B0F14);
+  static const panel = Color(0xFF12171E); // painéis
+  static const panel2 = Color(0xFF1A2029); // item ativo, hover
+  static const line = Color(0xFF262E39); // divisórias e contorno de painel
+  static const glassBorder = Color(0xFF3A4452); // contorno de botão secundário
+  // texto
+  static const ink = Color(0xFFE8ECF1);
+  static const mute = Color(0xFF9AA4B2);
+  static const faint = Color(0xFF7D8796); // rótulos terciários (4,6:1 sobre o painel)
+  // papéis com cor
+  static const action = Color(0xFFF2EEE6); // o botão da próxima jogada
+  static const onAction = Color(0xFF0B0F14);
+  static const medal = Color(0xFFC9A45C); // só medalhas/Quartel
+  static const bad = Color(0xFFFF6B5E);
+  static const rad = Color(0xFFC8FF3E); // só ogiva
+  static const onRad = Color(0xFF11140A);
 
-  // Backwards-compatible aliases if referenced in tests/widgets
+  // nomes antigos, apontando para os papéis novos (as telas ainda os usam)
+  static const gold = action;
+  static const brass = mute;
+  static const brassDim = Color(0x4C9AA4B2);
   static const bg = deep;
   static const surface = panel;
   static const border = line;
@@ -26,27 +36,118 @@ abstract final class AppColors {
   static const muted = mute;
   static const danger = bad;
 
-  static const glassGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xF7142033), Color(0xF70B121F)],
-  );
+  // sem degradê: os "gradientes" antigos agora são chapados
+  static const glassGradient = LinearGradient(colors: [panel, panel]);
+  static const hudGradient = LinearGradient(colors: [deep, deep]);
+  static const wideHudGradient = LinearGradient(colors: [deep, deep]);
 
-  static const hudGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF131F32), Color(0xFF0A111D)],
-  );
-
-  static const wideHudGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF101B2C), Color(0xFF080E18)],
-  );
-
+  /// A única sombra do sistema: o que flutua sobre o mapa.
   static const List<BoxShadow> edgeShadows = [
-    BoxShadow(color: Color(0xB8000000), blurRadius: 24, offset: Offset(0, 8)),
+    BoxShadow(color: Color(0x73000000), blurRadius: 24, offset: Offset(0, 8)),
   ];
+}
+
+/// Paleta das facções, na ordem do motor (Vermelho, Azul, Verde, Amarelo, Roxo, Cinza).
+/// Cada facção tem uma insígnia além da cor: leitura para daltônicos e com o mapa afastado.
+enum FactionShape { triangle, circle, square, diamond, hexagon, cross }
+
+abstract final class Factions {
+  static const hex = ['#E0483E', '#3D7FE3', '#2E9E62', '#E9B530', '#8E5BD6', '#9AA6B4'];
+  static const colors = [
+    Color(0xFFE0483E),
+    Color(0xFF3D7FE3),
+    Color(0xFF2E9E62),
+    Color(0xFFE9B530),
+    Color(0xFF8E5BD6),
+    Color(0xFF9AA6B4),
+  ];
+  static const shapes = [
+    FactionShape.triangle,
+    FactionShape.circle,
+    FactionShape.square,
+    FactionShape.diamond,
+    FactionShape.hexagon,
+    FactionShape.cross,
+  ];
+
+  static FactionShape shapeOf(Color c) {
+    final i = colors.indexWhere((x) => x.toARGB32() == c.toARGB32());
+    return i < 0 ? FactionShape.circle : shapes[i];
+  }
+
+  /// Número escuro sobre as facções claras (Amarelo, Cinza).
+  static Color onColor(Color c) =>
+      c.computeLuminance() > 0.35 ? AppColors.onAction : Colors.white;
+
+  /// Contorno da insígnia de raio [r], centrada na origem.
+  static Path path(FactionShape k, double r) {
+    switch (k) {
+      case FactionShape.circle:
+        return Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: r));
+      case FactionShape.square:
+        final h = r * 0.9;
+        return Path()
+          ..addRRect(RRect.fromRectAndRadius(Rect.fromLTRB(-h, -h, h, h), Radius.circular(r * 0.12)));
+      case FactionShape.diamond:
+        final h = r * 1.22;
+        return Path()
+          ..moveTo(0, -h)
+          ..lineTo(h, 0)
+          ..lineTo(0, h)
+          ..lineTo(-h, 0)
+          ..close();
+      case FactionShape.triangle:
+        return Path()
+          ..moveTo(0, -r * 1.25)
+          ..lineTo(r * 1.2, r * 0.85)
+          ..lineTo(-r * 1.2, r * 0.85)
+          ..close();
+      case FactionShape.hexagon:
+        final p = Path();
+        for (var k = 0; k < 6; k++) {
+          final a = pi / 6 + k * pi / 3;
+          final o = Offset(cos(a), sin(a)) * (r * 1.08);
+          k == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
+        }
+        return p..close();
+      case FactionShape.cross:
+        final a = r * 1.05, b = r * 0.42;
+        return Path()
+          ..moveTo(-b, -a)
+          ..lineTo(b, -a)
+          ..lineTo(b, -b)
+          ..lineTo(a, -b)
+          ..lineTo(a, b)
+          ..lineTo(b, b)
+          ..lineTo(b, a)
+          ..lineTo(-b, a)
+          ..lineTo(-b, b)
+          ..lineTo(-a, b)
+          ..lineTo(-a, -b)
+          ..lineTo(-b, -b)
+          ..close();
+    }
+  }
+
+  /// O triângulo tem o centro visual mais baixo: o número desce um pouco.
+  static double textNudge(FactionShape k, double r) => k == FactionShape.triangle ? r * 0.2 : 0;
+}
+
+/// Espaçamento em múltiplos de 4.
+abstract final class Space {
+  static const x1 = 4.0;
+  static const x2 = 8.0;
+  static const x3 = 12.0;
+  static const x4 = 16.0;
+  static const x6 = 24.0;
+  static const x8 = 32.0;
+}
+
+/// Raios: 2 (selos, etiquetas), 4 (controles), 8 (painéis).
+abstract final class Radii {
+  static const xs = 2.0;
+  static const sm = 4.0;
+  static const md = 8.0;
 }
 
 class EstRotatedScope extends InheritedWidget {
@@ -169,19 +270,27 @@ class EstLayout {
   }
 }
 
+/// Tipografia: Barlow Condensed para comando (títulos, rótulos, números), Barlow para leitura.
+/// Escala única: 11 · 12 · 13 · 15 · 18 · 22 · 28.
 abstract final class AppText {
-  static const List<String> serifFallback = ['Georgia', 'Times New Roman', 'serif'];
+  static const cond = 'Barlow Condensed';
+  static const body = 'Barlow';
+  static const List<String> condFallback = ['Barlow', 'Arial Narrow', 'sans-serif'];
+  static const List<String> serifFallback = condFallback; // nome antigo
 
+  static const tabular = [FontFeature.tabularFigures()];
+
+  /// Títulos e nomes de lugar (substitui a antiga serifa).
   static TextStyle serif({
-    double size = 20,
+    double size = 18,
     FontWeight weight = FontWeight.w700,
     Color color = AppColors.ink,
-    double letterSpacing = 0.04,
-    double height = 1.2,
+    double letterSpacing = 0.01,
+    double height = 1.15,
   }) {
     return TextStyle(
-      fontFamily: 'Georgia',
-      fontFamilyFallback: serifFallback,
+      fontFamily: cond,
+      fontFamilyFallback: condFallback,
       fontSize: size,
       fontWeight: weight,
       color: color,
@@ -189,52 +298,100 @@ abstract final class AppText {
       height: height,
     );
   }
+
+  static TextStyle title({double size = 18, Color color = AppColors.ink}) => serif(size: size, color: color);
+
+  /// Rótulo de comando: condensada, caixa alta, espaçada.
+  static TextStyle label({
+    double size = 12,
+    Color color = AppColors.faint,
+    FontWeight weight = FontWeight.w600,
+  }) {
+    return TextStyle(
+      fontFamily: cond,
+      fontFamilyFallback: condFallback,
+      fontSize: size,
+      fontWeight: weight,
+      letterSpacing: size * 0.08,
+      height: 1.1,
+      color: color,
+    );
+  }
+
+  /// Números (exércitos, tempo, medalhas): condensada com algarismos tabulares.
+  static TextStyle number({double size = 15, Color color = AppColors.ink, FontWeight weight = FontWeight.w600}) {
+    return TextStyle(
+      fontFamily: cond,
+      fontFamilyFallback: condFallback,
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      height: 1.1,
+      fontFeatures: tabular,
+    );
+  }
 }
 
 ThemeData buildAppTheme() {
+  const fieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(Radii.sm)),
+    borderSide: BorderSide(color: AppColors.glassBorder),
+  );
   return ThemeData(
     brightness: Brightness.dark,
+    fontFamily: AppText.body,
     scaffoldBackgroundColor: AppColors.deep,
     colorScheme: const ColorScheme.dark(
-      primary: AppColors.gold,
-      secondary: AppColors.gold,
+      primary: AppColors.action,
+      secondary: AppColors.action,
       surface: AppColors.panel,
       error: AppColors.bad,
-      onPrimary: Color(0xFF1C1408),
+      onPrimary: AppColors.onAction,
       onSurface: AppColors.ink,
     ),
     textTheme: const TextTheme(
       bodyMedium: TextStyle(fontSize: 15, height: 1.4, color: AppColors.ink),
       bodySmall: TextStyle(fontSize: 13, height: 1.35, color: AppColors.mute),
     ),
+    splashFactory: NoSplash.splashFactory,
+    highlightColor: const Color(0x14FFFFFF),
+    hoverColor: const Color(0x0DFFFFFF),
     cardColor: AppColors.panel,
     dividerColor: AppColors.line,
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: const Color(0xFF0C1422),
-      hintStyle: const TextStyle(color: Color(0xFF607491)),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(5),
-        borderSide: const BorderSide(color: Color(0xFF283A56)),
+    tooltipTheme: const TooltipThemeData(
+      decoration: BoxDecoration(
+        color: AppColors.panel2,
+        borderRadius: BorderRadius.all(Radius.circular(Radii.sm)),
+        border: Border.fromBorderSide(BorderSide(color: AppColors.line)),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(5),
-        borderSide: const BorderSide(color: Color(0xFF283A56)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(5),
-        borderSide: const BorderSide(color: AppColors.brass),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      textStyle: TextStyle(fontFamily: AppText.body, fontSize: 12, color: AppColors.ink),
     ),
-    dialogTheme: DialogThemeData(
+    inputDecorationTheme: const InputDecorationTheme(
+      filled: true,
+      fillColor: AppColors.deep,
+      hintStyle: TextStyle(color: AppColors.faint),
+      border: fieldBorder,
+      enabledBorder: fieldBorder,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(Radii.sm)),
+        borderSide: BorderSide(color: AppColors.ink),
+      ),
+      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    ),
+    dialogTheme: const DialogThemeData(
       backgroundColor: AppColors.panel,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: AppColors.glassBorder),
+        borderRadius: BorderRadius.all(Radius.circular(Radii.md)),
+        side: BorderSide(color: AppColors.line),
       ),
     ),
   );
+}
+
+/// Celular deitado (pouca altura): controles mais baixos e paddings menores.
+bool estCompact(BuildContext context) {
+  final sz = MediaQuery.sizeOf(context);
+  return min(sz.width, sz.height) < 500;
 }
 
 enum EstButtonVariant { normal, primary, ghost, warn, rad, pact }
@@ -268,90 +425,40 @@ class EstButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = onPressed == null;
-    final h = height ?? (small ? 36.0 : 44.0);
-    final fs = fontSize ?? (small ? 13.0 : 14.0);
+    final compact = estCompact(context);
+    final h = height ?? (small ? (compact ? 30.0 : 34.0) : (compact ? 36.0 : 40.0));
+    final fs = fontSize ?? (small ? 12.0 : 13.0);
 
-    Color? bg;
-    Gradient? grad;
-    Color border;
+    Color bg = Colors.transparent;
+    Color border = Colors.transparent;
     Color fg;
-    Color? topBevel;
-    List<BoxShadow>? shadows;
+    var weight = FontWeight.w600;
 
     if (askPulse) {
-      grad = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFE7BF66), Color(0xFFB5822B)],
-      );
-      border = const Color(0xFFF3D896);
-      fg = const Color(0xFF191205);
-      topBevel = const Color(0x66FFF4D6);
-      shadows = const [
-        BoxShadow(color: Color(0x77000000), blurRadius: 8, offset: Offset(0, 3)),
-        BoxShadow(color: Color(0x44D9B25F), blurRadius: 12),
-      ];
+      bg = AppColors.action;
+      fg = AppColors.onAction;
+      weight = FontWeight.w700;
     } else {
       switch (variant) {
         case EstButtonVariant.primary:
-          grad = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFDFB85E), Color(0xFFA97824)],
-          );
-          border = const Color(0xFFE9CB81);
-          fg = const Color(0xFF191104);
-          topBevel = const Color(0x55FFF0C8);
-          shadows = const [
-            BoxShadow(color: Color(0x77000000), blurRadius: 8, offset: Offset(0, 3)),
-          ];
+          bg = AppColors.action;
+          fg = AppColors.onAction;
+          weight = FontWeight.w700;
         case EstButtonVariant.ghost:
-          bg = Colors.transparent;
-          border = Colors.transparent;
           fg = AppColors.mute;
         case EstButtonVariant.warn:
-          grad = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF39181B), Color(0xFF210D10)],
-          );
-          border = AppColors.bad.withValues(alpha: 0.72);
-          fg = const Color(0xFFFFD8D1);
-          topBevel = const Color(0x1EFF9E92);
+          border = AppColors.bad;
+          fg = AppColors.bad;
         case EstButtonVariant.rad:
-          grad = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A3F22), Color(0xFF0C2211)],
-          );
-          border = AppColors.rad.withValues(alpha: 0.62);
-          fg = AppColors.rad;
-          topBevel = const Color(0x287DFF4A);
-          shadows = [BoxShadow(color: AppColors.rad.withValues(alpha: 0.14), blurRadius: 8)];
+          bg = AppColors.rad;
+          fg = AppColors.onRad;
+          weight = FontWeight.w700;
         case EstButtonVariant.pact:
-          grad = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF243854), Color(0xFF152236)],
-          );
-          border = AppColors.brass;
-          fg = const Color(0xFFF3DEAC);
-          topBevel = const Color(0x2EE9CB81);
-          shadows = const [
-            BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2)),
-          ];
-        case EstButtonVariant.normal:
-          grad = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A283E), Color(0xFF101928)],
-          );
-          border = const Color(0xFF2D405C);
+          border = AppColors.mute;
           fg = AppColors.ink;
-          topBevel = const Color(0x16FFFFFF);
-          shadows = const [
-            BoxShadow(color: Color(0x66000000), blurRadius: 4, offset: Offset(0, 2)),
-          ];
+        case EstButtonVariant.normal:
+          border = AppColors.glassBorder;
+          fg = AppColors.ink;
       }
     }
 
@@ -362,73 +469,43 @@ class EstButton extends StatelessWidget {
           children: [
             if (icon != null) ...[
               EstIcon(icon!, size: small ? 14 : 16, color: fg),
-              SizedBox(width: small ? 6 : 8),
+              SizedBox(width: small ? 5 : 7),
             ],
             Flexible(
               child: Text(
-                label ?? '',
+                (label ?? '').toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textHeightBehavior: const TextHeightBehavior(
                   applyHeightToFirstAscent: false,
                   applyHeightToLastDescent: false,
                 ),
-                style: TextStyle(
-                  fontSize: fs,
-                  fontWeight: variant == EstButtonVariant.primary || askPulse
-                      ? FontWeight.w800
-                      : FontWeight.w600,
-                  letterSpacing: variant == EstButtonVariant.primary ? 0.35 : 0.15,
-                  color: fg,
-                  height: 1.15,
-                ),
+                style: AppText.label(size: fs + 1, color: fg, weight: weight),
               ),
             ),
           ],
         );
 
-    const radius = 5.0;
+    const radius = Radii.sm;
     return Opacity(
-      opacity: disabled ? 0.42 : 1.0,
+      opacity: disabled ? 0.38 : 1.0,
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(radius),
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(radius),
+          hoverColor: bg == Colors.transparent ? const Color(0x0FFFFFFF) : const Color(0x14000000),
           child: Ink(
             height: h,
             decoration: BoxDecoration(
-              color: grad == null ? bg : null,
-              gradient: grad,
+              color: bg,
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: border),
-              boxShadow: disabled ? null : shadows,
+              border: border == Colors.transparent ? null : Border.all(color: border),
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (topBevel != null)
-                  Positioned(
-                    left: 1,
-                    right: 1,
-                    top: 0,
-                    height: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: topBevel,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(radius - 1)),
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: padding ?? EdgeInsets.symmetric(horizontal: small ? 11 : 15),
-                  child: Center(
-                    widthFactor: 1,
-                    child: innerContent,
-                  ),
-                ),
-              ],
+            child: Padding(
+              padding: padding ?? EdgeInsets.symmetric(horizontal: small ? 10 : (compact ? 12 : 14)),
+              child: Center(widthFactor: 1, child: innerContent),
             ),
           ),
         ),
@@ -464,19 +541,17 @@ class EstIconButton extends StatelessWidget {
       opacity: disabled ? 0.4 : 1.0,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(Radii.sm),
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(4),
-          hoverColor: dangerHover
-              ? AppColors.bad.withValues(alpha: 0.16)
-              : AppColors.panel2.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(Radii.sm),
+          hoverColor: dangerHover ? AppColors.bad.withValues(alpha: 0.14) : AppColors.panel2,
           child: Ink(
             width: size,
             height: size,
             decoration: BoxDecoration(
-              color: AppColors.obsidian.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(4),
+              color: AppColors.deep,
+              borderRadius: BorderRadius.circular(Radii.sm),
               border: Border.all(color: AppColors.line),
             ),
             child: Center(
@@ -563,14 +638,9 @@ class _EstTextFieldState extends State<EstTextField> {
             right: widget.suffix != null ? 4 : 12,
           ),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0xFF0A111D) : const Color(0xFF0C1422),
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(
-              color: _focused ? AppColors.brass : const Color(0xFF283A56),
-            ),
-            boxShadow: _focused
-                ? const [BoxShadow(color: Color(0x24D9B25F), blurRadius: 8)]
-                : null,
+            color: AppColors.deep,
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: _focused ? AppColors.ink : AppColors.glassBorder),
           ),
           alignment: Alignment.center,
           child: Row(
@@ -592,14 +662,10 @@ class _EstTextFieldState extends State<EstTextField> {
                   textAlignVertical: TextAlignVertical.center,
                   onChanged: widget.onChanged,
                   onSubmitted: widget.onSubmitted,
-                  style: widget.style ?? const TextStyle(fontSize: 13.5, color: AppColors.ink),
+                  style: widget.style ?? const TextStyle(fontSize: 15, color: AppColors.ink),
                   decoration: InputDecoration(
                     hintText: widget.hintText,
-                    hintStyle: const TextStyle(
-                      color: Color(0xFF607491),
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    hintStyle: const TextStyle(color: AppColors.faint, fontSize: 15),
                     counterText: '',
                     filled: false,
                     isDense: true,
@@ -634,22 +700,13 @@ class EstBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: net ? const Color(0xFF102037) : const Color(0xFF112618),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: net ? const Color(0xFF2D4B73) : const Color(0xFF2D5D3B)),
+        color: AppColors.panel2,
+        borderRadius: BorderRadius.circular(Radii.xs),
+        border: Border.all(color: AppColors.line),
       ),
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.9,
-          height: 1.0,
-          color: net ? const Color(0xFFA7C7F0) : const Color(0xFF9BE0B0),
-        ),
-      ),
+      child: Text(text.toUpperCase(), style: AppText.label(size: 11, color: net ? AppColors.ink : AppColors.mute)),
     );
   }
 }
@@ -673,20 +730,17 @@ class EstChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? const Color(0xFF24344B) : AppColors.obsidian,
-      borderRadius: BorderRadius.circular(5),
+      color: selected ? AppColors.panel2 : Colors.transparent,
+      borderRadius: BorderRadius.circular(Radii.sm),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(Radii.sm),
         child: Container(
-          height: height,
+          height: estCompact(context) ? min(height, 32) : height,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(
-              color: selected ? AppColors.gold : AppColors.line,
-              width: selected ? 1.2 : 1.0,
-            ),
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: selected ? AppColors.ink : AppColors.line),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -695,12 +749,7 @@ class EstChip extends StatelessWidget {
               applyHeightToFirstAscent: false,
               applyHeightToLastDescent: false,
             ),
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              color: selected ? AppColors.ink : AppColors.mute,
-              height: 1.15,
-            ),
+            style: AppText.number(size: fontSize + 1, color: selected ? AppColors.ink : AppColors.mute),
           ),
         ),
       ),
@@ -731,8 +780,8 @@ class EstSwitchOpt extends StatelessWidget {
     return InkWell(
       onTap: enabled ? () => onChanged(!value) : null,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 54),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        constraints: BoxConstraints(minHeight: estCompact(context) ? 44 : 52),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           border: topBorder ? const Border(top: BorderSide(color: AppColors.line)) : null,
         ),
@@ -740,23 +789,23 @@ class EstSwitchOpt extends StatelessWidget {
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 140),
-              width: 36,
+              width: 34,
               height: 20,
-              padding: const EdgeInsets.all(2.5),
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: value ? const Color(0xFF8C6B2C) : AppColors.obsidian,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: value ? AppColors.gold : AppColors.line),
+                color: value ? AppColors.action : AppColors.deep,
+                borderRadius: BorderRadius.circular(Radii.sm),
+                border: Border.all(color: value ? AppColors.action : AppColors.glassBorder),
               ),
               child: AnimatedAlign(
                 duration: const Duration(milliseconds: 140),
                 alignment: value ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
-                  width: 13,
-                  height: 13,
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(
-                    color: value ? AppColors.ink : AppColors.mute,
-                    borderRadius: BorderRadius.circular(2.5),
+                    color: value ? AppColors.onAction : AppColors.mute,
+                    borderRadius: BorderRadius.circular(Radii.xs),
                   ),
                 ),
               ),
@@ -769,20 +818,12 @@ class EstSwitchOpt extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
                   ),
                   const SizedBox(height: 1),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.35,
-                      color: AppColors.mute,
-                    ),
+                    style: const TextStyle(fontSize: 13, height: 1.35, color: AppColors.mute),
                   ),
                 ],
               ),
@@ -798,8 +839,8 @@ class EstGlassCard extends StatelessWidget {
   const EstGlassCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(20),
-    this.borderRadius = 6,
+    this.padding = const EdgeInsets.all(16),
+    this.borderRadius = Radii.md,
     this.ornate = true,
     this.highlight = false,
   });
@@ -807,56 +848,19 @@ class EstGlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final double borderRadius;
-  final bool ornate;
+  final bool ornate; // sem efeito: o sistema não tem ornamentos
   final bool highlight;
 
   @override
   Widget build(BuildContext context) {
-    final outerBorder = highlight ? const Color(0xFF8F7241) : AppColors.glassBorder;
     return Container(
+      padding: padding,
       decoration: BoxDecoration(
-        gradient: AppColors.glassGradient,
+        color: highlight ? AppColors.panel2 : AppColors.panel,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: outerBorder, width: 1.0),
-        boxShadow: AppColors.edgeShadows,
+        border: Border.all(color: highlight ? AppColors.glassBorder : AppColors.line),
       ),
-      child: Stack(
-        alignment: Alignment.topCenter,
-        children: [
-          Positioned(
-            left: 1,
-            right: 1,
-            top: 0,
-            height: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    (highlight ? AppColors.gold : Colors.white).withValues(alpha: highlight ? 0.24 : 0.12),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (ornate && highlight)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(max(2.0, borderRadius - 2.5)),
-                      border: Border.all(color: const Color(0x28D9B25F), width: 0.9),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          Padding(padding: padding, child: child),
-        ],
-      ),
+      child: child,
     );
   }
 }
@@ -865,46 +869,10 @@ class EstRuleDivider extends StatelessWidget {
   const EstRuleDivider({super.key, this.color, this.diamond = true});
 
   final Color? color;
-  final bool diamond;
+  final bool diamond; // sem efeito: divisória é uma linha
 
   @override
-  Widget build(BuildContext context) {
-    final c = color ?? const Color(0xFF394D69);
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [c.withValues(alpha: 0.0), c]),
-            ),
-          ),
-        ),
-        if (diamond)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Transform.rotate(
-              angle: pi / 4,
-              child: Container(
-                width: 4.5,
-                height: 4.5,
-                decoration: BoxDecoration(
-                  color: AppColors.brass.withValues(alpha: 0.85),
-                ),
-              ),
-            ),
-          ),
-        Expanded(
-          child: Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [c, c.withValues(alpha: 0.0)]),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Container(height: 1, color: color ?? AppColors.line);
 }
 
 class EstSectionTag extends StatelessWidget {
@@ -916,35 +884,9 @@ class EstSectionTag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Transform.rotate(
-          angle: pi / 4,
-          child: Container(
-            width: 4.5,
-            height: 4.5,
-            margin: const EdgeInsets.only(right: 8, left: 1),
-            color: AppColors.brass,
-          ),
-        ),
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.7,
-            color: AppColors.mute,
-          ),
-        ),
+        Text(label.toUpperCase(), style: AppText.label(size: 11)),
         const SizedBox(width: 10),
-        Expanded(
-          child: Container(
-            height: 1,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0x99344966), Color(0x14344966)],
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: Container(height: 1, color: AppColors.line)),
         if (trailing != null) ...[
           const SizedBox(width: 10),
           trailing!,
@@ -954,46 +896,97 @@ class EstSectionTag extends StatelessWidget {
   }
 }
 
+/// Insígnia da facção: forma + cor. [size] é a largura da forma.
 class EstFactionSeal extends StatelessWidget {
   const EstFactionSeal({
     super.key,
     required this.color,
     this.size = 16,
     this.highlighted = false,
+    this.shape,
   });
 
   final Color color;
   final double size;
   final bool highlighted;
+  final FactionShape? shape;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size + 6,
-      height: size + 6,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.obsidian,
-        border: Border.all(
-          color: highlighted ? AppColors.gold : const Color(0xFF475C7A),
-          width: highlighted ? 1.4 : 1.1,
+    final box = size + 4;
+    return SizedBox(
+      width: box,
+      height: box,
+      child: CustomPaint(
+        painter: _InsigniaPainter(
+          color: color,
+          shape: shape ?? Factions.shapeOf(color),
+          ring: highlighted,
         ),
       ),
-      alignment: Alignment.center,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            center: const Alignment(-0.28, -0.32),
-            colors: [
-              Color.lerp(color, Colors.white, 0.25)!,
-              color,
-              Color.lerp(color, Colors.black, 0.28)!,
-            ],
-          ),
-          border: Border.all(color: Colors.black.withValues(alpha: 0.45), width: 0.7),
+    );
+  }
+}
+
+class _InsigniaPainter extends CustomPainter {
+  const _InsigniaPainter({required this.color, required this.shape, required this.ring});
+
+  final Color color;
+  final FactionShape shape;
+  final bool ring;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2 * 0.72;
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    final path = Factions.path(shape, r);
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = ring ? 1.6 : 1.0
+        ..strokeJoin = StrokeJoin.round
+        ..color = ring ? AppColors.ink : AppColors.deep,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_InsigniaPainter old) => old.color != color || old.shape != shape || old.ring != ring;
+}
+
+/// Marca: ULTIMAT + a mira no lugar do O.
+class EstWordmark extends StatelessWidget {
+  const EstWordmark({super.key, this.size = 32, this.color = AppColors.ink});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Ultimato',
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'ULTIMAT',
+              style: TextStyle(
+                fontFamily: AppText.cond,
+                fontFamilyFallback: AppText.condFallback,
+                fontWeight: FontWeight.w700,
+                fontSize: size,
+                height: 1,
+                letterSpacing: size * 0.06,
+                color: color,
+              ),
+            ),
+            SizedBox(width: size * 0.02),
+            EstIcon(EstIconKind.crest, size: size * 0.74, color: color),
+          ],
         ),
       ),
     );
@@ -1038,8 +1031,8 @@ Future<T?> showEstSheet<T>(
     context: context,
     barrierDismissible: dismissible,
     barrierLabel: 'Fechar',
-    barrierColor: const Color(0xCC02060C),
-    transitionDuration: const Duration(milliseconds: 180),
+    barrierColor: const Color(0xB3000000),
+    transitionDuration: const Duration(milliseconds: 160),
     pageBuilder: (rootCtx, anim, _) {
       Widget buildAnimatedDialog(BuildContext rCtx) {
         final layout = EstLayout.of(rCtx);
@@ -1054,20 +1047,12 @@ Future<T?> showEstSheet<T>(
             width: double.infinity,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              gradient: pactTheme
-                  ? const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xF7241F15), Color(0xF70D1727)],
-                    )
-                  : AppColors.glassGradient,
+              color: AppColors.panel,
               borderRadius: centered
-                  ? BorderRadius.circular(6)
-                  : const BorderRadius.vertical(top: Radius.circular(8)),
-              border: Border.all(color: pactTheme ? AppColors.brass : AppColors.glassBorder),
-              boxShadow: const [
-                BoxShadow(color: Color(0xCC000000), blurRadius: 36, offset: Offset(0, -4)),
-              ],
+                  ? BorderRadius.circular(Radii.md)
+                  : const BorderRadius.vertical(top: Radius.circular(Radii.md)),
+              border: Border.all(color: pactTheme ? AppColors.glassBorder : AppColors.line),
+              boxShadow: AppColors.edgeShadows,
             ),
             child: builder(rCtx),
           ),
@@ -1095,8 +1080,8 @@ Future<T?> showEstSheet<T>(
             child: Padding(
               padding: centered
                   ? EdgeInsets.symmetric(
-                      horizontal: compactLand ? 16 : 20,
-                      vertical: compactLand ? 10 : 20,
+                      horizontal: compactLand ? 12 : 20,
+                      vertical: compactLand ? 8 : 20,
                     )
                   : EdgeInsets.zero,
               child: ConstrainedBox(
@@ -1104,7 +1089,7 @@ Future<T?> showEstSheet<T>(
                   maxWidth: centered
                       ? min(compactLand ? 580.0 : maxWidth, max(260.0, sz.width - (compactLand ? 32 : 40)))
                       : min(500.0, sz.width),
-                  maxHeight: sz.height * (compactLand ? 0.94 : (centered ? 0.90 : 0.92)),
+                  maxHeight: sz.height * (compactLand ? 0.96 : (centered ? 0.90 : 0.92)),
                 ),
                 child: animated,
               ),
@@ -1144,51 +1129,48 @@ class EstSheetBody extends StatelessWidget {
     this.title,
     this.titleIcon,
     this.onClose,
-    this.padding = const EdgeInsets.fromLTRB(18, 16, 18, 18),
+    this.padding,
   });
 
   final String? title;
   final Widget? titleIcon;
   final VoidCallback? onClose;
   final List<Widget> children;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
+    final compact = estCompact(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (title != null)
           Container(
-            padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
+            height: compact ? 44 : 52,
+            padding: EdgeInsets.only(left: compact ? 14 : 18, right: compact ? 8 : 10),
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF162235), Color(0xFF0E1725)],
-              ),
-              border: Border(
-                top: BorderSide(color: Color(0x66B38B45), width: 1.5),
-                bottom: BorderSide(color: AppColors.line),
-              ),
+              border: Border(bottom: BorderSide(color: AppColors.line)),
             ),
             child: Row(
               children: [
                 if (titleIcon != null) ...[
                   titleIcon!,
-                  const SizedBox(width: 9),
+                  const SizedBox(width: 8),
                 ],
                 Expanded(
                   child: Text(
                     title!,
-                    style: AppText.serif(size: 20, color: const Color(0xFFF9EFD7)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.title(size: compact ? 18 : 22),
                   ),
                 ),
                 EstIconButton(
                   icon: EstIconKind.close,
-                  size: 30,
+                  size: 32,
                   iconSize: 13,
+                  tooltip: 'Fechar',
                   onPressed: onClose ?? () => Navigator.of(context).maybePop(),
                 ),
               ],
@@ -1196,7 +1178,7 @@ class EstSheetBody extends StatelessWidget {
           ),
         Flexible(
           child: SingleChildScrollView(
-            padding: padding,
+            padding: padding ?? EdgeInsets.fromLTRB(compact ? 14 : 18, compact ? 12 : 16, compact ? 14 : 18, compact ? 14 : 18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1357,34 +1339,23 @@ class _EstIconPainter extends CustomPainter {
           ..lineTo(15, 20);
         canvas.drawPath(p, stroke);
       case EstIconKind.crest:
-        // Lacre de cera vermelho com uma mira: a marca do Ultimato
+        // A marca: mira (anel grosso + quatro marcas), na cor pedida
         const c = Offset(32, 32);
-        final seal = Path();
-        for (var i = 0; i < 12; i++) {
-          final a = i * pi / 6;
-          seal.addOval(Rect.fromCircle(center: c + Offset(cos(a), sin(a)) * 21.5, radius: 7.5));
-        }
-        seal.addOval(Rect.fromCircle(center: c, radius: 23));
-        canvas.drawPath(seal, Paint()..color = const Color(0xFFB8322F));
-        canvas.drawCircle(c, 21, Paint()..color = const Color(0xFFD64545));
         canvas.drawCircle(
           c,
-          17.5,
+          23,
           Paint()
-            ..color = const Color(0x55701A18)
+            ..color = color
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
+            ..strokeWidth = 8.4,
         );
-        final mark = Paint()
-          ..color = AppColors.ink
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
-          ..strokeCap = StrokeCap.round;
-        canvas.drawCircle(c, 10.5, mark);
-        for (final d in const [Offset(0, -1), Offset(0, 1), Offset(-1, 0), Offset(1, 0)]) {
-          canvas.drawLine(c + d * 5.5, c + d * 15.5, mark);
-        }
-        canvas.drawCircle(c, 1.8, Paint()..color = AppColors.ink);
+        final tick = Paint()
+          ..color = color
+          ..strokeWidth = 5.2;
+        canvas.drawLine(const Offset(32, 0), const Offset(32, 16), tick);
+        canvas.drawLine(const Offset(32, 48), const Offset(32, 64), tick);
+        canvas.drawLine(const Offset(0, 32), const Offset(16, 32), tick);
+        canvas.drawLine(const Offset(48, 32), const Offset(64, 32), tick);
       case EstIconKind.cup:
         final cupBody = Path()
           ..moveTo(20, 10)

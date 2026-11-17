@@ -33,3 +33,35 @@ jobs:
           name: web-${{ github.sha }}
           path: build/web
           retention-days: 7
+
+  # Fotos das telas (844x390, 1280x800, 390x844) para revisão visual. Ficam na branch ci-screens/<branch>.
+  screens:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: mkdir -p native && cp tool/screens/libestandarte_engine.so native/
+      - run: SCREENS=1 flutter test test/screens_test.dart
+      - name: Publica as fotos
+        if: always()
+        run: |
+          set -e
+          ls build/screens/*.png >/dev/null 2>&1 || exit 0
+          dest="shots/${GITHUB_REF_NAME}"
+          if git fetch --depth 1 origin ci-screens 2>/dev/null; then
+            git worktree add /tmp/cs FETCH_HEAD
+          else
+            git worktree add --detach /tmp/cs && (cd /tmp/cs && git checkout --orphan tmp && git rm -rf -q .)
+          fi
+          cd /tmp/cs
+          rm -rf "$dest" && mkdir -p "$dest" && cp "$GITHUB_WORKSPACE"/build/screens/*.png "$dest/"
+          git add -A shots
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -q -m "fotos de ${GITHUB_SHA::7}" || exit 0
+          git push origin HEAD:refs/heads/ci-screens

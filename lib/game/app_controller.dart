@@ -704,7 +704,7 @@ class AppController extends ChangeNotifier {
         mutated = true;
         showFlash(
           'Logística de Fronteira',
-          const Color(0xFFE2B04A),
+          const Color(0xFFF2EEE6),
           sub: '+$bonus exércitos bônus por novo continente dominado',
           ms: 1700,
           top: true,
@@ -744,7 +744,7 @@ class AppController extends ChangeNotifier {
       _engineId = engine.loadGame(st);
       showFlash(
         'Doutrina de Choque · +1 medalha',
-        const Color(0xFFE2B04A),
+        const Color(0xFFF2EEE6),
         sub: 'Conquista com ataque máximo (3 dados)',
         ms: 1300,
         top: true,
@@ -3161,7 +3161,7 @@ class AppController extends ChangeNotifier {
       attName: cur['name'] as String? ?? '',
       attColor: _playerColor((cur['color'] as num).toInt()),
       defName: defP?['name'] as String? ?? 'Defesa',
-      defColor: defP != null ? _playerColor((defP['color'] as num).toInt()) : const Color(0xFF9DB0C8),
+      defColor: defP != null ? _playerColor((defP['color'] as num).toInt()) : const Color(0xFFE8ECF1),
       low: low,
       untilMs: DateTime.now().millisecondsSinceEpoch + 2900,
     );
@@ -3191,7 +3191,7 @@ class AppController extends ChangeNotifier {
           if (v['phase'] != 'play') break;
           final r = (v['round'] as num).toInt();
           if (r == 1 && _roundSeen == 0) {
-            showFlash('Rodada 2', const Color(0xFFE2B04A),
+            showFlash('Rodada 2', const Color(0xFFF2EEE6),
                 sub: 'A partir de agora os ataques estão liberados', ms: 1400, big: true);
           }
           _roundSeen = r;
@@ -3259,7 +3259,7 @@ class AppController extends ChangeNotifier {
           if (mine(p)) {
             showFlash(
               k > 0 ? '+$k medalha${k == 1 ? '' : 's'}' : 'Limite de medalhas',
-              const Color(0xFFE2B04A),
+              const Color(0xFFF2EEE6),
               sub: k > 0 ? (why[e['why']] ?? '') : 'Gaste no Quartel no início do seu turno',
               ms: 1000,
               top: true,
@@ -3371,8 +3371,8 @@ class AppController extends ChangeNotifier {
             }
           }
           strikes.add(MapStrike(from: from, to: to, color: col(p), won: won, startMs: now));
-          if (la > 0) floats.add(MapFloatText(terr: from, text: '−$la', color: const Color(0xFFFF8A7A), startMs: now));
-          if (ld > 0) floats.add(MapFloatText(terr: to, text: '−$ld', color: const Color(0xFFFF8A7A), startMs: now));
+          if (la > 0) floats.add(MapFloatText(terr: from, text: '−$la', color: const Color(0xFFFF6B5E), startMs: now));
+          if (ld > 0) floats.add(MapFloatText(terr: to, text: '−$ld', color: const Color(0xFFFF6B5E), startMs: now));
           onShake?.call(won);
           if (!mine(p)) _spotlight({from, to}, 1200);
           final involved = mine(p) || mine(def);
@@ -3404,7 +3404,7 @@ class AppController extends ChangeNotifier {
           final p = (e['p'] as num).toInt();
           showFlash(
             mine(p) ? 'Tempo esgotado!' : 'Tempo de ${nm(p)} esgotou',
-            const Color(0xFFE06A5A),
+            const Color(0xFFFF6B5E),
             ms: 1000,
             big: mine(p),
             top: !mine(p),
@@ -3442,7 +3442,7 @@ class AppController extends ChangeNotifier {
           _spotlight({to}, impactMs + 2600);
           showFlash(
             'Alerta nuclear!',
-            const Color(0xFFFF4A3A),
+            const Color(0xFFFF6B5E),
             sub: '${nm(p)} lançou uma ogiva contra ${mapData.territories[to].name} (${nm(def)})',
             ms: impactMs,
             big: true,
@@ -3452,7 +3452,7 @@ class AppController extends ChangeNotifier {
             if (view == null) return;
             showFlash(
               '${mapData.territories[to].name} atingido',
-              const Color(0xFF7DFF4A),
+              const Color(0xFFC8FF3E),
               sub: '−$lost exércitos · radioativo até a vez de ${nm(p)} voltar',
               ms: 2600,
               big: true,
@@ -3461,20 +3461,20 @@ class AppController extends ChangeNotifier {
           });
         case 'fogEnd':
           final to = (e['to'] as num).toInt();
-          showFlash('A névoa sobre ${mapData.territories[to].name} se dissipou', const Color(0xFF7DFF4A), ms: 1100, top: true);
+          showFlash('A névoa sobre ${mapData.territories[to].name} se dissipou', const Color(0xFFC8FF3E), ms: 1100, top: true);
         case 'pactVoid':
           final a = (e['a'] as num).toInt();
           final b = (e['b'] as num).toInt();
           if (mine(a) || mine(b)) {
-            showFlash('Pacto encerrado', const Color(0xFFE2B04A),
+            showFlash('Pacto encerrado', const Color(0xFFF2EEE6),
                 sub: '${nm(a)} e ${nm(b)} · acabou com a ogiva', ms: 1500, top: true);
           }
         case 'eventEnd':
           final k = e['k'] as String? ?? '';
-          showFlash('${eventTitles[k] ?? k} terminou', const Color(0xFFE2B04A), ms: 1000, top: true);
+          showFlash('${eventTitles[k] ?? k} terminou', const Color(0xFFF2EEE6), ms: 1000, top: true);
         case 'event':
           final k = e['k'] as String? ?? '';
-          showFlash(eventTitles[k] ?? k, const Color(0xFFE2B04A), sub: eval?.eventText ?? '', ms: 2400, big: true);
+          showFlash(eventTitles[k] ?? k, const Color(0xFFF2EEE6), sub: eval?.eventText ?? '', ms: 2400, big: true);
           SoundPlayer.play('phase');
         case 'pactAsk':
           final a = (e['a'] as num).toInt();
@@ -3533,7 +3533,7 @@ class AppController extends ChangeNotifier {
           final a = (e['a'] as num).toInt();
           final b = (e['b'] as num).toInt();
           if (mine(a) || mine(b)) {
-            showFlash('Pacto encerrado', const Color(0xFFE2B04A),
+            showFlash('Pacto encerrado', const Color(0xFFF2EEE6),
                 sub: '${nm(a)} e ${nm(b)} podem se atacar de novo', ms: 1500, top: true);
           }
       }
@@ -4558,7 +4558,7 @@ class AppController extends ChangeNotifier {
 
   Color _playerColor(int idx) {
     final cols = engine.constants.colors;
-    if (idx < 0 || idx >= cols.length) return const Color(0xFF999999);
+    if (idx < 0 || idx >= cols.length) return const Color(0xFF9AA4B2);
     return parseHexColor(cols[idx].hex);
   }
 

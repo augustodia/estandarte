@@ -79,7 +79,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
           padding: const EdgeInsets.fromLTRB(10, 4, 8, 4),
           decoration: BoxDecoration(
             color: AppColors.obsidian.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: AppColors.line),
           ),
           child: Row(
@@ -89,7 +89,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
               const Text(
                 'COMANDANTE',
                 style: TextStyle(
-                  fontSize: 9.5,
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.3,
                   color: AppColors.mute,
@@ -104,7 +104,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   textAlign: TextAlign.right,
                   textAlignVertical: TextAlignVertical.center,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
@@ -167,7 +167,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   Text(
                     'PARTIDA RÁPIDA',
                     style: TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.0,
                       color: AppColors.gold,
@@ -187,7 +187,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
               label: 'Entrar na Fila',
               variant: EstButtonVariant.primary,
               height: 40,
-              fontSize: 14,
+              fontSize: 13,
               onPressed: () {
                 _syncName();
                 c.startQuickMatch(_nameCtrl.text);
@@ -214,7 +214,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 EstButton(
                   label: '+ Criar Mesa',
                   height: 40,
-                  fontSize: 13.5,
+                  fontSize: 13,
                   onPressed: () {
                     _syncName();
                     c.createOnlineRoom(_nameCtrl.text, isPublic: true);
@@ -230,10 +230,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     textCapitalization: TextCapitalization.characters,
                     onSubmitted: (_) => _enterCode(),
                     style: const TextStyle(
-                      fontFamily: 'monospace',
+                      fontFamily: AppText.cond, fontFeatures: AppText.tabular,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.0,
-                      fontSize: 13.5,
+                      fontSize: 13,
                       color: AppColors.ink,
                     ),
                   ),
@@ -242,7 +242,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 EstButton(
                   label: 'Entrar',
                   height: 40,
-                  fontSize: 13.5,
+                  fontSize: 13,
                   onPressed: _enterCode,
                 ),
               ],
@@ -279,7 +279,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: AppColors.panel,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AppColors.line),
         ),
         child: Row(
@@ -399,9 +399,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
           padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
             gradient: AppColors.glassGradient,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: isQuick ? const Color(0xFF7D663D) : AppColors.line,
+              color: isQuick ? const Color(0xFF9AA4B2) : AppColors.line,
             ),
           ),
           child: Row(
@@ -429,7 +429,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0x28E6B652),
+                              color: const Color(0x28F2EEE6),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: AppColors.brassDim),
                             ),
@@ -441,7 +441,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                 Text(
                                   'RÁPIDA',
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.5,
                                     color: AppColors.gold,
@@ -458,7 +458,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                             decoration: BoxDecoration(
                               color: AppColors.obsidian,
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFF7D663D)),
+                              border: Border.all(color: const Color(0xFF9AA4B2)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -468,7 +468,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                 Text(
                                   'SENHA',
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.5,
                                     color: AppColors.gold,
@@ -489,7 +489,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           child: Text(
                             '#$code',
                             style: const TextStyle(
-                              fontFamily: 'monospace',
+                              fontFamily: AppText.cond, fontFeatures: AppText.tabular,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.7,
@@ -518,14 +518,14 @@ class _RoomsScreenState extends State<RoomsScreen> {
                               const SizedBox(width: 5),
                               Text(
                                 '${p['name'] ?? ''}',
-                                style: const TextStyle(fontSize: 12.5, color: AppColors.ink),
+                                style: const TextStyle(fontSize: 12, color: AppColors.ink),
                               ),
                               if (p['ctrl'] == 'bot') ...[
                                 const SizedBox(width: 3),
                                 const Text(
                                   'BOT',
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.mute,
                                     letterSpacing: 0.5,
@@ -553,7 +553,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                       meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 11, color: AppColors.mute),
                     ),
                   ],
                 ),
@@ -670,7 +670,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     Text(
                       statusMsg,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 12, color: AppColors.mute),
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -708,7 +708,7 @@ class _RoomTabButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppColors.panel2 : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          border: active ? Border.all(color: const Color(0xFF6B5734)) : null,
+          border: active ? Border.all(color: const Color(0xFF7D8796)) : null,
           boxShadow: active
               ? const [BoxShadow(color: Color(0x88000000), blurRadius: 3, offset: Offset(0, 1))]
               : null,
@@ -720,7 +720,7 @@ class _RoomTabButton extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 13.5,
+                fontSize: 13,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 color: active ? AppColors.ink : AppColors.mute,
               ),
@@ -734,7 +734,7 @@ class _RoomTabButton extends StatelessWidget {
                 color: active
                     ? AppColors.gold.withValues(alpha: 0.16)
                     : AppColors.ink.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 border: active
                     ? Border.all(color: AppColors.brass.withValues(alpha: 0.40), width: 0.8)
                     : null,
@@ -743,7 +743,7 @@ class _RoomTabButton extends StatelessWidget {
               child: Text(
                 count,
                 style: TextStyle(
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   height: 1.0,
                   color: active ? AppColors.gold : AppColors.mute,
@@ -772,7 +772,7 @@ class _EmptyRoomsBox extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
         decoration: BoxDecoration(
           color: AppColors.obsidian.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AppColors.line),
         ),
         child: Text(
