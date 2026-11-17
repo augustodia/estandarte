@@ -1333,31 +1333,6 @@ class _WorldMapPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // 6b. Active lit sea route dashes (at most 1-3 active connections, cached in 8 discrete phase buckets)
-    if (can && ctrl.sel != null) {
-      final bucket = ((nowMs / 1000.0 * (20.0 / 11.0) * 8.0).floor()) & 7;
-      final litPaint = Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = 3.0 / camZ;
-      for (var si = 0; si < seaCache.routes.length; si++) {
-        final sr = seaCache.routes[si];
-        if ((sr.route.a == ctrl.sel && targets.contains(sr.route.b)) ||
-            (sr.route.b == ctrl.sel && targets.contains(sr.route.a))) {
-          canvas.drawPath(
-            cache.litSeaDashPathFor(
-              si,
-              sr,
-              dirPositive: ctrl.sel == sr.route.b,
-              bucket: bucket,
-            ),
-            litPaint,
-          );
-        }
-      }
-    }
-
     // Collect highlighted territories for foreground borders
     final frontOrder = <int>[];
     for (var i = 0; i < md.territories.length; i++) {
@@ -1485,7 +1460,8 @@ class _WorldMapPainter extends CustomPainter {
       );
     } else if (can && !ctrl.trenchMode && !ctrl.airliftMode && ctrl.sel != null && v != null && v['step'] != 'reinforce' && v['occupy'] == null) {
       final from = ctrl.sel!;
-      final dests = ctrl.target != null ? [ctrl.target!] : targets.toList();
+      // Só a ligação com o alvo escolhido; os candidatos já aparecem pelo contorno.
+      final dests = ctrl.target != null ? [ctrl.target!] : const <int>[];
       final isMoveStep = v['step'] == 'move';
       for (final j in dests) {
         _drawAimLine(
@@ -1712,15 +1688,18 @@ class _WorldMapPainter extends CustomPainter {
           ..strokeWidth = 3.2 / camZ,
       );
     } else if (isTgt) {
+      // Alvo sem animação: candidatos com contorno fino e discreto; o escolhido, contorno firme.
       final tgtColor = isOccupyOrMove ? AppColors.gold : Colors.white;
-      final bucket = ((nowMs / 1000.0 * 2.0 * 8.0).floor()) & 7;
+      final chosen = (ctrl.target != null && i == ctrl.target) ||
+          (pk != null && i == pk.target) ||
+          (ctrl.airliftMode && ctrl.airliftTo != null && i == ctrl.airliftTo);
       canvas.drawPath(
-        cache.borderDashPathFor(i, isMove: isOccupyOrMove, bucket: bucket),
+        tr.path,
         Paint()
-          ..color = tgtColor
+          ..color = chosen ? tgtColor : tgtColor.withValues(alpha: 0.6)
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = 2.6 / camZ,
+          ..strokeWidth = (chosen ? 2.6 : 1.6) / camZ,
       );
     } else if (i == hoverTerr) {
       canvas.drawPath(
@@ -1802,9 +1781,8 @@ class _WorldMapPainter extends CustomPainter {
 
     final dash = isMove ? 3.5 : 7.0;
     final gap = isMove ? 6.5 : 6.0;
-    final cycle = dash + gap;
-    // Negative phase shift advances dashes from A -> B
-    final phase = (cycle - ((nowMs / 750.0 * 20.0) % cycle)) % cycle;
+    // Tracejado parado: só a seta de movimento de tropas anda (um único elemento animado por vez)
+    const phase = 0.0;
     final pa = Offset(ta.x, ta.y);
     final pb = Offset(tb.x, tb.y);
     _drawStraightDashedLine(
