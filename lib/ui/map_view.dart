@@ -769,8 +769,8 @@ class _MapPaintCache {
           style: TextStyle(
             fontFamily: AppText.cond,
             fontFamilyFallback: AppText.condFallback,
-            color: rad ? AppColors.rad : (dark ? AppColors.onAction : Colors.white),
-            fontSize: 15,
+            color: rad ? AppColors.rad : (dark ? AppColors.onAction : AppColors.ink),
+            fontSize: 13,
             fontWeight: FontWeight.w700,
             height: 1.0,
             fontFeatures: AppText.tabular,
@@ -952,11 +952,19 @@ class _WorldMapPainter extends CustomPainter {
   static final Paint _boardImgPaint = Paint()..filterQuality = FilterQuality.medium;
   static final Paint _badgeShadowPaint = Paint()..color = const Color(0x73000000);
   static final Paint _badgeShapeFill = Paint();
-  static final Paint _badgeShapeStroke = Paint()
-    ..color = AppColors.deep
+  // Geometria da placa de tropa (unidades do mapa, antes do markK)
+  static const double _plateH = 17;
+  static const double _plateL = 5;
+  static const double _plateR = 5.5;
+  static const double _plateGap = 3.5;
+  static const double _markR = 3.9;
+  static const double _markW = 9;
+  static const double _capH = 0.70; // altura dos dígitos da Barlow, em em
+  static final Paint _plateFillPaint = Paint()..color = const Color(0xF20B0F14);
+  static final Paint _plateLinePaint = Paint()
+    ..color = const Color(0xFF3A4452)
     ..style = PaintingStyle.stroke
-    ..strokeJoin = StrokeJoin.round
-    ..strokeWidth = 1.8;
+    ..strokeWidth = 1;
 
   /// Índice da cor (facção) do dono do território [i], ou -1.
   static int _ownerColorIndex(Map<String, dynamic> v, List<dynamic> terrs, int i) {
@@ -2344,35 +2352,33 @@ class _WorldMapPainter extends CustomPainter {
       canvas.translate(center.dx, center.dy);
       canvas.scale(markK, markK);
 
-      var dark = false;
-      var nudge = 0.0;
-      if (isRad) {
-        // território radioativo: disco escuro com anel da ogiva
-        canvas.drawCircle(const Offset(0, 2), 13.4, _badgeShadowPaint);
-        canvas.drawCircle(Offset.zero, 12.5, _badgeFillRadPaint);
-        canvas.drawCircle(Offset.zero, 12.5, _badgeRingRadPaint);
-      } else {
-        // exército = insígnia da facção (forma + cor), com contorno escuro para separar do território
-        final ci = _ownerColorIndex(v, terrs, i);
-        final col = ci >= 0 && ci < Factions.colors.length ? Factions.colors[ci] : AppColors.mute;
-        final shape = ci >= 0 && ci < Factions.shapes.length ? Factions.shapes[ci] : FactionShape.circle;
-        final key = ci * 2;
-        final path = cache.insigniaPaths.putIfAbsent(key, () => Factions.path(shape, 11.5));
-        _badgeShapeFill.color = col;
-        canvas.drawPath(path, _badgeShapeFill);
-        canvas.drawPath(path, _badgeShapeStroke);
-        dark = Factions.onColor(col) != Colors.white;
-        nudge = Factions.textNudge(shape, 11.5);
-      }
+      // Marcador de tropa: placa escura (como os painéis da UI) com a insígnia da facção
+      // em miniatura à esquerda e o número centrado opticamente pela altura dos dígitos.
+      final numTp = cache.armyPainter(armies, isRad);
+      final ci = _ownerColorIndex(v, terrs, i);
+      final col = ci >= 0 && ci < Factions.colors.length ? Factions.colors[ci] : AppColors.mute;
+      final shape = ci >= 0 && ci < Factions.shapes.length ? Factions.shapes[ci] : FactionShape.circle;
+      final plateW = _plateL + _markW + _plateGap + numTp.width + _plateR;
+      final left = -plateW / 2;
+      final plate = RRect.fromLTRBR(left, -_plateH / 2, left + plateW, _plateH / 2, const Radius.circular(3));
+      canvas.drawRRect(plate.shift(const Offset(0, 1.2)), _badgeShadowPaint);
+      canvas.drawRRect(plate, isRad ? _badgeFillRadPaint : _plateFillPaint);
+      canvas.drawRRect(plate, isRad ? _badgeRingRadPaint : _plateLinePaint);
 
-      // .num (cached TextPainter)
-      final numTp = cache.armyPainter(armies, isRad, dark: dark);
-      numTp.paint(canvas, Offset(-numTp.width / 2, -numTp.height / 2 + 0.5 + nudge));
+      final mark = cache.insigniaPaths.putIfAbsent(ci * 2 + 1, () => Factions.path(shape, _markR));
+      canvas.save();
+      canvas.translate(left + _plateL + _markW / 2, Factions.markNudge(shape, _markR));
+      _badgeShapeFill.color = col;
+      canvas.drawPath(mark, _badgeShapeFill);
+      canvas.restore();
 
-      // .trefoil radiation badge at (13.5, -13.5)
+      final base = numTp.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+      numTp.paint(canvas, Offset(left + _plateL + _markW + _plateGap, -base + 13 * _capH / 2));
+
+      // .trefoil no canto superior direito da placa
       if (isRad) {
         canvas.save();
-        canvas.translate(13.5, -13.5);
+        canvas.translate(plateW / 2, -_plateH / 2 - 1);
         canvas.drawCircle(Offset.zero, 7.6, _trefoilBgPaint);
         canvas.drawCircle(Offset.zero, 7.6, _trefoilStrokePaint);
         canvas.save();
@@ -2420,10 +2426,10 @@ class _WorldMapPainter extends CustomPainter {
         final w = tp.width + 2.4;
         const hgt = 9.5;
         const opts = [
-          (0.0, 24.0, TextAlign.center),
-          (0.0, -18.0, TextAlign.center),
-          (16.5, 3.0, TextAlign.left),
-          (-16.5, 3.0, TextAlign.right),
+          (0.0, 19.0, TextAlign.center),
+          (0.0, -13.0, TextAlign.center),
+          (19.5, 3.0, TextAlign.left),
+          (-19.5, 3.0, TextAlign.right),
         ];
         for (final opt in opts) {
           final cx = pos.dx + opt.$1 * markK;
