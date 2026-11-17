@@ -105,6 +105,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final isLanHostActive = !isOnline && c.lanHostAddr != null;
     final isRelayHostActive = !isOnline && c.relayCode != null;
     final isQuick = c.lobbyQuick;
+    final isCorr = c.inCorr;
     final canConfig = isOnline ? c.lobbyOwner : c.role != 'guest';
     final code = c.relayCode ?? c.lobbyCode ?? c.online?.code;
     final maxSeats = isQuick ? 4 : 6;
@@ -176,13 +177,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     size: 34,
                     iconSize: 15,
                     color: AppColors.ink,
-                    tooltip: isOnline ? 'Sair da sala' : 'Voltar',
-                    onPressed: c.leaveGame,
+                    tooltip: isCorr ? 'Fechar (o lugar continua seu)' : (isOnline ? 'Sair da sala' : 'Voltar'),
+                    onPressed: isCorr ? () => c.leaveGame(keepSeat: true) : c.leaveGame,
                   ),
                   const SizedBox(width: 12),
                   EstIcon(
                     isQuick
                         ? EstIconKind.bolt
+                        : isCorr
+                        ? EstIconKind.compass
                         : (isLanGuest || isLanHostActive
                             ? EstIconKind.lan
                             : (isOnline || isRelayHostActive ? EstIconKind.globe : EstIconKind.board)),
@@ -194,6 +197,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     child: Text(
                       isQuick
                           ? 'Partida Rápida'
+                          : isCorr
+                          ? 'Correspondência'
                           : (isLanGuest
                               ? 'Rede Local'
                               : (isOnline ? 'Sala Online' : 'Mesa Local')),
@@ -300,6 +305,32 @@ class _LobbyScreenState extends State<LobbyScreen> {
       );
     }
 
+    // Correspondência: o combinado em uma linha (o prazo é fixo e a partida fica no servidor).
+    Widget? corrBanner() {
+      if (!isCorr) return null;
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('24 H POR JOGADA', style: AppText.label(size: 12, color: AppColors.ink, weight: FontWeight.w700)),
+            const SizedBox(height: 5),
+            const Text(
+              'Pode fechar o jogo quando quiser: a partida fica na Correspondência e avisamos por e-mail quando '
+              'for a sua vez. Três prazos perdidos seguidos e um bot assume o lugar.',
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.mute),
+            ),
+          ],
+        ),
+      );
+    }
+
     Widget seatsWidget({double gap = 6}) {
       final colors = c.engine.constants.colors;
       final openCount = isQuick ? max(0, 4 - c.seats.length) : 0;
@@ -371,13 +402,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
           : null;
 
       if (!canConfig) {
-        final timeStr = c.turnSecs > 0 ? '${c.turnSecs ~/ 60} min' : 'Livre';
+        final timeStr = isCorr ? '24 h por jogada' : (c.turnSecs > 0 ? '${c.turnSecs ~/ 60} min' : 'Livre');
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ?connBanner,
             ?quickBanner(),
+            ?corrBanner(),
             const EstSectionTag('BRIEFING DA MESA'),
             const SizedBox(height: 10),
             Container(
@@ -411,7 +443,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       ),
                     ],
                   ),
-                  if (c.lobbyHasPass) ...[
+                  if (c.lobbyHasPass && !isCorr) ...[
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -453,7 +485,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              isOnline
+              isCorr
+                  ? 'Quem criou começa a partida. Pode fechar: avisamos por e-mail.'
+                  : isOnline
                   ? 'Aguardando o anfitrião iniciar. Toque no círculo da sua cor para trocar.'
                   : 'Aguardando o anfitrião iniciar…',
               textAlign: TextAlign.center,
@@ -469,7 +503,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ],
             const SizedBox(height: 8),
             EstButton(
-              label: isOnline ? 'Sair da sala' : 'Sair',
+              label: isCorr ? 'Sair da partida' : (isOnline ? 'Sair da sala' : 'Sair'),
               variant: EstButtonVariant.ghost,
               onPressed: () => c.leaveGame(),
             ),
@@ -483,10 +517,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
         children: [
           ?connBanner,
           ?quickBanner(),
+          ?corrBanner(),
           const EstSectionTag('REGRAS DA BATALHA'),
           SizedBox(height: roomy ? 14 : 10),
-          // Tempo por turno
-          Row(
+          // Tempo por turno (na correspondência é fixo: 24 h)
+          if (!isCorr) Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
@@ -514,7 +549,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               ),
             ],
           ),
-          SizedBox(height: roomy ? 14 : 10),
+          if (!isCorr) SizedBox(height: roomy ? 14 : 10),
 
           // Collapsible Regras extras
           Container(
@@ -589,7 +624,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
           ),
 
-          if (isOnline || isRelayHostActive) ...[
+          if ((isOnline || isRelayHostActive) && !isCorr) ...[
             SizedBox(height: roomy ? 10 : 8),
             Container(
               decoration: BoxDecoration(
@@ -609,7 +644,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
           ],
 
-          if (!isQuick) ...[
+          if (!isQuick && !isCorr) ...[
             SizedBox(height: roomy ? 10 : 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

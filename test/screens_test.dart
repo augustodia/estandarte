@@ -12,7 +12,9 @@ import 'package:estandarte/game/app_controller.dart';
 import 'package:estandarte/game/daily_challenge.dart';
 import 'package:estandarte/game/fx_models.dart';
 import 'package:estandarte/net/account_api.dart';
+import 'package:estandarte/net/online_client.dart';
 import 'package:estandarte/ui/account_sheet.dart';
+import 'package:estandarte/ui/corr_screen.dart';
 import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
 import 'package:estandarte/ui/daily_screen.dart';
@@ -29,6 +31,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final _on = Platform.environment['SCREENS'] == '1';
+
+class _FakeLink extends GameLink {
+  @override
+  bool get isOpen => true;
+  @override
+  void send(Map<String, dynamic> msg) {}
+  @override
+  void close() {}
+}
+
+List<AsyncGameInfo> _corrSample() {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  const h = 3600 * 1000;
+  return [
+    AsyncGameInfo(
+      id: 'K7M2QA', status: 'play', round: 7, yourTurn: true, turnName: 'Luiz', deadlineMs: now + 18 * h + 600000,
+      seats: const [
+        AsyncSeatInfo(name: 'Luiz', color: 1, you: true),
+        AsyncSeatInfo(name: 'Beto', color: 0),
+        AsyncSeatInfo(name: 'Carla', color: 2),
+      ],
+    ),
+    AsyncGameInfo(
+      id: 'P3XR8D', status: 'play', round: 3, turnName: 'Ana', deadlineMs: now + 5 * h,
+      seats: const [
+        AsyncSeatInfo(name: 'Ana', color: 4),
+        AsyncSeatInfo(name: 'Luiz', color: 1, you: true),
+        AsyncSeatInfo(name: 'Bot 3', color: 3, bot: true),
+      ],
+    ),
+    const AsyncGameInfo(
+      id: 'H9WQ2E', status: 'lobby', owner: true,
+      seats: [AsyncSeatInfo(name: 'Luiz', color: 1, you: true), AsyncSeatInfo(name: 'Davi', color: 5)],
+    ),
+    AsyncGameInfo(
+      id: 'B4NM7T', status: 'over', round: 14, winner: 'Luiz', youWon: true, updatedMs: now - 3 * 24 * h,
+      seats: const [
+        AsyncSeatInfo(name: 'Luiz', color: 1, you: true),
+        AsyncSeatInfo(name: 'Eva', color: 3),
+        AsyncSeatInfo(name: 'Fábio', color: 0),
+        AsyncSeatInfo(name: 'Gil', color: 2),
+      ],
+    ),
+  ];
+}
 
 Future<void> _loadFonts() async {
   Future<void> fam(String name, List<String> files) async {
@@ -125,16 +172,49 @@ void main() {
       await _shot(tester, 'account_new_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
       ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com'));
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_unconf_$tag');
       showAccountSheet(homeCtx, ctrl);
       await _shot(tester, 'account_code_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
       ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com', emailVerified: true));
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_acct_$tag');
       showAccountSheet(homeCtx, ctrl);
       await _shot(tester, 'account_in_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      // correspondência: o início com partidas esperando, a lista, a lista vazia e a sala de espera
+      ctrl.debugSetCorr(_corrSample());
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
+      await _shot(tester, 'home_corr_$tag');
+      await tester.pumpWidget(_app(CorrScreen(ctrl: ctrl)));
+      await _shot(tester, 'corr_$tag');
+      ctrl.debugSetCorr(const []);
+      await tester.pumpWidget(_app(CorrScreen(ctrl: ctrl)));
+      await _shot(tester, 'corr_empty_$tag');
+      ctrl.online = OnlineSession(server: '', code: 'K7M2QA', host: false, fromRooms: false, name: 'Luiz', corr: true);
+      ctrl.guestLink = _FakeLink();
+      ctrl.lobbyCode = 'K7M2QA';
+      ctrl.lobbyOwner = true;
+      ctrl.optHq = true;
+      ctrl.me = 0;
+      ctrl.seats = [
+        LobbySeat(name: 'Luiz', color: 1, ctrl: 'remote', online: true),
+        LobbySeat(name: 'Beto', color: 0, ctrl: 'remote'),
+      ];
+      await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
+      await _shot(tester, 'lobby_corr_$tag');
+      ctrl.online = null;
+      ctrl.guestLink = null;
+      ctrl.lobbyCode = null;
+      ctrl.lobbyOwner = false;
+      ctrl.seats = [];
+      ctrl.debugSetCorr(const []);
+
       ctrl.debugSetAccount(null);
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await tester.pump(const Duration(milliseconds: 400));
 
       // teclado aberto: o navegador encolhe a altura útil (interactive-widget=resizes-content)

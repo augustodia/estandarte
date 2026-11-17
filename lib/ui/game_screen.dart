@@ -1428,10 +1428,17 @@ class _TurnRingButton extends StatelessWidget {
             secsLeft = max(0, (left / 1000).ceil());
             clockFrac = (left / ctrl.turnLimitMs!).clamp(0.0, 1.0);
             low = secsLeft <= 10;
-            topText = secsLeft >= 60
-                ? '${secsLeft ~/ 60}:${(secsLeft % 60).toString().padLeft(2, '0')}'
-                : '$secsLeft';
-            subText = secsLeft >= 60 ? '' : 'seg';
+            if (ctrl.inCorr) {
+              // correspondência: horas (ou minutos na última hora) até o prazo da jogada
+              low = secsLeft < 3600;
+              topText = secsLeft >= 3600 ? '${secsLeft ~/ 3600}' : '${(secsLeft / 60).ceil()}';
+              subText = secsLeft >= 3600 ? 'h' : 'min';
+            } else {
+              topText = secsLeft >= 60
+                  ? '${secsLeft ~/ 60}:${(secsLeft % 60).toString().padLeft(2, '0')}'
+                  : '$secsLeft';
+              subText = secsLeft >= 60 ? '' : 'seg';
+            }
           } else {
             topText = '${slices.isNotEmpty ? slices.first.$2 : 0}';
             subText = 'terr';
@@ -2077,7 +2084,9 @@ class _BottomActionBar extends StatelessWidget {
       final objTxt = ev.objectiveTexts[wIdx] ?? '';
       msgSpans.add(TextSpan(text: '${w['name']}', style: TextStyle(fontWeight: FontWeight.w700, color: wCol)));
       msgSpans.add(TextSpan(text: ' venceu! $objTxt'));
-      if (ctrl.role != 'guest' || ctrl.lobbyOwner) {
+      if (ctrl.inCorr) {
+        btns.add(actionBtn('Correspondência', () => ctrl.leaveGame(keepSeat: true), variant: EstButtonVariant.primary));
+      } else if (ctrl.role != 'guest' || ctrl.lobbyOwner) {
         btns.add(actionBtn('Nova partida', ctrl.requestPlayAgainOnline, variant: EstButtonVariant.primary));
       }
     } else if (!can) {
@@ -3291,7 +3300,16 @@ class _VictoryOverlayState extends State<_VictoryOverlay> {
         Row(
           children: [
             Expanded(child: EstButton(label: 'Ver o mapa', onPressed: c.dismissVictory)),
-            if (c.role != 'guest' || c.lobbyOwner) ...[
+            if (c.inCorr) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: EstButton(
+                  label: 'Correspondência',
+                  variant: EstButtonVariant.primary,
+                  onPressed: () => c.leaveGame(keepSeat: true),
+                ),
+              ),
+            ] else if (c.role != 'guest' || c.lobbyOwner) ...[
               const SizedBox(width: 8),
               Expanded(
                 child: EstButton(

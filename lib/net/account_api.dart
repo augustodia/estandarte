@@ -164,3 +164,92 @@ bool looksLikeEmail(String s) {
           r'(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$')
       .hasMatch(s);
 }
+
+// ---------------- Partidas por correspondência (24 h por jogada) ----------------
+
+class AsyncSeatInfo {
+  const AsyncSeatInfo({required this.name, required this.color, this.bot = false, this.you = false});
+  final String name;
+  final int color;
+  final bool bot;
+  final bool you;
+
+  factory AsyncSeatInfo.fromJson(Map<String, dynamic> j) => AsyncSeatInfo(
+        name: j['name'] as String? ?? '',
+        color: (j['color'] as num?)?.toInt() ?? 0,
+        bot: j['ctrl'] == 'bot',
+        you: j['you'] == true,
+      );
+}
+
+/// Uma partida da lista: [status] é lobby (esperando gente), play ou over.
+class AsyncGameInfo {
+  const AsyncGameInfo({
+    required this.id,
+    required this.status,
+    this.round = 0,
+    this.seats = const [],
+    this.yourTurn = false,
+    this.turnName = '',
+    this.deadlineMs = 0,
+    this.winner = '',
+    this.youWon = false,
+    this.owner = false,
+    this.updatedMs = 0,
+  });
+
+  final String id;
+  final String status;
+  final int round;
+  final List<AsyncSeatInfo> seats;
+  final bool yourTurn;
+  final String turnName;
+  final int deadlineMs;
+  final String winner;
+  final bool youWon;
+  final bool owner;
+  final int updatedMs;
+
+  bool get playing => status == 'play';
+  bool get waiting => status == 'lobby';
+  bool get over => status == 'over';
+
+  factory AsyncGameInfo.fromJson(Map<String, dynamic> j) => AsyncGameInfo(
+        id: j['id'] as String? ?? '',
+        status: j['status'] as String? ?? 'lobby',
+        round: (j['round'] as num?)?.toInt() ?? 0,
+        seats: [
+          for (final s in (j['seats'] as List<dynamic>? ?? const []))
+            AsyncSeatInfo.fromJson(Map<String, dynamic>.from(s as Map)),
+        ],
+        yourTurn: j['yourTurn'] == true,
+        turnName: j['turnName'] as String? ?? '',
+        deadlineMs: (j['deadline'] as num?)?.toInt() ?? 0,
+        winner: j['winner'] as String? ?? '',
+        youWon: j['youWon'] == true,
+        owner: j['owner'] == true,
+        updatedMs: (j['updated'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Cria a sala de espera de uma partida por correspondência; devolve o código.
+Future<String> asyncCreate(String server, String token) async =>
+    (await _call(server, 'POST', '/async/create', token: token))['id'] as String? ?? '';
+
+/// As partidas por correspondência da conta (as que esperam por você primeiro).
+Future<List<AsyncGameInfo>> asyncMine(String server, String token) async {
+  final j = await _call(server, 'GET', '/async/mine', token: token);
+  return [
+    for (final g in (j['games'] as List<dynamic>? ?? const []))
+      AsyncGameInfo.fromJson(Map<String, dynamic>.from(g as Map)),
+  ];
+}
+
+/// Código de partida por correspondência (6 letras) digitado ou colado como link (?partida=).
+String? asyncCode(String? raw) {
+  final s = (raw ?? '').trim();
+  final m1 = RegExp(r'[?&]partida=([A-Za-z0-9]{6})').firstMatch(s);
+  if (m1 != null) return m1.group(1)!.toUpperCase();
+  final m2 = RegExp(r'^#?([A-Za-z0-9]{6})$').firstMatch(s);
+  return m2?.group(1)!.toUpperCase();
+}

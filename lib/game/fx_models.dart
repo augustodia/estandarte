@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import '../net/online_client.dart';
 
-enum AppScreen { home, rooms, lobby, daily, game }
+enum AppScreen { home, rooms, corr, lobby, daily, game }
 
 class LobbySeat {
   LobbySeat({
@@ -196,6 +196,7 @@ class OnlineSession {
     this.owner = false,
     this.isPublic = false,
     this.lan = false,
+    this.corr = false,
     this.gone = false,
     this.waitMsg = '',
   });
@@ -209,6 +210,9 @@ class OnlineSession {
   bool owner;
   bool isPublic;
   final bool lan;
+
+  /// Partida por correspondência (24 h por jogada): fica no servidor, sair só fecha neste aparelho.
+  final bool corr;
   bool gone;
   String waitMsg;
   GameLink? pendingLink;

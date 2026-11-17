@@ -23,6 +23,7 @@ const int alarmMs = 900;
 const int flightMs = 2900;
 const int impactMs = alarmMs + flightMs;
 const String appVersion = 'alpha-1.4';
+const int corrTurnMs = 24 * 3600 * 1000; // correspondência: prazo de cada jogada
 
 const Map<String, String> stepLabels = {
   'reinforce': 'Reforço',
@@ -224,6 +225,23 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic>? savedOnlineMeta;
   String? pendingJoinSalaCode;
   String? pendingJoinQrCode;
+  String? pendingJoinCorrCode;
+
+  /// Código que chegou por link: a tela da correspondência já abre com ele no campo.
+  String corrPrefill = '';
+
+  // Correspondência (24 h por jogada): as partidas da conta, de quem é a vez e o prazo
+  List<acc.AsyncGameInfo> corrGames = const [];
+  bool corrLoading = false;
+  bool corrLoaded = false;
+  String? corrError;
+  Timer? _corrTimer;
+
+  /// Partidas em que é a sua vez (o número que aparece no início).
+  int get corrYourTurn => corrGames.where((g) => g.playing && g.yourTurn).length;
+
+  /// A partida aberta agora é por correspondência.
+  bool get inCorr => online?.corr == true;
 
   // Rooms browser state
   bool roomsLoading = false;
@@ -289,8 +307,12 @@ class AppController extends ChangeNotifier {
 
     // Check URL params / hash
     final sala = roomCode(WebEnv.getQueryParam('sala'));
+    final partida = acc.asyncCode(WebEnv.getQueryParam('partida'));
     final hash = WebEnv.getHash();
-    if (sala != null) {
+    if (partida != null) {
+      pendingJoinCorrCode = partida;
+      WebEnv.replaceCleanUrl();
+    } else if (sala != null) {
       pendingJoinSalaCode = sala;
       WebEnv.replaceCleanUrl(sala);
     } else if (hash.startsWith('#j=')) {
@@ -411,6 +433,7 @@ class AppController extends ChangeNotifier {
   // Opcional: sem conta, tudo funciona igual (convidado, mesa local, rede de casa).
   // Com conta: o nome de usuário (único) é o nome no jogo e o desafio do dia vale em qualquer aparelho.
   static const _kAccToken = 'ultimato.account.token';
+  static const _kPlayed = 'ultimato.played';
   static const _kAccUser = 'ultimato.account.user';
   // De quem é o progresso guardado no aparelho (id da conta; vazio = convidado).
   static const _kProgressOwner = 'ultimato.progress.owner';
@@ -480,6 +503,8 @@ class AppController extends ChangeNotifier {
   }
 
   void _clearAccount() {
+    corrGames = const [];
+    corrLoaded = false;
     _accountToken = null;
     account = null;
     accountPendingEmail = null;
@@ -497,6 +522,7 @@ class AppController extends ChangeNotifier {
       if (_accountToken != tok) return;
       _applyState(st);
       unawaited(syncProgress());
+      unawaited(refreshCorr(silent: true));
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) _clearAccount();
     }
@@ -574,7 +600,7 @@ class AppController extends ChangeNotifier {
         _storeAccount(s.token, s.user);
         accountPendingEmail = null;
         accountResendAt = null;
-        unawaited(refreshAccount()); // traz troca de e-mail pendente e o tempo do reenvio
+        unawaited(refreshAccount()); // traz troca de e-mail pendente e o tempo do reenvio (e as partidas)
       });
 
   Future<acc.AccountError?> accountVerify(String code) => _accountRun(() async {
@@ -663,7 +689,106 @@ class AppController extends ChangeNotifier {
   void goHome() {
     _roomsTimer?.cancel();
     _roomsTimer = null;
+    _corrTimer?.cancel();
     screen = AppScreen.home;
+    notifyListeners();
+    if (signedIn) unawaited(refreshCorr(silent: true));
+  }
+
+  // ---------------- Correspondência ----------------
+
+  /// Busca as partidas por correspondência da conta. [silent] não mostra erro se já há uma lista na tela.
+  Future<void> refreshCorr({bool silent = false}) async {
+    final tok = _accountToken;
+    if (tok == null || !netOnline || corrLoading) return;
+    corrLoading = true;
+    if (!silent) notifyListeners();
+    try {
+      final list = await acc.asyncMine(serverUrl(), tok);
+      if (_accountToken != tok) return;
+      corrGames = list;
+      corrLoaded = true;
+      corrError = null;
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) _clearAccount();
+      if (!silent || corrGames.isEmpty) corrError = e.message;
+    } finally {
+      corrLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void openCorrScreen() {
+    SoundPlayer.unlock();
+    if (!_onlineGate()) return;
+    _roomsTimer?.cancel();
+    screen = AppScreen.corr;
+    corrError = null;
+    notifyListeners();
+    unawaited(refreshCorr());
+    _corrTimer?.cancel();
+    _corrTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (screen == AppScreen.corr) {
+        unawaited(refreshCorr(silent: true));
+      } else {
+        _corrTimer?.cancel();
+      }
+    });
+  }
+
+  bool corrCreating = false;
+
+  /// Cria a sala de espera no servidor e entra nela (as regras se acertam na sala, como numa mesa online).
+  Future<void> createCorrGame() async {
+    if (!_onlineGate() || corrCreating) return;
+    if (!netOnline) {
+      showToast('Sem internet: a correspondência precisa de conexão.', 4000);
+      return;
+    }
+    corrCreating = true;
+    notifyListeners();
+    try {
+      final id = await acc.asyncCreate(serverUrl(), _accountToken!);
+      if (id.isNotEmpty) openCorrGame(id);
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized) {
+        _clearAccount();
+        _onlineGate();
+      } else {
+        showToast(e.message, 4500);
+      }
+    } finally {
+      corrCreating = false;
+      notifyListeners();
+    }
+  }
+
+  /// Abre uma partida por correspondência (pelo código de 6 letras ou o link).
+  void openCorrGame(String raw) {
+    final code = acc.asyncCode(raw);
+    if (code == null) {
+      showToast('O código da correspondência tem 6 letras (ex.: K7M2QA).');
+      return;
+    }
+    if (!_onlineGate()) return;
+    _corrTimer?.cancel();
+    _connectOnlineQuery(
+      'async=$code',
+      host: false,
+      fromRooms: false,
+      name: onlineName,
+      code: code,
+      isPublic: false,
+      corr: true,
+    );
+  }
+
+  /// Só para as fotos de tela.
+  @visibleForTesting
+  void debugSetCorr(List<acc.AsyncGameInfo> games) {
+    corrGames = games;
+    corrLoaded = true;
+    corrError = null;
     notifyListeners();
   }
 
@@ -1231,8 +1356,17 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Primeira visita: nunca jogou o tutorial, uma partida ou o desafio, nem entrou numa conta.
+  bool get isNewcomer =>
+      AppStorage.instance.getString(_kPlayed) == null && dailyProgress.isEmpty && !signedIn && !hasSavedLocal;
+
+  void _markPlayed() {
+    if (AppStorage.instance.getString(_kPlayed) == null) AppStorage.instance.setString(_kPlayed, '1');
+  }
+
   void startTutorial({String? playerName}) {
     SoundPlayer.unlock();
+    _markPlayed();
     _resetSessionState();
     inTutorial = true;
     _tutorialCompletedSent = false;
@@ -1587,6 +1721,7 @@ class AppController extends ChangeNotifier {
 
   void beginGame() {
     SoundPlayer.unlock();
+    _markPlayed();
     if (online != null) {
       if (lobbyOwner && guestLink != null) {
         guestLink!.send({'t': 'begin'});
@@ -2664,6 +2799,7 @@ class AppController extends ChangeNotifier {
     bool isPublic = true,
     bool watchOnly = false,
     bool isLan = false,
+    bool corr = false,
     String? pass,
   }) {
     SoundPlayer.unlock();
@@ -2687,6 +2823,7 @@ class AppController extends ChangeNotifier {
       owner: host,
       isPublic: !isLan && isPublic,
       lan: isLan,
+      corr: corr,
     )..waitMsg = isLan ? 'Conectando ao anfitrião ($code)…' : 'Conectando ao servidor…';
     online = ses;
     screen = AppScreen.lobby;
@@ -2720,7 +2857,7 @@ class AppController extends ChangeNotifier {
             if (!isLan && _accountToken != null) 'acc': _accountToken,
           });
         }
-        if (ses.code != null && !ses.lan) {
+        if (ses.code != null && !ses.lan && !ses.corr) {
           _saveOnlineSession(watch: watchOnly);
         }
         notifyListeners();
@@ -2762,7 +2899,9 @@ class AppController extends ChangeNotifier {
     final ses = online;
     if (ses == null || ses.gone || ses.code == null || guestLink != null) return;
     final tok = ses.token ?? _loadRoomToken(ses.server, ses.lan ? 'lan' : ses.code!);
-    final q = ses.lan ? 'room=lan' : 'room=${Uri.encodeQueryComponent(ses.code!)}';
+    final q = ses.lan
+        ? 'room=lan'
+        : (ses.corr ? 'async=${Uri.encodeQueryComponent(ses.code!)}' : 'room=${Uri.encodeQueryComponent(ses.code!)}');
     guestLink = connectOnline(
       ses.server,
       q,
@@ -2828,7 +2967,7 @@ class AppController extends ChangeNotifier {
 
   void _saveOnlineSession({bool watch = false}) {
     final ses = online;
-    if (ses == null || ses.code == null) return;
+    if (ses == null || ses.code == null || ses.corr) return; // a correspondência volta pela lista, não pela retomada
     if (ses.token != null) {
       _saveRoomToken(ses.server, ses.code!, ses.token!);
     }
@@ -3002,13 +3141,19 @@ class AppController extends ChangeNotifier {
     }
     if (t == 'state') {
       passPrompt = null;
+      _markPlayed();
       _hostLastHeardMs = DateTime.now().millisecondsSinceEpoch;
       hostLag = false;
       screen = AppScreen.game;
       final sView = msg['s'] as Map<String, dynamic>;
       me = (msg['you'] as num?)?.toInt() ?? -1;
       turnLimitMs = msg['limit'] is num ? (msg['limit'] as num).toInt() : null;
-      final leftMs = msg['left'] is num ? (msg['left'] as num).toInt() : null;
+      var leftMs = msg['left'] is num ? (msg['left'] as num).toInt() : null;
+      if (msg['async'] == true && msg['deadline'] is num) {
+        // correspondência: 24 h por jogada, contadas no servidor
+        turnLimitMs = corrTurnMs;
+        leftMs = max(0, (msg['deadline'] as num).toInt() - DateTime.now().millisecondsSinceEpoch);
+      }
       if (leftMs != null) {
         turnDeadlineMs = DateTime.now().millisecondsSinceEpoch + leftMs;
         _ensureClockRunning();
@@ -4641,8 +4786,10 @@ class AppController extends ChangeNotifier {
     unawaited(_tryAutoSpare());
   }
 
-  void leaveGame({String? showReason}) {
+  /// Sai da partida. Na correspondência, [keepSeat] só fecha neste aparelho (o lugar continua seu).
+  void leaveGame({String? showReason, bool keepSeat = false}) {
     final backToRooms = online != null && online!.fromRooms && !online!.gone;
+    final backToCorr = online != null && online!.corr;
     final backToDaily = activeChallenge != null;
     if (activeChallenge != null && !challengeWon && !challengeLost && _challengeStartedMs > 0) {
       final dur = max(1, (DateTime.now().millisecondsSinceEpoch - _challengeStartedMs) ~/ 1000);
@@ -4666,7 +4813,7 @@ class AppController extends ChangeNotifier {
 
     if (online != null) {
       final link = guestLink;
-      if (link != null && !online!.gone) {
+      if (link != null && !online!.gone && !(keepSeat && online!.corr)) {
         link.send({'t': 'leave'});
       }
       AppStorage.instance.remove('estandarte.online');
@@ -4680,6 +4827,8 @@ class AppController extends ChangeNotifier {
     WebEnv.setWakeLock(false);
     if (backToDaily) {
       unawaited(openDailyScreen());
+    } else if (backToCorr && signedIn) {
+      openCorrScreen();
     } else if (backToRooms) {
       openRoomsBrowser();
     } else {
@@ -4833,6 +4982,7 @@ class AppController extends ChangeNotifier {
     _fxCleanupTimer?.cancel();
     _heartbeatTimer?.cancel();
     _roomsTimer?.cancel();
+    _corrTimer?.cancel();
     _resetSessionState();
     clockTick.dispose();
     smoke.dispose();

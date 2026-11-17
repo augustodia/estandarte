@@ -6,6 +6,7 @@ import 'game/app_controller.dart';
 import 'game/fx_models.dart';
 import 'platform/storage.dart';
 import 'ui/account_sheet.dart';
+import 'ui/corr_screen.dart';
 import 'ui/daily_screen.dart';
 import 'ui/game_screen.dart';
 import 'ui/home_screen.dart';
@@ -187,7 +188,20 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
     if (_handledPendingUrl) return;
     _handledPendingUrl = true;
     final c = widget.ctrl;
-    if (c.pendingJoinSalaCode != null) {
+    if (c.pendingJoinCorrCode != null) {
+      // link de convite da correspondência: abre a lista com a partida (pede a conta antes, se faltar)
+      final code = c.pendingJoinCorrCode!;
+      c.pendingJoinCorrCode = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        c.corrPrefill = code;
+        if (c.signedIn) {
+          c.openCorrGame(code);
+        } else {
+          c.openCorrScreen();
+        }
+      });
+    } else if (c.pendingJoinSalaCode != null) {
       final code = c.pendingJoinSalaCode!;
       c.pendingJoinSalaCode = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -259,6 +273,7 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
           child: switch (widget.ctrl.screen) {
             AppScreen.home => HomeScreen(ctrl: widget.ctrl),
             AppScreen.rooms => RoomsScreen(ctrl: widget.ctrl),
+            AppScreen.corr => CorrScreen(ctrl: widget.ctrl),
             AppScreen.lobby => LobbyScreen(ctrl: widget.ctrl),
             AppScreen.daily => DailyScreen(ctrl: widget.ctrl),
             AppScreen.game => GameScreen(ctrl: widget.ctrl),

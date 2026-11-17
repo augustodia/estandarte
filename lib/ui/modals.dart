@@ -1617,8 +1617,11 @@ void showMenuModal(BuildContext context, AppController ctrl) {
 
 void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
   final watching = ctrl.online != null && (ctrl.me < 0);
+  final corr = ctrl.inCorr;
   final desc = watching
       ? 'Você volta para a tela inicial.'
+      : corr
+      ? 'A partida continua e o lugar é seu. Avisamos por e-mail quando for a sua vez; volte pela Correspondência.'
       : ctrl.online != null
           ? 'Um bot assume o seu lugar. Para voltar, abra de novo o link da sala.'
           : ctrl.role != 'guest'
@@ -1629,7 +1632,7 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
     context,
     maxWidth: 440,
     builder: (ctx) => EstSheetBody(
-      title: watching ? 'Parar de assistir?' : 'Sair da partida?',
+      title: watching ? 'Parar de assistir?' : (corr ? 'Fechar a partida?' : 'Sair da partida?'),
       onClose: () => Navigator.pop(ctx),
       children: [
         Text(desc, style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute)),
@@ -1638,11 +1641,11 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
           children: [
             Expanded(
               child: EstButton(
-                label: 'Sair',
-                variant: EstButtonVariant.warn,
+                label: corr ? 'Fechar' : 'Sair',
+                variant: corr ? EstButtonVariant.normal : EstButtonVariant.warn,
                 onPressed: () {
                   Navigator.pop(ctx);
-                  ctrl.leaveGame();
+                  ctrl.leaveGame(keepSeat: true);
                 },
               ),
             ),
@@ -1974,7 +1977,8 @@ class _RuleBullet extends StatelessWidget {
 void showOnlineInviteModal(BuildContext context, AppController ctrl) {
   final code = ctrl.lobbyCode ?? ctrl.online?.code;
   if (code == null) return;
-  final url = '${WebEnv.getBaseUrl()}?sala=$code';
+  final corr = ctrl.inCorr;
+  final url = corr ? '${WebEnv.getBaseUrl()}?partida=$code' : '${WebEnv.getBaseUrl()}?sala=$code';
 
   showEstSheet<void>(
     context,
@@ -1983,8 +1987,10 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
       titleIcon: const EstIcon(EstIconKind.globe, size: 20, color: AppColors.gold),
       onClose: () => Navigator.pop(ctx),
       children: [
-        const Text(
-          'Compartilhe o link ou o QR abaixo. Quem abrir entra direto nesta sala; também dá para digitar o código em Salas Online.',
+        Text(
+          corr
+              ? 'Compartilhe o link ou o QR abaixo. Quem abrir entra nesta partida (com conta); também dá para digitar o código na Correspondência.'
+              : 'Compartilhe o link ou o QR abaixo. Quem abrir entra direto nesta sala; também dá para digitar o código em Salas Online.',
           style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
         ),
         const SizedBox(height: 12),
