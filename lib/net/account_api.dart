@@ -64,7 +64,9 @@ Future<Map<String, dynamic>> _call(String server, String method, String path,
     j = jsonDecode(r.body) as Map<String, dynamic>;
   } catch (_) {}
   if (r.statusCode >= 200 && r.statusCode < 300) return j;
-  final msg = j['error'] as String? ?? 'Erro ${r.statusCode} no servidor.';
+  // 404: servidor ainda sem contas (versão antiga publicada)
+  final msg = j['error'] as String? ??
+      (r.statusCode == 404 ? 'Contas ainda não estão disponíveis no servidor.' : 'Erro ${r.statusCode} no servidor.');
   throw AccountError(msg, unauthorized: r.statusCode == 401 && token != null && path != '/account/login');
 }
 
