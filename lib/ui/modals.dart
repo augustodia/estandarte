@@ -1082,7 +1082,7 @@ void showPactsModal(BuildContext context, AppController ctrl) {
                           final canOffer = myTurn && why.isEmpty && !used && offer == null;
                           final sub = why.isNotEmpty
                               ? why
-                              : '${_ownedCount(v, i)} territórios · ${_handSize(p)} carta${_handSize(p) == 1 ? '' : 's'}${p['ctrl'] == 'bot' ? ' · bot' : ''}';
+                              : '${_ownedCount(v, i)} territórios · ${_handLabel(v, p)}${p['ctrl'] == 'bot' ? ' · bot' : ''}';
 
                           return Opacity(
                             opacity: why.isNotEmpty ? 0.62 : 1.0,

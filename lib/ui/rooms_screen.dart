@@ -657,9 +657,8 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 layout.big ? 28 : 16,
                 0,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              child: LayoutBuilder(builder: (context, box) {
+                final head = <Widget>[
                   topHeader(),
                   SizedBox(height: layout.big ? 12 : 8),
                   commandStrip(),
@@ -674,9 +673,21 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     ),
                   ],
                   const SizedBox(height: 10),
-                  Expanded(child: listBody()),
-                ],
-              ),
+                ];
+                // Teclado aberto deixa pouca altura: a tela rola inteira e o campo segue visível.
+                if (box.maxHeight < 360) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [...head, SizedBox(height: 280, child: listBody())],
+                    ),
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [...head, Expanded(child: listBody())],
+                );
+              }),
             ),
           ),
         ),

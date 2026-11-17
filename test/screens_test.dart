@@ -104,6 +104,15 @@ void main() {
       await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_$tag');
 
+      // teclado aberto: o navegador encolhe a altura útil (interactive-widget=resizes-content)
+      final kbSize = Size(size.width, size.height * (size.width > size.height ? 0.45 : 0.55));
+      tester.view.physicalSize = kbSize * 2;
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
+      await _shot(tester, 'home_kb_$tag');
+      await tester.pumpWidget(_app(RoomsScreen(ctrl: ctrl)));
+      await _shot(tester, 'rooms_kb_$tag');
+      tester.view.physicalSize = size * 2;
+
       // salas online (sem rede no teste: mostra o estado vazio/erro) e desafio do dia
       await tester.pumpWidget(_app(RoomsScreen(ctrl: ctrl)));
       await _shot(tester, 'rooms_$tag');
@@ -121,7 +130,10 @@ void main() {
       await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
       await _shot(tester, 'lobby_$tag');
 
-      // partida
+      // partida (com todos os extras, para as janelas)
+      ctrl.optEvents = true;
+      ctrl.optPacts = true;
+      ctrl.optNukes = true;
       ctrl.beginGame();
       await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
       for (var i = 0; i < 30 && ctrl.view?['turn'] != ctrl.me; i++) {
@@ -130,6 +142,54 @@ void main() {
       await _shot(tester, 'game_$tag');
 
       final ctx = tester.element(find.byType(GameScreen));
+
+      // reforça um território de fronteira e ataca: seleção e dados
+      final v0 = ctrl.view!;
+      final terrs = v0['terr'] as List<dynamic>;
+      int? from;
+      int? to;
+      for (var t = 0; t < terrs.length && from == null; t++) {
+        if ((terrs[t]['o'] as num).toInt() != ctrl.me) continue;
+        for (final j in ctrl.mapData.territories[t].adj) {
+          if ((terrs[j]['o'] as num).toInt() != ctrl.me) {
+            from = t;
+            to = j;
+            break;
+          }
+        }
+      }
+      if (from != null && ctrl.view?['turn'] == ctrl.me) {
+        for (var k = 0; k < 80 && ctrl.view?['step'] == 'reinforce' && ctrl.view?['turn'] == ctrl.me; k++) {
+          ctrl.sel = from;
+          ctrl.stepValue = 1;
+          ctrl.placeReinforce();
+          await tester.pump(const Duration(milliseconds: 30));
+        }
+        await _shot(tester, 'attackstep_$tag');
+        ctrl.tapTerritory(from);
+        await tester.pump(const Duration(milliseconds: 50));
+        ctrl.tapTerritory(to!);
+        await _shot(tester, 'select_$tag');
+        ctrl.attack();
+        await tester.pump(const Duration(milliseconds: 250));
+        await _shot(tester, 'dice_$tag');
+        await tester.pump(const Duration(seconds: 3));
+      }
+
+      showMenuModal(ctx, ctrl);
+      await _shot(tester, 'menu_$tag');
+      Navigator.of(ctx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      showExtrasModal(ctx, ctrl);
+      await _shot(tester, 'extras_$tag');
+      Navigator.of(ctx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      showPactsModal(ctx, ctrl);
+      await _shot(tester, 'pacts_$tag');
+      Navigator.of(ctx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 300));
       showObjectiveModal(ctx, ctrl);
       await _shot(tester, 'objective_$tag');
       Navigator.of(ctx, rootNavigator: true).pop();
@@ -144,6 +204,13 @@ void main() {
       await _shot(tester, 'rules_$tag');
       Navigator.of(ctx, rootNavigator: true).pop();
       await tester.pump(const Duration(milliseconds: 300));
+
+      // tutorial
+      await tester.pumpWidget(const SizedBox());
+      ctrl.startTutorial(playerName: 'Luiz');
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
+      await tester.pump(const Duration(seconds: 1));
+      await _shot(tester, 'tutorial_$tag');
 
       await tester.pumpWidget(const SizedBox());
       ctrl.dispose();

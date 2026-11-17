@@ -351,8 +351,11 @@ class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xD80B0F14),
-      child: Center(
-        child: Padding(
+      child: Padding(
+        // acima do teclado
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: Center(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
@@ -453,6 +456,7 @@ class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
