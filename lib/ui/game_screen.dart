@@ -2517,7 +2517,7 @@ class _BottomActionBar extends StatelessWidget {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: quiet ? CrossAxisAlignment.center : CrossAxisAlignment.stretch,
           children: [
             Row(
               mainAxisSize: quiet ? MainAxisSize.min : MainAxisSize.max,

@@ -275,7 +275,9 @@ class EstLayout {
 abstract final class AppText {
   static const cond = 'Barlow Condensed';
   static const body = 'Barlow';
-  static const List<String> condFallback = ['Barlow', 'Arial Narrow', 'sans-serif'];
+  /// Reserva para símbolos que a Barlow não tem (★ ☆ ✓ → ☰), embutida para funcionar sem internet.
+  static const List<String> symbols = ['UltSymbols', 'UltSymbols2'];
+  static const List<String> condFallback = ['Barlow', ...symbols];
   static const List<String> serifFallback = condFallback; // nome antigo
 
   static const tabular = [FontFeature.tabularFigures()];
@@ -340,6 +342,7 @@ ThemeData buildAppTheme() {
   return ThemeData(
     brightness: Brightness.dark,
     fontFamily: AppText.body,
+    fontFamilyFallback: AppText.symbols,
     scaffoldBackgroundColor: AppColors.deep,
     colorScheme: const ColorScheme.dark(
       primary: AppColors.action,

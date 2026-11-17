@@ -47,6 +47,8 @@ Future<void> _loadFonts() async {
     'assets/fonts/BarlowCondensed-SemiBold.ttf',
     'assets/fonts/BarlowCondensed-Bold.ttf',
   ]);
+  await fam('UltSymbols', ['assets/fonts/SymbolsMath-Subset.ttf']);
+  await fam('UltSymbols2', ['assets/fonts/Symbols2-Subset.ttf']);
   final root = Platform.environment['FLUTTER_ROOT'];
   if (root != null) {
     final icons = File('$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
