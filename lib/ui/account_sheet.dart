@@ -38,6 +38,13 @@ class _AccountSheetState extends State<_AccountSheet> {
   bool _showPass = false;
   bool _editEmail = false;
 
+  // esqueci a senha: 0 = fora, 1 = pedir o código, 2 = código + senha nova
+  int _resetStep = 0;
+  final _resetLogin = TextEditingController();
+  final _resetCode = TextEditingController();
+  final _newPass = TextEditingController();
+  DateTime? _resetSentAt;
+
   // erros por campo e geral
   final Map<String, String> _fieldErr = {};
   String? _error;
@@ -59,7 +66,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     _user.addListener(_onUserChanged);
     if (_signUp && !c.signedIn) WidgetsBinding.instance.addPostFrameCallback((_) => _onUserChanged());
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && c.accountResendAt != null) setState(() {});
+      if (mounted && (c.accountResendAt != null || _resetSentAt != null)) setState(() {});
     });
   }
 
@@ -67,7 +74,7 @@ class _AccountSheetState extends State<_AccountSheet> {
   void dispose() {
     _checkTimer?.cancel();
     _tick?.cancel();
-    for (final t in [_login, _email, _user, _pass, _code, _newEmail]) {
+    for (final t in [_login, _email, _user, _pass, _code, _newEmail, _resetLogin, _resetCode, _newPass]) {
       t.dispose();
     }
     super.dispose();
@@ -209,6 +216,51 @@ class _AccountSheetState extends State<_AccountSheet> {
     });
   }
 
+  int get _resetWait {
+    final at = _resetSentAt;
+    if (at == null) return 0;
+    final left = 60 - DateTime.now().difference(at).inSeconds;
+    return left > 0 ? left : 0;
+  }
+
+  Future<void> _sendReset() async {
+    FocusScope.of(context).unfocus();
+    setState(_clearMsgs);
+    final login = _resetLogin.text.trim();
+    if (login.isEmpty) {
+      setState(() => _fieldErr['login'] = 'Digite o e-mail ou o nome de usuário da conta.');
+      return;
+    }
+    final e = await c.accountForgotPassword(login);
+    if (!mounted) return;
+    if (e != null) return _show(e);
+    setState(() {
+      _resetSentAt = DateTime.now();
+      _resetStep = 2;
+      _resetCode.clear();
+    });
+  }
+
+  Future<void> _doReset() async {
+    FocusScope.of(context).unfocus();
+    setState(_clearMsgs);
+    final code = _resetCode.text.replaceAll(RegExp(r'\D'), '');
+    if (code.length != 6) _fieldErr['code'] = 'O código tem 6 dígitos.';
+    if (_newPass.text.characters.length < 8) _fieldErr['password'] = 'Pelo menos 8 caracteres.';
+    if (_fieldErr.isNotEmpty) {
+      setState(() {});
+      return;
+    }
+    final e = await c.accountResetPassword(_resetLogin.text, code, _newPass.text);
+    if (!mounted) return;
+    if (e != null) return _show(e);
+    _newPass.clear();
+    _resetCode.clear();
+    c.showToast('Senha trocada. Os outros aparelhos saíram da conta.');
+    setState(() => _resetStep = 0);
+    if (!c.accountNeedsConfirm) Navigator.of(context).maybePop();
+  }
+
   Future<void> _rename() async {
     FocusScope.of(context).unfocus();
     setState(_clearMsgs);
@@ -231,7 +283,10 @@ class _AccountSheetState extends State<_AccountSheet> {
       builder: (context, _) {
         final String title;
         final List<Widget> body;
-        if (!c.signedIn) {
+        if (_resetStep > 0) {
+          title = 'Trocar senha';
+          body = _resetBody();
+        } else if (!c.signedIn) {
           title = _signUp ? 'Criar conta' : 'Entrar';
           body = _signedOut();
         } else if (c.accountNeedsConfirm && !_editEmail) {
@@ -314,6 +369,19 @@ class _AccountSheetState extends State<_AccountSheet> {
         ),
         const SizedBox(height: Space.x3),
         _passwordField(busy, newPassword: false),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: busy
+                ? null
+                : () => setState(() {
+                      _clearMsgs();
+                      _resetLogin.text = _login.text.trim();
+                      _resetStep = 1;
+                    }),
+            child: Text('ESQUECI A SENHA', style: AppText.label(size: 11.5, color: AppColors.mute)),
+          ),
+        ),
       ];
 
   List<Widget> _signUpFields(bool busy) {
@@ -403,6 +471,145 @@ class _AccountSheetState extends State<_AccountSheet> {
           ),
         ),
       );
+
+  // ── esqueci a senha ──────────────────────────────────────────────────────────
+
+  List<Widget> _resetBody() {
+    final busy = c.accountBusy;
+    final back = EstButton(
+      variant: EstButtonVariant.ghost,
+      small: true,
+      label: 'Voltar',
+      onPressed: busy
+          ? null
+          : () => setState(() {
+                _clearMsgs();
+                _resetStep = 0;
+              }),
+    );
+    if (_resetStep == 1) {
+      return [
+        const Text(
+          'Mandamos um código para o e-mail da conta. Com ele você escolhe uma senha nova.',
+          style: TextStyle(fontSize: 14, color: AppColors.mute, height: 1.4),
+        ),
+        const SizedBox(height: Space.x4),
+        _Field(
+          label: 'E-MAIL OU NOME DE USUÁRIO',
+          error: _fieldErr['login'],
+          child: TextField(
+            controller: _resetLogin,
+            enabled: !busy,
+            autocorrect: false,
+            enableSuggestions: false,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.send,
+            autofillHints: const [AutofillHints.email, AutofillHints.username],
+            onSubmitted: (_) => _sendReset(),
+            decoration: const InputDecoration(hintText: 'voce@email.com'),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: Space.x3),
+          _Notice(_error!, bad: true),
+        ],
+        const SizedBox(height: Space.x4),
+        EstButton(
+          variant: EstButtonVariant.primary,
+          label: busy ? 'Enviando…' : 'Enviar código',
+          onPressed: busy || !c.netOnline ? null : _sendReset,
+        ),
+        const SizedBox(height: Space.x2),
+        back,
+      ];
+    }
+    final wait = _resetWait;
+    return [
+      Text.rich(
+        TextSpan(children: [
+          const TextSpan(text: 'Se existe uma conta com '),
+          TextSpan(text: _resetLogin.text.trim(), style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600)),
+          const TextSpan(text: ', o código chegou no e-mail dela. Vale por 30 minutos.'),
+        ]),
+        style: const TextStyle(fontSize: 14, color: AppColors.mute, height: 1.4),
+      ),
+      const SizedBox(height: Space.x4),
+      AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Field(
+              label: 'CÓDIGO',
+              error: _fieldErr['code'],
+              child: TextField(
+                controller: _resetCode,
+                enabled: !busy,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+                autofillHints: const [AutofillHints.oneTimeCode],
+                textAlign: TextAlign.center,
+                textInputAction: TextInputAction.next,
+                style: AppText.number(size: 26).copyWith(letterSpacing: 10),
+                decoration: const InputDecoration(hintText: '000000', counterText: ''),
+              ),
+            ),
+            const SizedBox(height: Space.x3),
+            _Field(
+              label: 'SENHA NOVA',
+              error: _fieldErr['password'],
+              child: TextField(
+                controller: _newPass,
+                enabled: !busy,
+                obscureText: !_showPass,
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLength: 128,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.newPassword],
+                onSubmitted: (_) => _doReset(),
+                decoration: InputDecoration(
+                  hintText: 'Pelo menos 8 caracteres',
+                  counterText: '',
+                  suffixIcon: IconButton(
+                    tooltip: _showPass ? 'Esconder senha' : 'Mostrar senha',
+                    icon: Icon(_showPass ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                    color: AppColors.faint,
+                    onPressed: () => setState(() => _showPass = !_showPass),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (_error != null) ...[
+        const SizedBox(height: Space.x3),
+        _Notice(_error!, bad: true),
+      ],
+      const SizedBox(height: Space.x4),
+      EstButton(
+        variant: EstButtonVariant.primary,
+        label: busy ? 'Trocando…' : 'Trocar senha',
+        onPressed: busy || !c.netOnline ? null : _doReset,
+      ),
+      const SizedBox(height: Space.x2),
+      Row(
+        children: [
+          Expanded(
+            child: EstButton(
+              small: true,
+              label: wait > 0 ? 'Reenviar em ${wait}s' : 'Reenviar código',
+              onPressed: busy || wait > 0 || !c.netOnline ? null : _sendReset,
+            ),
+          ),
+          const SizedBox(width: Space.x2),
+          Expanded(child: back),
+        ],
+      ),
+      const SizedBox(height: Space.x3),
+      const _Hint('Não chegou? Olhe o spam. Ao trocar, os outros aparelhos saem da conta.', center: true),
+    ];
+  }
 
   // ── confirmar o e-mail ───────────────────────────────────────────────────────
 
@@ -620,6 +827,17 @@ class _AccountSheetState extends State<_AccountSheet> {
         ),
       ],
       const SizedBox(height: Space.x6),
+      EstButton(
+        label: 'Trocar senha',
+        onPressed: busy || !c.netOnline
+            ? null
+            : () async {
+                setState(_clearMsgs);
+                _resetLogin.text = u.email;
+                await _sendReset();
+              },
+      ),
+      const SizedBox(height: Space.x2),
       EstButton(
         variant: EstButtonVariant.ghost,
         label: 'Sair da conta',

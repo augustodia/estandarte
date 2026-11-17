@@ -552,6 +552,20 @@ class AppController extends ChangeNotifier {
         if (st.codeSent) accountResendAt = DateTime.now().add(const Duration(seconds: 60));
       });
 
+  /// Esqueci a senha: manda o código para o e-mail da conta.
+  Future<acc.AccountError?> accountForgotPassword(String login) =>
+      _accountRun(() => acc.accountForgotPassword(serverUrl(), login.trim()));
+
+  /// Troca a senha com o código e entra (neste aparelho; os outros saem).
+  Future<acc.AccountError?> accountResetPassword(String login, String code, String password) =>
+      _accountRun(() async {
+        final s = await acc.accountResetPassword(serverUrl(), login.trim(), code.trim(), password);
+        _storeAccount(s.token, s.user);
+        accountPendingEmail = null;
+        accountResendAt = null;
+        unawaited(refreshAccount());
+      });
+
   /// Troca o nome de usuário (continua único).
   Future<acc.AccountError?> accountRename(String username) => _accountRun(() async {
         final u = await acc.accountRename(serverUrl(), _accountToken!, username.trim());
