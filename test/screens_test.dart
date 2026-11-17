@@ -183,12 +183,12 @@ void main() {
             star3Desc: 'S3'),
         setup: {},
       );
-      ctrl.debugRefresh();
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl))); // no teste ninguém escuta o controle: redesenha
       await _shot(tester, 'challenge_open_$tag');
       await tester.pump(const Duration(seconds: 7));
       await _shot(tester, 'challenge_closed_$tag');
       ctrl.activeChallenge = null;
-      ctrl.debugRefresh();
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
       await tester.pump(const Duration(milliseconds: 300));
 
       final ctx = tester.element(find.byType(GameScreen));

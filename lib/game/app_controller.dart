@@ -637,10 +637,6 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// Só para as fotos de tela: redesenha depois de mexer em campos públicos.
-  @visibleForTesting
-  void debugRefresh() => notifyListeners();
-
   /// Só para as fotos de tela: entra numa conta sem servidor.
   @visibleForTesting
   void debugSetAccount(acc.AccountUser? u, {String? pendingEmail}) {
