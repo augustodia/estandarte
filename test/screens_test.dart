@@ -196,6 +196,13 @@ void main() {
       Navigator.of(ctx, rootNavigator: true).pop();
       await tester.pump(const Duration(milliseconds: 300));
 
+      // fim de partida: o assento humano vira bot e os bots terminam a partida
+      ctrl.convertSeatToBot(0);
+      for (var k = 0; k < 4000 && ctrl.view?['phase'] == 'play'; k++) {
+        await tester.pump(const Duration(seconds: 2));
+      }
+      if (ctrl.view?['phase'] != 'play') await _shot(tester, 'victory_$tag');
+
       // tutorial
       await tester.pumpWidget(const SizedBox());
       ctrl.startTutorial(playerName: 'Luiz');

@@ -1712,35 +1712,46 @@ class _FlashOverlay extends StatelessWidget {
             : (land ? const Alignment(0, -0.16) : const Alignment(0, -0.20)),
         child: Padding(
           padding: EdgeInsets.only(top: isMini ? (land ? 58.0 : 104.0) : 0, left: 20, right: 20),
+          // aviso neutro com uma faixa na cor de quem age: a cor informa, o painel não grita
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 420),
-            padding: isMini
-                ? const EdgeInsets.symmetric(horizontal: 14, vertical: 5)
-                : const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            constraints: BoxConstraints(maxWidth: isMini ? 420 : 340),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              gradient: AppColors.glassGradient,
-              borderRadius: BorderRadius.circular(isMini ? 5 : 6),
-              border: Border.all(color: banner.color, width: isMini ? 1 : 1.5),
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(Radii.md),
+              border: Border.all(color: AppColors.glassBorder),
               boxShadow: AppColors.edgeShadows,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  banner.title,
-                  textAlign: TextAlign.center,
-                  style: isMini
-                      ? TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: banner.color)
-                      : AppText.serif(size: 24, color: banner.color, letterSpacing: 0.03),
-                ),
-                if (banner.sub.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    banner.sub,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13, height: 1.3, color: AppColors.ink),
+                Container(height: 3, color: banner.color),
+                Padding(
+                  padding: isMini
+                      ? const EdgeInsets.fromLTRB(14, 5, 14, 6)
+                      : EdgeInsets.fromLTRB(20, land ? 8 : 10, 20, land ? 10 : 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isMini ? banner.title : banner.title.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        style: isMini
+                            ? const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)
+                            : AppText.label(size: land ? 20 : 24, color: AppColors.ink, weight: FontWeight.w700),
+                      ),
+                      if (banner.sub.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          banner.sub,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13, height: 1.3, color: AppColors.mute),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -3125,45 +3136,7 @@ class _VictoryOverlay extends StatefulWidget {
   State<_VictoryOverlay> createState() => _VictoryOverlayState();
 }
 
-class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProviderStateMixin {
-  late final AnimationController _anim;
-  late final List<_Confetti> _bits;
-
-  @override
-  void initState() {
-    super.initState();
-    final c = widget.ctrl;
-    final v = c.view!;
-    final wIdx = (v['winner'] as num?)?.toInt() ?? (c.challengeWon ? 0 : 1);
-    final players = v['players'] as List<dynamic>;
-    final safeIdx = wIdx >= 0 && wIdx < players.length ? wIdx : 0;
-    final wCol = c.challengeLost
-        ? AppColors.bad
-        : parseHexColor(
-            c.engine.constants.colors[(players[safeIdx]['color'] as num).toInt()].hex,
-          );
-    _bits = c.challengeLost
-        ? const []
-        : List.generate(
-            70,
-            (k) => _Confetti(
-              x: ((k * 37) % 100) / 100.0,
-              y: -((k * 29) % 40) / 40.0,
-              vy: 0.25 + (((k * 13) % 20) / 40.0),
-              vx: ((k % 5) - 2) * 0.03,
-              size: 6.0 + (k % 4) * 2.0,
-              color: [wCol, AppColors.gold, AppColors.ink, wCol][k % 4],
-            ),
-          );
-    _anim = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
+class _VictoryOverlayState extends State<_VictoryOverlay> {
   @override
   Widget build(BuildContext context) {
     final c = widget.ctrl;
@@ -3181,7 +3154,10 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
     final w = players[wIdx] as Map<String, dynamic>;
     final wCol = parseHexColor(colors[(w['color'] as num).toInt()].hex);
     final mine = c.role == 'guest' ? wIdx == c.me : w['ctrl'] == 'local';
+    final hasSeat = c.me >= 0 && c.me < players.length;
+    final verdict = mine ? 'VITÓRIA' : (hasSeat ? 'DERROTA' : 'FIM DE PARTIDA');
     final objTxt = (c.eval?.objectiveTexts[wIdx] ?? '').replaceFirst(RegExp(r' Se for o seu.*$'), '');
+    final round = (v['round'] as num?)?.toInt() ?? 0;
 
     int owned(int idx) {
       var n = 0;
@@ -3198,194 +3174,182 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
         return owned(b) - owned(a);
       });
 
-    return Container(
-      color: const Color(0xEE0B0F14),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _anim,
-                builder: (_, _) => CustomPaint(painter: _ConfettiPainter(bits: _bits, t: _anim.value)),
+    final twoCol = widget.land && !layout.big;
+
+    final hero = Column(
+      crossAxisAlignment: twoCol ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          verdict,
+          style: AppText.label(
+            size: 13,
+            color: mine ? AppColors.action : (hasSeat ? AppColors.bad : AppColors.mute),
+            weight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EstFactionSeal(color: wCol, size: twoCol ? 26 : 30),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                '${w['name'] ?? ''}'.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.label(size: twoCol ? 30 : 36, color: AppColors.ink, weight: FontWeight.w700)
+                    .copyWith(letterSpacing: 1.0, height: 1.0),
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Rodada ${round + 1}',
+          style: AppText.number(size: 15, color: AppColors.mute, weight: FontWeight.w600),
+        ),
+        if (objTxt.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            v['winBy'] == 'last' ? 'ÚLTIMO EXÉRCITO EM JOGO · O OBJETIVO ERA' : 'OBJETIVO CUMPRIDO',
+            style: AppText.label(size: 11),
           ),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Container(
-                width: double.infinity,
-                constraints: BoxConstraints(maxWidth: layout.big ? 500 : (widget.land ? 620 : 400)),
-                padding: EdgeInsets.all(layout.big ? 24 : 18),
+          const SizedBox(height: 4),
+          Text(
+            objTxt,
+            textAlign: twoCol ? TextAlign.start : TextAlign.center,
+            style: const TextStyle(fontSize: 15, height: 1.35, color: AppColors.ink),
+          ),
+        ],
+      ],
+    );
+
+    final table = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text('COMANDANTE', style: AppText.label(size: 11))),
+            Text('TERRITÓRIOS', style: AppText.label(size: 11)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (var k = 0; k < rank.length; k++)
+          Builder(
+            builder: (_) {
+              final i = rank[k];
+              final p = players[i] as Map<String, dynamic>;
+              final col = parseHexColor(colors[(p['color'] as num).toInt()].hex);
+              final isFirst = i == wIdx;
+              final alive = p['alive'] == true;
+              return Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.panel,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: wCol, width: 2),
-                  boxShadow: AppColors.edgeShadows,
+                  color: isFirst ? AppColors.panel2 : Colors.transparent,
+                  borderRadius: BorderRadius.circular(Radii.sm),
+                  border: Border(
+                    top: k == 0 ? BorderSide.none : const BorderSide(color: AppColors.line),
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                child: Row(
                   children: [
-                    AnimatedBuilder(
-                      animation: _anim,
-                      builder: (context, child) {
-                        final bob = sin(_anim.value * pi * 4);
-                        return Transform.translate(
-                          offset: Offset(0, -3 * bob.abs()),
-                          child: child,
-                        );
-                      },
-                      child: EstIcon(EstIconKind.cup, size: 72, color: wCol),
+                    SizedBox(
+                      width: 18,
+                      child: Text('${k + 1}', style: AppText.number(size: 15, color: AppColors.faint)),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      mine ? 'Você venceu!' : 'Vitória de',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        letterSpacing: 2.0,
-                        color: AppColors.mute,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${w['name'] ?? ''}',
-                      textAlign: TextAlign.center,
-                      style: AppText.serif(size: layout.big ? 40 : 32, color: wCol, height: 1.05),
-                    ),
-                    if (objTxt.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        v['winBy'] == 'last' ? 'ÚLTIMO EXÉRCITO EM JOGO · O OBJETIVO ERA' : 'OBJETIVO CUMPRIDO',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                          color: AppColors.mute,
+                    EstFactionSeal(color: col, size: 12),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${p['name'] ?? ''}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
+                          color: alive || isFirst ? AppColors.ink : AppColors.faint,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        objTxt,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, height: 1.35, color: AppColors.ink),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    const EstRuleDivider(),
-                    const SizedBox(height: 10),
-                    for (final i in rank)
-                      Builder(
-                        builder: (_) {
-                          final p = players[i] as Map<String, dynamic>;
-                          final col = parseHexColor(colors[(p['color'] as num).toInt()].hex);
-                          final isFirst = i == wIdx;
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: isFirst ? wCol.withValues(alpha: 0.16) : AppColors.obsidian.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: isFirst ? wCol.withValues(alpha: 0.6) : AppColors.line,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                EstFactionSeal(color: col, size: 12, highlighted: isFirst),
-                                const SizedBox(width: 9),
-                                Expanded(
-                                  child: Text(
-                                    '${p['name'] ?? ''}',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
-                                      color: isFirst ? AppColors.ink : AppColors.mute,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  p['alive'] == true ? '${owned(i)} territórios' : 'eliminado',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: isFirst ? FontWeight.w700 : FontWeight.w400,
-                                    color: isFirst ? AppColors.ink : AppColors.mute,
-                                    fontFeatures: const [FontFeature.tabularFigures()],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: EstButton(label: 'Ver o mapa', onPressed: c.dismissVictory),
-                        ),
-                        if (c.role != 'guest' || c.lobbyOwner) ...[
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: EstButton(
-                              label: 'Nova partida',
-                              variant: EstButtonVariant.primary,
-                              onPressed: c.requestPlayAgainOnline,
-                            ),
-                          ),
-                        ],
-                      ],
+                    ),
+                    Text(
+                      alive ? '${owned(i)}' : 'ELIMINADO',
+                      style: alive
+                          ? AppText.number(size: 17, weight: FontWeight.w700, color: isFirst ? AppColors.ink : AppColors.mute)
+                          : AppText.label(size: 11),
                     ),
                   ],
                 ),
+              );
+            },
+          ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: EstButton(label: 'Ver o mapa', onPressed: c.dismissVictory)),
+            if (c.role != 'guest' || c.lobbyOwner) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: EstButton(
+                  label: 'Nova partida',
+                  variant: EstButtonVariant.primary,
+                  onPressed: c.requestPlayAgainOnline,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+
+    return Container(
+      color: const Color(0xF20B0F14),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              width: double.infinity,
+              constraints: BoxConstraints(maxWidth: twoCol ? 760 : (layout.big ? 520 : 400)),
+              decoration: BoxDecoration(
+                color: AppColors.panel,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: Border.all(color: AppColors.line),
+                boxShadow: AppColors.edgeShadows,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(height: 4, color: wCol),
+                  Padding(
+                    padding: EdgeInsets.all(twoCol ? 18 : (layout.big ? 24 : 18)),
+                    child: twoCol
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 5, child: hero),
+                              const SizedBox(width: 24),
+                              Expanded(flex: 6, child: table),
+                            ],
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [hero, const SizedBox(height: 18), table],
+                          ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
-}
-
-class _Confetti {
-  _Confetti({
-    required this.x,
-    required this.y,
-    required this.vx,
-    required this.vy,
-    required this.size,
-    required this.color,
-  });
-
-  final double x;
-  final double y;
-  final double vx;
-  final double vy;
-  final double size;
-  final Color color;
-}
-
-class _ConfettiPainter extends CustomPainter {
-  const _ConfettiPainter({required this.bits, required this.t});
-
-  final List<_Confetti> bits;
-  final double t;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final b in bits) {
-      final py = ((b.y + b.vy * t * 4) % 1.2) * size.height;
-      final px = ((b.x + b.vx * t * 4 + sin(t * 14 + b.size) * 0.02) % 1.0) * size.width;
-      canvas.drawRect(
-        Rect.fromCenter(center: Offset(px, py), width: b.size, height: b.size * 1.6),
-        Paint()..color = b.color.withValues(alpha: 0.92),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConfettiPainter old) => old.t != t;
 }
 
 /// Passo do tutorial. Compacto e recolhível para não cobrir o mapa; abre sozinho quando o passo muda.

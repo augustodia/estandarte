@@ -1119,7 +1119,7 @@ class AppController extends ChangeNotifier {
         step: 1,
         total: 5,
         title: 'Reforço (30 de 32 territórios)',
-        body: 'Seu objetivo é dominar 32 territórios. O Brasil já está selecionado: toque no botão dourado "Colocar" para posicionar seus 3 exércitos.',
+        body: 'Seu objetivo é dominar 32 territórios. O Brasil já está selecionado: toque no botão claro "Colocar" para posicionar seus 3 exércitos.',
       );
     }
     if (round == 1 && step == 'attack' && owned < 31) {
@@ -1136,7 +1136,7 @@ class AppController extends ChangeNotifier {
           step: 3,
           total: 5,
           title: 'Território Conquistado! (Avance tropas)',
-          body: 'Você tomou a Argentina e ganhou 2 medalhas! Escolha quantas tropas extras quer levar do Brasil e clique no botão dourado para confirmar a ocupação.',
+          body: 'Você tomou a Argentina e ganhou 2 medalhas! Escolha quantas tropas extras quer levar do Brasil e toque no botão claro para confirmar a ocupação.',
         );
       }
       return (
@@ -1161,7 +1161,7 @@ class AppController extends ChangeNotifier {
           step: 5,
           total: 5,
           title: 'Bônus de Continente Obrigatório',
-          body: 'Como você domina continentes inteiros, esses exércitos extras devem ser colocados nos continentes destacados em dourado no mapa!',
+          body: 'Como você domina continentes inteiros, esses exércitos extras devem ser colocados nos continentes destacados no mapa!',
         );
       }
     }
