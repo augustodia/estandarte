@@ -9,6 +9,7 @@ import 'dart:ui' as ui;
 import 'package:estandarte/core/map_data.dart';
 import 'package:estandarte/engine/game_engine.dart';
 import 'package:estandarte/game/app_controller.dart';
+import 'package:estandarte/game/daily_challenge.dart';
 import 'package:estandarte/game/fx_models.dart';
 import 'package:estandarte/net/account_api.dart';
 import 'package:estandarte/ui/account_sheet.dart';
@@ -172,6 +173,23 @@ void main() {
         await tester.pump(const Duration(milliseconds: 600));
       }
       await _shot(tester, 'game_$tag');
+
+      // objetivo do desafio: aberto ao começar, recolhido depois de alguns segundos
+      ctrl.activeChallenge = const DailyChallengeSpec(
+        id: 'd_teste', date: '2026-11-17', seed: 1, kind: 'daily', weekday: 2, flavor: 'daily',
+        title: 'Operação Assimetria', subtitle: '', briefing: '', doctrines: [], mutations: [], startRound: 1,
+        goal: ChallengeGoal(kind: 'hold_continents', title: 'Fechar América do Norte e do Sul em até 8 rodadas',
+            maxRounds: 8, star1Desc: 'S1', star2MaxRound: 6, star2Desc: 'S2', star3Rule: 'never_lost_key',
+            star3Desc: 'S3'),
+        setup: {},
+      );
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl))); // no teste ninguém escuta o controle: redesenha
+      await _shot(tester, 'challenge_open_$tag');
+      await tester.pump(const Duration(seconds: 7));
+      await _shot(tester, 'challenge_closed_$tag');
+      ctrl.activeChallenge = null;
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
+      await tester.pump(const Duration(milliseconds: 300));
 
       final ctx = tester.element(find.byType(GameScreen));
 
