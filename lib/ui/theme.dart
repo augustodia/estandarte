@@ -1057,7 +1057,8 @@ Future<T?> showEstSheet<T>(
               border: Border.all(color: pactTheme ? AppColors.glassBorder : AppColors.line),
               boxShadow: AppColors.edgeShadows,
             ),
-            child: builder(rCtx),
+            // Material próprio: listas e itens recolhíveis da janela desenham o toque sobre o painel
+            child: Material(type: MaterialType.transparency, child: builder(rCtx)),
           ),
         );
 
