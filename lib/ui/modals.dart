@@ -587,12 +587,13 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
                           ? 'Abrir pactos (propor ou romper)'
                           : 'Ver pactos',
                   onPressed: () {
-                    Navigator.pop(ctx);
-                    if (offerIsMine) {
-                      showOfferModal(context, ctrl);
-                    } else {
-                      showPactsModal(context, ctrl);
-                    }
+                    replaceEstSheet(ctx, (safeCtx) {
+                      if (offerIsMine) {
+                        showOfferModal(safeCtx, ctrl);
+                      } else {
+                        showPactsModal(safeCtx, ctrl);
+                      }
+                    });
                   },
                 ),
               ],
@@ -979,8 +980,9 @@ void showPactsModal(BuildContext context, AppController ctrl) {
                         variant: EstButtonVariant.warn,
                         label: 'Romper o pacto (perde ${ev.pactPenalty} exércitos)',
                         onPressed: () {
-                          Navigator.pop(ctx);
-                          _showConfirmBreakPact(context, ctrl, other);
+                          replaceEstSheet(ctx, (safeCtx) {
+                            _showConfirmBreakPact(safeCtx, ctrl, other);
+                          });
                         },
                       )
                     else
@@ -1365,8 +1367,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                                     height: 32,
                                     label: 'QR',
                                     onPressed: () {
-                                      Navigator.pop(ctx);
-                                      showP2pInviteModal(context, ctrl, reconnectSeat: seatIdx);
+                                      replaceEstSheet(ctx, (safeCtx) {
+                                        showP2pInviteModal(safeCtx, ctrl, reconnectSeat: seatIdx);
+                                      });
                                     },
                                   ),
                                 ],
@@ -1415,8 +1418,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                     small: true,
                     label: 'Convidar de volta',
                     onPressed: () {
-                      Navigator.pop(ctx);
-                      showOnlineInviteModal(context, ctrl);
+                      replaceEstSheet(ctx, (safeCtx) {
+                        showOnlineInviteModal(safeCtx, ctrl);
+                      });
                     },
                   ),
                 ],
@@ -1490,8 +1494,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                       height: 30,
                       label: 'QR',
                       onPressed: () {
-                        Navigator.pop(ctx);
-                        showOnlineInviteModal(context, ctrl);
+                        replaceEstSheet(ctx, (safeCtx) {
+                          showOnlineInviteModal(safeCtx, ctrl);
+                        });
                       },
                     ),
                   ],
@@ -1542,8 +1547,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                 icon: EstIconKind.qr,
                 label: 'Reconectar por QR',
                 onPressed: () {
-                  Navigator.pop(ctx);
-                  showP2pInviteModal(context, ctrl);
+                  replaceEstSheet(ctx, (safeCtx) {
+                    showP2pInviteModal(safeCtx, ctrl);
+                  });
                 },
               ),
             ],
@@ -1587,8 +1593,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                     icon: EstIconKind.book,
                     label: 'Regras',
                     onPressed: () {
-                      Navigator.pop(ctx);
-                      showRulesModal(context, ctrl);
+                      replaceEstSheet(ctx, (safeCtx) {
+                        showRulesModal(safeCtx, ctrl);
+                      });
                     },
                   ),
                 ),
@@ -1599,8 +1606,9 @@ void showMenuModal(BuildContext context, AppController ctrl) {
                     variant: EstButtonVariant.warn,
                     label: 'Sair',
                     onPressed: () {
-                      Navigator.pop(ctx);
-                      _showQuitConfirmModal(context, ctrl);
+                      replaceEstSheet(ctx, (safeCtx) {
+                        _showQuitConfirmModal(safeCtx, ctrl);
+                      });
                     },
                   ),
                 ),
@@ -2003,7 +2011,13 @@ void showOnlineInviteModal(BuildContext context, AppController ctrl) {
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: AppColors.brass),
             ),
-            child: QrImageView(data: url, size: 210, backgroundColor: Colors.white),
+            child: Builder(
+              builder: (qCtx) {
+                final l = EstLayout.of(qCtx);
+                final qrSize = l.land && !l.big ? 136.0 : 210.0;
+                return QrImageView(data: url, size: qrSize, backgroundColor: Colors.white);
+              },
+            ),
           ),
         ),
         const SizedBox(height: 10),
@@ -2136,10 +2150,16 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: AppColors.brass),
                   ),
-                  child: QrImageView(
-                    data: '${WebEnv.getBaseUrl()}#j=${Uri.encodeComponent(invite!.code)}',
-                    size: 200,
-                    backgroundColor: Colors.white,
+                  child: Builder(
+                    builder: (qCtx) {
+                      final l = EstLayout.of(qCtx);
+                      final qrSize = l.land && !l.big ? 136.0 : 200.0;
+                      return QrImageView(
+                        data: '${WebEnv.getBaseUrl()}#j=${Uri.encodeComponent(invite!.code)}',
+                        size: qrSize,
+                        backgroundColor: Colors.white,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -2147,12 +2167,17 @@ void showP2pInviteModal(BuildContext context, AppController ctrl, {int? reconnec
                 const SizedBox(height: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    height: 160,
-                    child: QrScannerView(
-                      onCode: acceptCode,
-                      onError: (m) => ctrl.showToast(m),
-                    ),
+                  child: Builder(
+                    builder: (sCtx) {
+                      final l = EstLayout.of(sCtx);
+                      return SizedBox(
+                        height: l.land && !l.big ? 130.0 : 160.0,
+                        child: QrScannerView(
+                          onCode: acceptCode,
+                          onError: (m) => ctrl.showToast(m),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -2295,10 +2320,16 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: AppColors.brass),
                   ),
-                  child: QrImageView(
-                    data: result!.code,
-                    size: 210,
-                    backgroundColor: Colors.white,
+                  child: Builder(
+                    builder: (qCtx) {
+                      final l = EstLayout.of(qCtx);
+                      final qrSize = l.land && !l.big ? 136.0 : 210.0;
+                      return QrImageView(
+                        data: result!.code,
+                        size: qrSize,
+                        backgroundColor: Colors.white,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -2344,12 +2375,17 @@ void showP2pJoinModal(BuildContext context, AppController ctrl, {String? initial
                 const SizedBox(height: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    height: 190,
-                    child: QrScannerView(
-                      onCode: submitOffer,
-                      onError: (m) => ctrl.showToast(m),
-                    ),
+                  child: Builder(
+                    builder: (sCtx) {
+                      final l = EstLayout.of(sCtx);
+                      return SizedBox(
+                        height: l.land && !l.big ? 140.0 : 190.0,
+                        child: QrScannerView(
+                          onCode: submitOffer,
+                          onError: (m) => ctrl.showToast(m),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],

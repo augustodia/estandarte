@@ -5,6 +5,7 @@ import 'engine/game_engine.dart';
 import 'game/app_controller.dart';
 import 'game/fx_models.dart';
 import 'platform/storage.dart';
+import 'ui/daily_screen.dart';
 import 'ui/game_screen.dart';
 import 'ui/home_screen.dart';
 import 'ui/lobby_screen.dart';
@@ -235,6 +236,7 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
             AppScreen.home => HomeScreen(ctrl: widget.ctrl),
             AppScreen.rooms => RoomsScreen(ctrl: widget.ctrl),
             AppScreen.lobby => LobbyScreen(ctrl: widget.ctrl),
+            AppScreen.daily => DailyScreen(ctrl: widget.ctrl),
             AppScreen.game => GameScreen(ctrl: widget.ctrl),
           },
         );

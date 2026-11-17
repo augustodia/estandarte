@@ -198,15 +198,108 @@ OnlineLink connectOnline(
   return link;
 }
 
+String _httpBase(String server) => server.replaceFirst(RegExp(r'^ws'), 'http');
+
 Future<Map<String, dynamic>> listRooms(String server, {Duration timeout = const Duration(seconds: 75)}) async {
-  final httpBase = server.replaceFirst(RegExp(r'^ws'), 'http');
   final r = await http
       .get(
-        Uri.parse('$httpBase/rooms?_=${DateTime.now().millisecondsSinceEpoch}'),
+        Uri.parse('${_httpBase(server)}/rooms?_=${DateTime.now().millisecondsSinceEpoch}'),
       )
       .timeout(timeout);
   if (r.statusCode < 200 || r.statusCode >= 300) {
     throw Exception('http ${r.statusCode}');
   }
   return jsonDecode(r.body) as Map<String, dynamic>;
+}
+
+Future<Map<String, dynamic>> fetchDailyChallenge(
+  String server, {
+  Duration timeout = const Duration(seconds: 45),
+}) async {
+  final r = await http
+      .get(
+        Uri.parse('${_httpBase(server)}/daily?_=${DateTime.now().millisecondsSinceEpoch}'),
+      )
+      .timeout(timeout);
+  if (r.statusCode < 200 || r.statusCode >= 300) {
+    throw Exception('http ${r.statusCode}');
+  }
+  return jsonDecode(r.body) as Map<String, dynamic>;
+}
+
+Future<Map<String, dynamic>> startDailyRun(
+  String server, {
+  required String clientId,
+  required String difficulty,
+  required String platform,
+  required String appVersion,
+  Duration timeout = const Duration(seconds: 25),
+}) async {
+  final r = await http
+      .post(
+        Uri.parse('${_httpBase(server)}/daily/start'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'clientId': clientId,
+          'difficulty': difficulty,
+          'platform': platform,
+          'appVersion': appVersion,
+        }),
+      )
+      .timeout(timeout);
+  if (r.statusCode < 200 || r.statusCode >= 300) {
+    throw Exception('http ${r.statusCode}');
+  }
+  return jsonDecode(r.body) as Map<String, dynamic>;
+}
+
+Future<Map<String, dynamic>> submitDailyRun(
+  String server,
+  Map<String, dynamic> payload, {
+  Duration timeout = const Duration(seconds: 25),
+}) async {
+  final r = await http
+      .post(
+        Uri.parse('${_httpBase(server)}/daily/submit'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      )
+      .timeout(timeout);
+  if (r.statusCode < 200 || r.statusCode >= 300) {
+    throw Exception('http ${r.statusCode}');
+  }
+  return jsonDecode(r.body) as Map<String, dynamic>;
+}
+
+Future<Map<String, dynamic>> fetchDailyRanking(
+  String server, {
+  String? date,
+  Duration timeout = const Duration(seconds: 25),
+}) async {
+  final q = date != null && date.isNotEmpty ? '?date=${Uri.encodeQueryComponent(date)}' : '';
+  final r = await http
+      .get(Uri.parse('${_httpBase(server)}/daily/ranking$q'))
+      .timeout(timeout);
+  if (r.statusCode < 200 || r.statusCode >= 300) {
+    throw Exception('http ${r.statusCode}');
+  }
+  return jsonDecode(r.body) as Map<String, dynamic>;
+}
+
+Future<void> sendMetricsBatch(
+  String server,
+  List<Map<String, dynamic>> events, {
+  Duration timeout = const Duration(seconds: 12),
+}) async {
+  if (events.isEmpty) return;
+  final r = await http
+      .post(
+        Uri.parse('${_httpBase(server)}/metrics'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'events': events}),
+      )
+      .timeout(timeout);
+  if (r.statusCode < 200 || r.statusCode >= 300) {
+    throw Exception('http ${r.statusCode}');
+  }
 }

@@ -8,11 +8,13 @@ import '../core/map_data.dart';
 import '../core/names.dart';
 import '../engine/game_engine.dart';
 import '../net/online_client.dart';
+import '../net/telemetry.dart';
 import '../platform/lan_host.dart';
 import '../platform/p2p.dart';
 import '../platform/sound.dart';
 import '../platform/storage.dart';
 import '../platform/web_env.dart';
+import 'daily_challenge.dart';
 import 'fx_models.dart';
 import 'smoke_sim.dart';
 
@@ -177,9 +179,39 @@ class AppController extends ChangeNotifier {
   String? toastMessage;
   int toastUntilMs = 0;
 
-  // Victory dismissal (allows inspecting board after game ends)
+  // Victory dismissal & Tutorial / Daily Challenge state
   bool victoryDismissed = false;
   bool inTutorial = false;
+  bool _tutorialCompletedSent = false;
+  bool _matchEndSent = false;
+  int _matchStartedMs = 0;
+
+  DailySnapshot? dailySnapshot;
+  bool dailyLoading = false;
+  String? dailyError;
+  String challengeDifficulty = 'standard'; // 'standard' | 'marechal'
+  DailyChallengeSpec? activeChallenge;
+  ChallengeLiveStatus? challengeStatus;
+  bool challengeWon = false;
+  bool challengeLost = false;
+  String challengeEndReason = '';
+  int challengeStarsEarned = 0;
+  int get challengeArmiesLost => _challengeArmiesLost;
+  int get challengeOrdersUsed => _challengeOrdersUsed;
+  int? challengeServerRank;
+  List<DailyRankEntry> challengeSubmitRanking = [];
+  bool challengeResultSubmitted = false;
+  String? _challengeRunId;
+  int _challengeStartedMs = 0;
+  int _challengeLastRound = 0;
+  int _challengeArmiesLost = 0;
+  int _challengeNukesUsed = 0;
+  int _challengeOrdersUsed = 0;
+  bool _challengeLostKeyEver = false;
+  String _challengeBlitzMedalTurnKey = '';
+  Set<int> _challengeOwnedContinents = {};
+  Map<String, dynamic> dailyProgress = {};
+  Map<String, dynamic> codexProgress = {};
 
   // Settings & Saved state availability
   bool forceLand = true;
@@ -244,6 +276,10 @@ class AppController extends ChangeNotifier {
     );
 
     _refreshSavedFlags();
+    _loadDailyLocalProgress();
+    Telemetry.appVersion = appVersion;
+    Telemetry.track('app_opened');
+    unawaited(refreshDailyChallenge(quiet: true));
 
     // Check URL params / hash
     final sala = roomCode(WebEnv.getQueryParam('sala'));
@@ -385,6 +421,478 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _loadDailyLocalProgress() {
+    dailyProgress = _readJsonStorage('estandarte.daily.done') ?? {};
+    codexProgress = _readJsonStorage('estandarte.codex') ?? {};
+    final cached = _readJsonStorage('estandarte.daily.cache');
+    if (cached != null && dailySnapshot == null) {
+      try {
+        final snap = DailySnapshot.fromServerJson(cached);
+        dailySnapshot = DailySnapshot(
+          date: snap.date,
+          resetInSecs: snap.resetInSecs,
+          weekday: snap.weekday,
+          challenge: snap.challenge,
+          ranking: snap.ranking,
+          totalRanked: snap.totalRanked,
+          fromServer: false,
+          rankingNote: snap.rankingNote,
+        );
+      } catch (_) {}
+    }
+  }
+
+  int get weeklyChallengeDaysCount {
+    final now = DateTime.now();
+    var count = 0;
+    for (var i = 0; i < 7; i++) {
+      final d = now.subtract(Duration(days: i));
+      final key =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      if (dailyProgress.containsKey(key)) count++;
+    }
+    return count;
+  }
+
+  int get todayChallengeStars {
+    final date = dailySnapshot?.date;
+    if (date == null) return 0;
+    final rec = dailyProgress[date];
+    if (rec is Map) {
+      return (rec['stars'] as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  }
+
+  Future<void> refreshDailyChallenge({bool quiet = false}) async {
+    if (dailyLoading) return;
+    dailyLoading = true;
+    if (!quiet) dailyError = null;
+    notifyListeners();
+    try {
+      final res = await fetchDailyChallenge(serverUrl());
+      final snap = DailySnapshot.fromServerJson(res);
+      dailySnapshot = snap;
+      dailyError = null;
+      AppStorage.instance.setString('estandarte.daily.cache', jsonEncode(res));
+    } catch (_) {
+      if (!quiet) {
+        dailyError = 'Não foi possível sincronizar o desafio com o servidor.';
+      }
+    } finally {
+      dailyLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openDailyScreen() async {
+    _roomsTimer?.cancel();
+    _roomsTimer = null;
+    screen = AppScreen.daily;
+    Telemetry.track(
+      'challenge_viewed',
+      date: dailySnapshot?.date,
+      challengeId: dailySnapshot?.challenge.id,
+      mode: dailySnapshot?.challenge.kind,
+    );
+    notifyListeners();
+    await refreshDailyChallenge(quiet: dailySnapshot != null);
+  }
+
+  void setChallengeDifficulty(String diff) {
+    final next = diff == 'marechal' ? 'marechal' : 'standard';
+    if (next == challengeDifficulty) return;
+    challengeDifficulty = next;
+    notifyListeners();
+  }
+
+  Future<void> startDailyChallenge({DailyChallengeSpec? overrideSpec}) async {
+    SoundPlayer.unlock();
+    var spec = overrideSpec ?? dailySnapshot?.challenge;
+    if (spec == null) {
+      await refreshDailyChallenge();
+      spec = dailySnapshot?.challenge;
+    }
+    if (spec == null) {
+      showToast('Sem conexão para carregar o desafio de hoje.');
+      return;
+    }
+
+    _resetSessionState();
+    activeChallenge = spec;
+    role = 'host';
+    netP2p = false;
+    me = 0;
+    turnSecs = 0;
+    challengeWon = false;
+    challengeLost = false;
+    challengeEndReason = '';
+    challengeStarsEarned = 0;
+    challengeServerRank = null;
+    challengeSubmitRanking = List<DailyRankEntry>.from(dailySnapshot?.ranking ?? const []);
+    challengeResultSubmitted = false;
+    _challengeStartedMs = DateTime.now().millisecondsSinceEpoch;
+    _challengeLastRound = spec.startRound;
+    _challengeArmiesLost = 0;
+    _challengeNukesUsed = 0;
+    _challengeOrdersUsed = 0;
+    _challengeLostKeyEver = false;
+    _challengeBlitzMedalTurnKey = '';
+
+    String? srvRunId;
+    if (netOnline) {
+      try {
+        final startRes = await startDailyRun(
+          serverUrl(),
+          clientId: Telemetry.clientId,
+          difficulty: challengeDifficulty,
+          platform: Telemetry.platformLabel,
+          appVersion: appVersion,
+        );
+        srvRunId = startRes['runId'] as String?;
+      } catch (_) {}
+    }
+    _challengeRunId = srvRunId ?? 'off_${DateTime.now().millisecondsSinceEpoch}';
+
+    final st = jsonDecode(jsonEncode(spec.setup)) as Map<String, dynamic>;
+    final players = (st['players'] as List<dynamic>).cast<Map<String, dynamic>>();
+    final cleanPlayer = cleanName(savedName);
+    if (players.isNotEmpty) {
+      players[0]['name'] = cleanPlayer.isNotEmpty ? cleanPlayer : 'Você';
+      players[0]['ctrl'] = 'local';
+    }
+    final opts = Map<String, dynamic>.from(st['opts'] as Map<String, dynamic>? ?? const {});
+    if (spec.hasMutation('no_nuke')) opts['nukes'] = false;
+    if (spec.hasMutation('aggressive_ai')) opts['pacts'] = false;
+    st['opts'] = opts;
+
+    if (challengeDifficulty == 'marechal') {
+      final terrs = st['terr'] as List<dynamic>;
+      for (final rawT in terrs) {
+        final tm = rawT as Map<String, dynamic>;
+        if ((tm['o'] as num).toInt() != 0 && (tm['a'] as num).toInt() >= 2) {
+          tm['a'] = (tm['a'] as num).toInt() + 1;
+        }
+      }
+      for (var i = 1; i < players.length; i++) {
+        final m = (players[i]['medals'] as num?)?.toInt() ?? 0;
+        players[i]['medals'] = min(6, m + 1);
+      }
+      if (players.isNotEmpty) {
+        final pm = (players[0]['medals'] as num?)?.toInt() ?? 2;
+        players[0]['medals'] = max(1, pm - 1);
+      }
+      final logList = (st['log'] as List<dynamic>? ?? []).toList();
+      logList.add('Dificuldade Marechal: fronteiras inimigas +1 tropa e bots com medalha extra.');
+      st['log'] = logList;
+    }
+
+    optEvents = opts['events'] == true;
+    optPacts = opts['pacts'] == true;
+    optNukes = opts['nukes'] == true;
+    optHq = opts['hq'] != false;
+    optSpy = opts['spy'] == true;
+    seats = [
+      for (final p in players)
+        LobbySeat(
+          name: p['name'] as String? ?? 'Jogador',
+          color: (p['color'] as num?)?.toInt() ?? 0,
+          ctrl: p['ctrl'] as String? ?? 'bot',
+        ),
+    ];
+
+    // Continentes já dominados na abertura não disparam Logística de Fronteira imediatamente
+    _challengeOwnedContinents = _continentsOwnedByPlayer0(st['terr'] as List<dynamic>);
+
+    _dropEngineGame();
+    _engineId = engine.loadGame(st);
+    screen = AppScreen.game;
+    WebEnv.setWakeLock(true);
+    Telemetry.track(
+      'challenge_started',
+      date: spec.date,
+      challengeId: spec.id,
+      mode: spec.kind,
+      difficulty: challengeDifficulty,
+      doctrine: spec.doctrines.isNotEmpty ? spec.doctrines.first.key : null,
+      mutation: spec.mutations.isNotEmpty ? spec.mutations.first.key : null,
+      // Servidor já grava challenge_started autoritativo em POST /daily/start quando online
+      localOnly: srvRunId != null,
+    );
+    _syncHost();
+  }
+
+  Set<int> _continentsOwnedByPlayer0(List<dynamic> terrs) {
+    final owned = <int>{};
+    for (var i = 0; i < terrs.length; i++) {
+      if ((terrs[i]['o'] as num?)?.toInt() == 0) owned.add(i);
+    }
+    final conts = <int>{};
+    for (var cId = 0; cId < mapData.continents.length; cId++) {
+      final hasAll = mapData.territories
+          .asMap()
+          .entries
+          .every((e) => e.value.continent != cId || owned.contains(e.key));
+      if (hasAll) conts.add(cId);
+    }
+    return conts;
+  }
+
+  String _activeTelemetryMode() {
+    if (inTutorial) return 'tutorial';
+    if (activeChallenge != null) return activeChallenge!.kind;
+    if (lobbyQuick) return 'quick';
+    if (online != null) return online!.lan ? 'lan' : 'online';
+    if (relayCode != null) return 'relay';
+    if (_lanServer != null) return 'lan';
+    return 'local';
+  }
+
+  void _applyChallengeRoundHooks() {
+    final spec = activeChallenge;
+    final id = _engineId;
+    if (spec == null || id == null || challengeWon || challengeLost) return;
+    final v = engine.viewFor(id, 0);
+    final round = (v['round'] as num?)?.toInt() ?? 1;
+    final turn = (v['turn'] as num?)?.toInt() ?? 0;
+    final step = v['step'] as String? ?? '';
+    final terrs = v['terr'] as List<dynamic>;
+
+    // Verifica perda temporária de território-chave
+    for (final tk in spec.goal.mustKeepTerritories) {
+      if (tk >= 0 && tk < terrs.length && (terrs[tk]['o'] as num).toInt() != 0) {
+        _challengeLostKeyEver = true;
+      }
+    }
+
+    var mutated = false;
+    Map<String, dynamic>? exported;
+    Map<String, dynamic> getSt() => exported ??= engine.exportGame(id);
+
+    // Rodadas pares com evento fixo (ex.: Mar revolto / Tempestade no Canal)
+    if (round > _challengeLastRound) {
+      _challengeLastRound = round;
+      if (spec.fixedEvenEvent.isNotEmpty && round % 2 == 0) {
+        final st = getSt();
+        st['event'] = {
+          'k': spec.fixedEvenEvent,
+          if (spec.fixedEvenEvent == 'storm') 'c': 2,
+        };
+        mutated = true;
+        Telemetry.track(
+          'mechanic_triggered',
+          date: spec.date,
+          challengeId: spec.id,
+          mode: spec.kind,
+          props: {'key': 'event:${spec.fixedEvenEvent}', 'round': round},
+        );
+      }
+    }
+
+    // Logística de Fronteira: ao fechar um continente novo, +2 exércitos no reforço do jogador 0
+    if (spec.hasDoctrine('continental_fervor') && turn == 0 && step == 'reinforce') {
+      final nowOwned = _continentsOwnedByPlayer0(terrs);
+      final newlyClosed = nowOwned.difference(_challengeOwnedContinents);
+      if (newlyClosed.isNotEmpty) {
+        _challengeOwnedContinents.addAll(newlyClosed);
+        final st = getSt();
+        final pool = Map<String, dynamic>.from(st['pool'] as Map<String, dynamic>? ?? const {});
+        final bonus = newlyClosed.length * 2;
+        pool['free'] = ((pool['free'] as num?)?.toInt() ?? 0) + bonus;
+        st['pool'] = pool;
+        mutated = true;
+        showFlash(
+          'Logística de Fronteira',
+          const Color(0xFFE2B04A),
+          sub: '+$bonus exércitos bônus por novo continente dominado',
+          ms: 1700,
+          top: true,
+        );
+        Telemetry.track(
+          'mechanic_triggered',
+          date: spec.date,
+          challengeId: spec.id,
+          mode: spec.kind,
+          props: {'key': 'doctrine:continental_fervor', 'bonus': bonus},
+        );
+      }
+    }
+
+    if (mutated && exported != null) {
+      _dropEngineGame();
+      _engineId = engine.loadGame(exported!);
+    }
+  }
+
+  void _grantChallengeMedalBonus(int round, int turn) {
+    final spec = activeChallenge;
+    final id = _engineId;
+    if (spec == null || id == null || !spec.hasDoctrine('blitz_medals')) return;
+    final key = '$round:$turn';
+    if (_challengeBlitzMedalTurnKey == key) return;
+    _challengeBlitzMedalTurnKey = key;
+
+    final st = engine.exportGame(id);
+    final players = st['players'] as List<dynamic>;
+    if (players.isEmpty) return;
+    final p0 = players[0] as Map<String, dynamic>;
+    final curM = (p0['medals'] as num?)?.toInt() ?? 0;
+    if (curM < 6) {
+      p0['medals'] = curM + 1;
+      _dropEngineGame();
+      _engineId = engine.loadGame(st);
+      showFlash(
+        'Doutrina de Choque · +1 medalha',
+        const Color(0xFFE2B04A),
+        sub: 'Conquista com ataque máximo (3 dados)',
+        ms: 1300,
+        top: true,
+      );
+      Telemetry.track(
+        'mechanic_triggered',
+        date: spec.date,
+        challengeId: spec.id,
+        mode: spec.kind,
+        props: {'key': 'doctrine:blitz_medals'},
+      );
+    }
+  }
+
+  void _evaluateActiveChallenge(Map<String, dynamic> hostView) {
+    final spec = activeChallenge;
+    if (spec == null || challengeWon || challengeLost) return;
+    final status = evaluateChallengeState(
+      spec: spec,
+      mapData: mapData,
+      view: hostView,
+      nukesUsed: _challengeNukesUsed,
+      armiesLost: _challengeArmiesLost,
+      ordersUsed: _challengeOrdersUsed,
+      lostKeyEver: _challengeLostKeyEver,
+    );
+    challengeStatus = status;
+    if (status.won || status.lost) {
+      challengeWon = status.won;
+      challengeLost = status.lost;
+      challengeEndReason = status.endReason;
+      challengeStarsEarned = status.earnedStars;
+      _botTimer?.cancel();
+      _clockTimer?.cancel();
+      SoundPlayer.play(status.won ? 'win' : 'lost');
+      WebEnv.vibrate(status.won ? 280 : 180);
+      _finalizeChallengeOutcome(spec, status, (hostView['round'] as num?)?.toInt() ?? 1);
+      notifyListeners();
+    }
+  }
+
+  void _finalizeChallengeOutcome(
+    DailyChallengeSpec spec,
+    ChallengeLiveStatus status,
+    int round,
+  ) {
+    final durSec = _challengeStartedMs > 0
+        ? max(1, (DateTime.now().millisecondsSinceEpoch - _challengeStartedMs) ~/ 1000)
+        : 1;
+
+    if (status.won) {
+      final prevDay = dailyProgress[spec.date];
+      final prevStars = prevDay is Map ? (prevDay['stars'] as num?)?.toInt() ?? 0 : 0;
+      final prevRounds = prevDay is Map ? (prevDay['rounds'] as num?)?.toInt() ?? 99 : 99;
+      if (status.earnedStars > prevStars ||
+          (status.earnedStars == prevStars && round < prevRounds)) {
+        dailyProgress[spec.date] = {
+          'id': spec.id,
+          'stars': status.earnedStars,
+          'rounds': round,
+          'difficulty': challengeDifficulty,
+          'at': DateTime.now().millisecondsSinceEpoch,
+        };
+        AppStorage.instance.setString('estandarte.daily.done', jsonEncode(dailyProgress));
+      }
+
+      if (spec.isHistorical) {
+        final prevCodex = codexProgress[spec.id];
+        final prevCStars = prevCodex is Map ? (prevCodex['bestStars'] as num?)?.toInt() ?? 0 : 0;
+        final prevCRounds = prevCodex is Map ? (prevCodex['bestRounds'] as num?)?.toInt() ?? 99 : 99;
+        if (status.earnedStars > prevCStars ||
+            (status.earnedStars == prevCStars && round < prevCRounds)) {
+          codexProgress[spec.id] = {
+            'id': spec.id,
+            'title': spec.title,
+            'era': spec.era,
+            'lore': spec.codexLore,
+            'bestStars': status.earnedStars,
+            'bestRounds': round,
+            'difficulty': challengeDifficulty,
+            'date': spec.date,
+          };
+          AppStorage.instance.setString('estandarte.codex', jsonEncode(codexProgress));
+        }
+      }
+    }
+
+    Telemetry.track(
+      'challenge_finished',
+      date: spec.date,
+      challengeId: spec.id,
+      mode: spec.kind,
+      difficulty: challengeDifficulty,
+      doctrine: spec.doctrines.isNotEmpty ? spec.doctrines.first.key : null,
+      mutation: spec.mutations.isNotEmpty ? spec.mutations.first.key : null,
+      outcome: status.won ? 'win' : 'loss',
+      stars: status.earnedStars,
+      rounds: round,
+      durationSec: durSec,
+      props: {
+        'armiesLost': _challengeArmiesLost,
+        'ordersUsed': _challengeOrdersUsed,
+        'nukesUsed': _challengeNukesUsed,
+      },
+      // Servidor já grava challenge_finished autoritativo em POST /daily/submit quando online
+      localOnly: netOnline,
+      immediate: !netOnline,
+    );
+
+    if (netOnline && !challengeResultSubmitted) {
+      challengeResultSubmitted = true;
+      final name = cleanName(savedName).isNotEmpty ? cleanName(savedName) : 'Comandante';
+      unawaited(
+        submitDailyRun(serverUrl(), {
+          'runId': _challengeRunId ?? 'off_${DateTime.now().millisecondsSinceEpoch}',
+          'date': spec.date,
+          'clientId': Telemetry.clientId,
+          'playerName': name,
+          'difficulty': challengeDifficulty,
+          'won': status.won,
+          'stars': status.earnedStars,
+          'rounds': round,
+          'armiesLost': _challengeArmiesLost,
+          'ordersUsed': _challengeOrdersUsed,
+          'durationSec': durSec,
+        }).then((res) {
+          final rank = (res['rank'] as num?)?.toInt();
+          final rawEntries = (res['entries'] as List<dynamic>? ?? const []);
+          final parsed = [for (final e in rawEntries) DailyRankEntry.fromJson(e as Map<String, dynamic>)];
+          challengeServerRank = rank != null && rank > 0 ? rank : null;
+          challengeSubmitRanking = parsed;
+          if (dailySnapshot != null && dailySnapshot!.date == spec.date) {
+            dailySnapshot = DailySnapshot(
+              date: dailySnapshot!.date,
+              resetInSecs: dailySnapshot!.resetInSecs,
+              weekday: dailySnapshot!.weekday,
+              challenge: dailySnapshot!.challenge,
+              ranking: parsed,
+              totalRanked: (res['totalRanked'] as num?)?.toInt() ?? parsed.length,
+              fromServer: true,
+              rankingNote: dailySnapshot!.rankingNote,
+            );
+          }
+          notifyListeners();
+        }).catchError((_) {}),
+      );
+    }
+  }
+
   void dismissVictory() {
     victoryDismissed = true;
     notifyListeners();
@@ -478,6 +986,8 @@ class AppController extends ChangeNotifier {
     SoundPlayer.unlock();
     _resetSessionState();
     inTutorial = true;
+    _tutorialCompletedSent = false;
+    Telemetry.track('tutorial_started', mode: 'tutorial');
     role = 'host';
     netP2p = false;
     me = 0;
@@ -863,6 +1373,9 @@ class AppController extends ChangeNotifier {
     confirmEndKind = null;
     screen = AppScreen.game;
     WebEnv.setWakeLock(true);
+    _matchStartedMs = DateTime.now().millisecondsSinceEpoch;
+    _matchEndSent = false;
+    Telemetry.track('match_started', mode: _activeTelemetryMode(), props: {'players': seats.length});
     _armTurnClock();
     _syncHost();
   }
@@ -2271,6 +2784,10 @@ class AppController extends ChangeNotifier {
   }
 
   void requestPlayAgainOnline() {
+    if (activeChallenge != null) {
+      unawaited(startDailyChallenge(overrideSpec: activeChallenge));
+      return;
+    }
     if (online != null && lobbyOwner && guestLink != null) {
       guestLink!.send({'t': 'again'});
     } else if (role != 'guest') {
@@ -2281,6 +2798,8 @@ class AppController extends ChangeNotifier {
   // ---------------- Host State Sync + Bot + Turn Clock ----------------
 
   void _syncHost() {
+    if (_engineId == null) return;
+    _applyChallengeRoundHooks();
     final id = _engineId;
     if (id == null) return;
     final v = engine.viewFor(id, 0);
@@ -2354,7 +2873,7 @@ class AppController extends ChangeNotifier {
     }
 
     // Save host/local game (`save3`)
-    if (!inTutorial) {
+    if (!inTutorial && activeChallenge == null) {
       final stateJson = engine.exportGame(id);
       if (hostView['phase'] == 'play') {
         AppStorage.instance.setString(
@@ -2374,8 +2893,11 @@ class AppController extends ChangeNotifier {
     }
 
     _applyIncomingView(hostView, turnKeyForClock: turnKey);
+    _evaluateActiveChallenge(hostView);
     _publishRelayRoomInfo();
-    _scheduleHostBot(hostView);
+    if (!challengeWon && !challengeLost) {
+      _scheduleHostBot(hostView);
+    }
   }
 
   String _lastClockTurnKey = '';
@@ -2832,6 +3354,21 @@ class AppController extends ChangeNotifier {
           final won = e['won'] == true;
           final la = (e['la'] as num?)?.toInt() ?? 0;
           final ld = (e['ld'] as num?)?.toInt() ?? 0;
+          if (activeChallenge != null) {
+            if (p == 0) _challengeArmiesLost += la;
+            if (def == 0) _challengeArmiesLost += ld;
+            if (p == 0 && won && activeChallenge!.hasDoctrine('blitz_medals')) {
+              final rMap = v['roll'] as Map<String, dynamic>?;
+              final attLen = (rMap?['att'] as List<dynamic>? ?? const []).length;
+              if (attLen >= 3) {
+                final curR = (v['round'] as num?)?.toInt() ?? 1;
+                final curT = (v['turn'] as num?)?.toInt() ?? 0;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _grantChallengeMedalBonus(curR, curT);
+                });
+              }
+            }
+          }
           strikes.add(MapStrike(from: from, to: to, color: col(p), won: won, startMs: now));
           if (la > 0) floats.add(MapFloatText(terr: from, text: '−$la', color: const Color(0xFFFF8A7A), startMs: now));
           if (ld > 0) floats.add(MapFloatText(terr: to, text: '−$ld', color: const Color(0xFFFF8A7A), startMs: now));
@@ -2875,11 +3412,31 @@ class AppController extends ChangeNotifier {
         case 'win':
           SoundPlayer.play('win');
           WebEnv.vibrate(300);
+          if (inTutorial && !_tutorialCompletedSent) {
+            _tutorialCompletedSent = true;
+            Telemetry.track('tutorial_completed', mode: 'tutorial', immediate: true);
+          } else if (!inTutorial && activeChallenge == null && !_matchEndSent) {
+            _matchEndSent = true;
+            final dur = _matchStartedMs > 0
+                ? max(1, (DateTime.now().millisecondsSinceEpoch - _matchStartedMs) ~/ 1000)
+                : 0;
+            Telemetry.track(
+              'match_ended',
+              mode: _activeTelemetryMode(),
+              rounds: (v['round'] as num?)?.toInt(),
+              durationSec: dur,
+              outcome: 'finished',
+              immediate: true,
+            );
+          }
         case 'nuke':
           final p = (e['p'] as num).toInt();
           final def = (e['def'] as num).toInt();
           final to = (e['to'] as num).toInt();
           final lost = (e['lost'] as num).toInt();
+          if (activeChallenge != null && def == 0) {
+            _challengeArmiesLost += lost;
+          }
           _startNukeCinema(to, p);
           _spotlight({to}, impactMs + 2600);
           showFlash(
@@ -3210,6 +3767,39 @@ class AppController extends ChangeNotifier {
     if (err.isNotEmpty) {
       showToast(err);
     } else {
+      final actT = action['t'] as String?;
+      if (actT == 'order') {
+        final k = action['k'] as String? ?? '';
+        if (activeChallenge != null && pIdx == 0) _challengeOrdersUsed++;
+        Telemetry.track(
+          'hq_order_used',
+          date: activeChallenge?.date,
+          challengeId: activeChallenge?.id,
+          mode: _activeTelemetryMode(),
+          props: {'order': k},
+        );
+      } else if (actT == 'mobilize') {
+        if (activeChallenge != null && pIdx == 0) _challengeOrdersUsed++;
+        Telemetry.track(
+          'hq_order_used',
+          date: activeChallenge?.date,
+          challengeId: activeChallenge?.id,
+          mode: _activeTelemetryMode(),
+          props: {'order': 'mobilize'},
+        );
+      } else if (actT == 'nuke') {
+        if (activeChallenge != null && pIdx == 0) {
+          _challengeNukesUsed++;
+          _challengeOrdersUsed++;
+        }
+        Telemetry.track(
+          'hq_order_used',
+          date: activeChallenge?.date,
+          challengeId: activeChallenge?.id,
+          mode: _activeTelemetryMode(),
+          props: {'order': 'nuke'},
+        );
+      }
       _syncHost();
     }
   }
@@ -3791,6 +4381,21 @@ class AppController extends ChangeNotifier {
 
   void leaveGame({String? showReason}) {
     final backToRooms = online != null && online!.fromRooms && !online!.gone;
+    final backToDaily = activeChallenge != null;
+    if (activeChallenge != null && !challengeWon && !challengeLost && _challengeStartedMs > 0) {
+      final dur = max(1, (DateTime.now().millisecondsSinceEpoch - _challengeStartedMs) ~/ 1000);
+      Telemetry.track(
+        'challenge_finished',
+        date: activeChallenge!.date,
+        challengeId: activeChallenge!.id,
+        mode: activeChallenge!.kind,
+        difficulty: challengeDifficulty,
+        outcome: 'quit',
+        rounds: (view?['round'] as num?)?.toInt() ?? 1,
+        durationSec: dur,
+        immediate: true,
+      );
+    }
     _botTimer?.cancel();
     _clockTimer?.cancel();
     _autoTimer?.cancel();
@@ -3811,7 +4416,9 @@ class AppController extends ChangeNotifier {
 
     _resetSessionState();
     WebEnv.setWakeLock(false);
-    if (backToRooms) {
+    if (backToDaily) {
+      unawaited(openDailyScreen());
+    } else if (backToRooms) {
       openRoomsBrowser();
     } else {
       screen = AppScreen.home;
@@ -3834,6 +4441,27 @@ class AppController extends ChangeNotifier {
 
   void _resetSessionState() {
     inTutorial = false;
+    _tutorialCompletedSent = false;
+    _matchEndSent = false;
+    _matchStartedMs = 0;
+    activeChallenge = null;
+    challengeStatus = null;
+    challengeWon = false;
+    challengeLost = false;
+    challengeEndReason = '';
+    challengeStarsEarned = 0;
+    challengeServerRank = null;
+    challengeSubmitRanking = [];
+    challengeResultSubmitted = false;
+    _challengeRunId = null;
+    _challengeStartedMs = 0;
+    _challengeLastRound = 0;
+    _challengeArmiesLost = 0;
+    _challengeNukesUsed = 0;
+    _challengeOrdersUsed = 0;
+    _challengeLostKeyEver = false;
+    _challengeBlitzMedalTurnKey = '';
+    _challengeOwnedContinents = {};
     _botTimer?.cancel();
     _clockTimer?.cancel();
     _autoTimer?.cancel();

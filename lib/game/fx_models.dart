@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import '../net/online_client.dart';
 
-enum AppScreen { home, rooms, lobby, game }
+enum AppScreen { home, rooms, lobby, daily, game }
 
 class LobbySeat {
   LobbySeat({

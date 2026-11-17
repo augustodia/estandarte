@@ -49,6 +49,84 @@ abstract final class AppColors {
   ];
 }
 
+class EstRotatedScope extends InheritedWidget {
+  const EstRotatedScope({
+    super.key,
+    required this.rotated,
+    this.watch,
+    this.resolveRotated,
+    required super.child,
+  });
+
+  final bool rotated;
+  final Listenable? watch;
+  final bool Function(BuildContext rootCtx)? resolveRotated;
+
+  static EstRotatedScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<EstRotatedScope>();
+  }
+
+  static bool of(BuildContext context) => maybeOf(context)?.rotated ?? false;
+
+  @override
+  bool updateShouldNotify(EstRotatedScope oldWidget) =>
+      rotated != oldWidget.rotated || watch != oldWidget.watch;
+}
+
+class EstRotatedStage extends StatelessWidget {
+  const EstRotatedStage({
+    super.key,
+    required this.rotated,
+    this.watch,
+    this.resolveRotated,
+    required this.child,
+  });
+
+  final bool rotated;
+  final Listenable? watch;
+  final bool Function(BuildContext rootCtx)? resolveRotated;
+  final Widget child;
+
+  static EdgeInsets _rotInsets(EdgeInsets e) => EdgeInsets.fromLTRB(
+        e.top,
+        e.right,
+        e.bottom,
+        e.left,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!rotated) {
+      return EstRotatedScope(
+        rotated: false,
+        watch: watch,
+        resolveRotated: resolveRotated,
+        child: child,
+      );
+    }
+    final mq = MediaQuery.of(context);
+    final raw = mq.size;
+    final rotMq = mq.copyWith(
+      size: Size(raw.height, raw.width),
+      padding: _rotInsets(mq.padding),
+      viewPadding: _rotInsets(mq.viewPadding),
+      viewInsets: _rotInsets(mq.viewInsets),
+    );
+    return RotatedBox(
+      quarterTurns: 1,
+      child: MediaQuery(
+        data: rotMq,
+        child: EstRotatedScope(
+          rotated: true,
+          watch: watch,
+          resolveRotated: resolveRotated,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class EstLayout {
   EstLayout._({
     required this.size,
@@ -67,13 +145,18 @@ class EstLayout {
   final bool rot;
 
   factory EstLayout.of(BuildContext context, {bool inGame = false, bool forceLand = false}) {
-    final sz = MediaQuery.sizeOf(context);
+    final rawSz = MediaQuery.sizeOf(context);
+    final scopedRot = EstRotatedScope.of(context);
+    // Se já estamos dentro de EstRotatedStage, MediaQuery.size já foi rotacionado (não inverter duas vezes).
+    final rawMin = min(rawSz.width, rawSz.height);
+    final rawPortrait = rawSz.height > rawSz.width;
+    final rot = scopedRot || (inGame && rawPortrait && rawMin < 600 && forceLand);
+    final sz = (!scopedRot && rot) ? Size(rawSz.height, rawSz.width) : rawSz;
     final minSide = min(sz.width, sz.height);
     final big = minSide >= 600;
-    final portrait = sz.height > sz.width;
+    final portrait = !rot && sz.height > sz.width;
     final wide = big && sz.width >= 1000 && sz.width >= sz.height * 0.9;
     final tall = big && !wide;
-    final rot = inGame && portrait && !big && forceLand;
     final land = rot || (!portrait && sz.height <= 520);
     return EstLayout._(
       size: sz,
@@ -738,6 +821,7 @@ class EstGlassCard extends StatelessWidget {
         boxShadow: AppColors.edgeShadows,
       ),
       child: Stack(
+        alignment: Alignment.topCenter,
         children: [
           Positioned(
             left: 1,
@@ -916,6 +1000,27 @@ class EstFactionSeal extends StatelessWidget {
   }
 }
 
+final Expando<EstRotatedScope> _navigatorSheetScope = Expando<EstRotatedScope>();
+
+/// Pops the current sheet ([sheetCtx]) and invokes [openNext] on the root
+/// [Navigator]'s live [BuildContext] while preserving [EstRotatedScope], so
+/// chained modals remain mounted and rotated even if the original button
+/// unmounted after layout or `Tela deitada` changes.
+void replaceEstSheet(
+  BuildContext sheetCtx,
+  void Function(BuildContext safeCtx) openNext,
+) {
+  final nav = Navigator.of(sheetCtx, rootNavigator: true);
+  final activeScope = EstRotatedScope.maybeOf(sheetCtx);
+  _navigatorSheetScope[nav] = activeScope;
+  Navigator.pop(sheetCtx);
+  final safeCtx = nav.context;
+  if (safeCtx.mounted) {
+    openNext(safeCtx);
+  }
+  _navigatorSheetScope[nav] = null;
+}
+
 Future<T?> showEstSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -923,71 +1028,112 @@ Future<T?> showEstSheet<T>(
   bool pactTheme = false,
   double maxWidth = 560,
 }) {
-  final layout = EstLayout.of(context);
-  final centered = layout.big || layout.land;
+  if (!context.mounted) return Future<T?>.value(null);
+  final nav = Navigator.of(context, rootNavigator: true);
+  final inheritedScope = EstRotatedScope.maybeOf(context);
+  final carriedScope = _navigatorSheetScope[nav];
+  _navigatorSheetScope[nav] = null;
+  final scope = inheritedScope ?? carriedScope;
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: dismissible,
     barrierLabel: 'Fechar',
     barrierColor: const Color(0xCC02060C),
     transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (ctx, anim, _) => SafeArea(
-      child: Align(
-        alignment: centered ? Alignment.center : Alignment.bottomCenter,
-        child: Padding(
-          padding: centered ? const EdgeInsets.all(20) : EdgeInsets.zero,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: centered ? (layout.land && !layout.big ? 560 : maxWidth) : 500,
-              maxHeight: MediaQuery.sizeOf(ctx).height * (centered ? 0.90 : 0.92),
+    pageBuilder: (rootCtx, anim, _) {
+      Widget buildAnimatedDialog(BuildContext rCtx) {
+        final layout = EstLayout.of(rCtx);
+        final centered = layout.big || layout.land;
+        final compactLand = layout.land && !layout.big;
+        final sz = MediaQuery.sizeOf(rCtx);
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+
+        final panel = Material(
+          color: Colors.transparent,
+          child: Container(
+            width: double.infinity,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              gradient: pactTheme
+                  ? const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xF7241F15), Color(0xF70D1727)],
+                    )
+                  : AppColors.glassGradient,
+              borderRadius: centered
+                  ? BorderRadius.circular(6)
+                  : const BorderRadius.vertical(top: Radius.circular(8)),
+              border: Border.all(color: pactTheme ? AppColors.brass : AppColors.glassBorder),
+              boxShadow: const [
+                BoxShadow(color: Color(0xCC000000), blurRadius: 36, offset: Offset(0, -4)),
+              ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: double.infinity,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  gradient: pactTheme
-                      ? const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xF7241F15), Color(0xF70D1727)],
-                        )
-                      : AppColors.glassGradient,
-                  borderRadius: centered
-                      ? BorderRadius.circular(6)
-                      : const BorderRadius.vertical(top: Radius.circular(8)),
-                  border: Border.all(color: pactTheme ? AppColors.brass : AppColors.glassBorder),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0xCC000000), blurRadius: 36, offset: Offset(0, -4)),
-                  ],
+            child: builder(rCtx),
+          ),
+        );
+
+        final animated = centered
+            ? FadeTransition(
+                opacity: curved,
+                child: ScaleTransition(
+                  scale: Tween(begin: 0.95, end: 1.0).animate(curved),
+                  child: panel,
                 ),
-                child: builder(ctx),
+              )
+            : FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween(begin: const Offset(0, 0.12), end: Offset.zero).animate(curved),
+                  child: panel,
+                ),
+              );
+
+        return SafeArea(
+          child: Align(
+            alignment: centered ? Alignment.center : Alignment.bottomCenter,
+            child: Padding(
+              padding: centered
+                  ? EdgeInsets.symmetric(
+                      horizontal: compactLand ? 16 : 20,
+                      vertical: compactLand ? 10 : 20,
+                    )
+                  : EdgeInsets.zero,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: centered
+                      ? min(compactLand ? 580.0 : maxWidth, max(260.0, sz.width - (compactLand ? 32 : 40)))
+                      : min(500.0, sz.width),
+                  maxHeight: sz.height * (compactLand ? 0.94 : (centered ? 0.90 : 0.92)),
+                ),
+                child: animated,
               ),
             ),
           ),
-        ),
-      ),
-    ),
-    transitionBuilder: (ctx, anim, _, child) {
-      final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-      if (centered) {
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.95, end: 1.0).animate(curved),
-            child: child,
-          ),
         );
       }
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.12), end: Offset.zero).animate(curved),
-          child: child,
-        ),
+
+      if (scope?.watch != null && scope?.resolveRotated != null) {
+        return ListenableBuilder(
+          listenable: scope!.watch!,
+          builder: (wCtx, _) {
+            final isRot = scope.resolveRotated!(wCtx);
+            return EstRotatedStage(
+              rotated: isRot,
+              watch: scope.watch,
+              resolveRotated: scope.resolveRotated,
+              child: Builder(builder: buildAnimatedDialog),
+            );
+          },
+        );
+      }
+
+      return EstRotatedStage(
+        rotated: scope?.rotated ?? false,
+        child: Builder(builder: buildAnimatedDialog),
       );
     },
+    transitionBuilder: (_, _, _, child) => child,
   );
 }
 

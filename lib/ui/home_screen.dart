@@ -506,6 +506,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        _DailyHomeCard(
+          ctrl: c,
+          compact: compactLand,
+          onTap: () {
+            c.savePlayerName(_nameCtrl.text);
+            c.openDailyScreen();
+          },
+        ),
 
         if (c.hasSavedGuest || c.hasSavedLocal) ...[
           const SizedBox(height: 8),
@@ -664,6 +673,117 @@ class _TacticalTile extends StatelessWidget {
                   style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyHomeCard extends StatelessWidget {
+  const _DailyHomeCard({
+    required this.ctrl,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final AppController ctrl;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final snap = ctrl.dailySnapshot;
+    final spec = snap?.challenge;
+    final isHist = spec?.isHistorical == true || DateTime.now().weekday == DateTime.thursday;
+    final stars = ctrl.todayChallengeStars;
+    final title = spec?.title ?? (isHist ? 'Crônica de Quinta' : 'Desafio do Dia');
+    final sub = spec != null
+        ? (isHist
+            ? '${spec.era} · Quinta Histórica'
+            : '${spec.subtitle} · Ranking ${snap?.totalRanked ?? 0}')
+        : (ctrl.dailyLoading ? 'Sincronizando com o servidor…' : 'Ranking diário e Crônicas de Quinta');
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(5),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(5),
+        child: Ink(
+          padding: EdgeInsets.symmetric(horizontal: 13, vertical: compact ? 9 : 11),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isHist
+                  ? const [Color(0xFF232018), Color(0xFF101723)]
+                  : const [Color(0xFF172235), Color(0xFF0C1422)],
+            ),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: isHist ? AppColors.brass : AppColors.line),
+          ),
+          child: Row(
+            children: [
+              EstIcon(
+                isHist ? EstIconKind.book : EstIconKind.medal,
+                size: 17,
+                color: AppColors.gold,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          isHist ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                        if (stars > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '★' * stars + '☆' * (3 - stars),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.gold,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    if (!compact)
+                      Text(
+                        sub,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mute),
             ],
           ),
         ),

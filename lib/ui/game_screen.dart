@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../core/map_data.dart';
 import '../game/app_controller.dart';
+import '../game/daily_challenge.dart';
 import '../game/fx_models.dart';
 import 'map_view.dart';
 import 'modals.dart';
@@ -24,6 +25,9 @@ class _GameScreenState extends State<GameScreen> {
   VoidCallback? _fitZoom;
   void Function(double factor)? _zoomBy;
   final FocusNode _focusNode = FocusNode();
+  final GlobalKey _stageKey = GlobalKey();
+
+  BuildContext get _stageCtx => _stageKey.currentContext ?? context;
 
   @override
   void initState() {
@@ -42,7 +46,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _handleIncomingOffer(Map<String, dynamic> v) {
     if (!mounted) return;
-    showOfferModal(context, widget.ctrl);
+    showOfferModal(_stageCtx, widget.ctrl);
   }
 
   void _triggerPrimaryAction() {
@@ -131,15 +135,15 @@ class _GameScreenState extends State<GameScreen> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.keyO) {
-      showObjectiveModal(context, c);
+      showObjectiveModal(_stageCtx, c);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.keyC) {
-      showCardsModal(context, c);
+      showCardsModal(_stageCtx, c);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.keyM) {
-      showMenuModal(context, c);
+      showMenuModal(_stageCtx, c);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -190,7 +194,7 @@ class _GameScreenState extends State<GameScreen> {
               child: _TurnRingButton(
                 ctrl: c,
                 size: ringSize,
-                onTap: () => showMenuModal(context, c),
+                onTap: () => showMenuModal(_stageCtx, c),
               ),
             ),
 
@@ -218,7 +222,9 @@ class _GameScreenState extends State<GameScreen> {
           if (showEvt)
             Positioned(
               left: evLeft,
-              top: layout.wide ? (c.tutorialGuide != null ? 92.0 : 14.0) : null,
+              top: layout.wide
+                  ? ((c.tutorialGuide != null || c.activeChallenge != null) ? 96.0 : 14.0)
+                  : null,
               bottom: layout.wide ? null : evBottom,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -281,7 +287,9 @@ class _GameScreenState extends State<GameScreen> {
             Positioned(
               left: 12,
               right: 12,
-              top: c.diceBanner!.low ? null : (c.tutorialGuide != null ? 96 : 12),
+              top: c.diceBanner!.low
+                  ? null
+                  : ((c.tutorialGuide != null || c.activeChallenge != null) ? 98 : 12),
               bottom: c.diceBanner!.low ? (layout.wide ? 112 : 12) : null,
               child: Center(child: _DiceTray(banner: c.diceBanner!)),
             ),
@@ -294,6 +302,20 @@ class _GameScreenState extends State<GameScreen> {
               child: Center(
                 child: _TutorialCoachBanner(
                   guide: c.tutorialGuide!,
+                  onExit: c.leaveGame,
+                ),
+              ),
+            )
+          else if (c.activeChallenge != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 10,
+              child: Center(
+                child: _ChallengeHudBanner(
+                  spec: c.activeChallenge!,
+                  status: c.challengeStatus,
+                  difficulty: c.challengeDifficulty,
                   onExit: c.leaveGame,
                 ),
               ),
@@ -373,6 +395,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     Widget stage = Scaffold(
+      key: _stageKey,
       backgroundColor: AppColors.deep,
       body: SafeArea(
         child: Focus(
@@ -440,8 +463,10 @@ class _GameScreenState extends State<GameScreen> {
               if (c.confirmEndKind != null)
                 _ConfirmEndOverlay(ctrl: c, kind: c.confirmEndKind!),
 
-              // Victory overlay (#win)
-              if (v != null && v['phase'] == 'over' && !c.victoryDismissed)
+              // Victory / Challenge outcome overlay (#win)
+              if (v != null &&
+                  (v['phase'] == 'over' || c.challengeWon || c.challengeLost) &&
+                  !c.victoryDismissed)
                 _VictoryOverlay(ctrl: c, land: layout.land),
             ],
           ),
@@ -449,10 +474,16 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
 
-    if (layout.rot) {
-      stage = RotatedBox(quarterTurns: 1, child: stage);
-    }
-    return stage;
+    return EstRotatedStage(
+      rotated: layout.rot,
+      watch: c,
+      resolveRotated: (rootCtx) {
+        final raw = MediaQuery.sizeOf(rootCtx);
+        final rawMin = min(raw.width, raw.height);
+        return raw.height > raw.width && rawMin < 600 && c.forceLand;
+      },
+      child: stage,
+    );
   }
 }
 
@@ -1122,7 +1153,7 @@ class _SidePanel extends StatelessWidget {
           children: [
             sectionHeader(playersHeader, 'domínio'),
             ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.44),
+              constraints: BoxConstraints(maxHeight: EstLayout.of(context).size.height * 0.44),
               child: ListView.builder(
                 shrinkWrap: true,
                 itemCount: players.length,
@@ -2662,22 +2693,28 @@ class _SheetBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final layout = EstLayout.of(context);
     final centered = layout.big || layout.land;
+    final compactLand = layout.land && !layout.big;
     return GestureDetector(
       onTap: onTapOutside,
       child: Container(
         color: const Color(0xCC02060C),
         alignment: centered ? Alignment.center : Alignment.bottomCenter,
-        padding: centered ? const EdgeInsets.all(20) : EdgeInsets.zero,
+        padding: centered
+            ? EdgeInsets.symmetric(horizontal: compactLand ? 16 : 20, vertical: compactLand ? 10 : 20)
+            : EdgeInsets.zero,
         child: GestureDetector(
           onTap: () {},
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: centered ? maxWidth : 500),
+            constraints: BoxConstraints(
+              maxWidth: centered ? maxWidth : 500,
+              maxHeight: layout.size.height * (compactLand ? 0.92 : 0.90),
+            ),
             child: EstGlassCard(
               highlight: true,
               ornate: true,
               borderRadius: centered ? 6 : 8,
-              padding: const EdgeInsets.all(20),
-              child: child,
+              padding: EdgeInsets.all(compactLand ? 16 : 20),
+              child: SingleChildScrollView(child: child),
             ),
           ),
         ),
@@ -2886,22 +2923,29 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
   @override
   void initState() {
     super.initState();
-    final v = widget.ctrl.view!;
-    final wIdx = (v['winner'] as num).toInt();
-    final wCol = parseHexColor(
-      widget.ctrl.engine.constants.colors[(v['players'][wIdx]['color'] as num).toInt()].hex,
-    );
-    _bits = List.generate(
-      70,
-      (k) => _Confetti(
-        x: ((k * 37) % 100) / 100.0,
-        y: -((k * 29) % 40) / 40.0,
-        vy: 0.25 + (((k * 13) % 20) / 40.0),
-        vx: ((k % 5) - 2) * 0.03,
-        size: 6.0 + (k % 4) * 2.0,
-        color: [wCol, AppColors.gold, AppColors.ink, wCol][k % 4],
-      ),
-    );
+    final c = widget.ctrl;
+    final v = c.view!;
+    final wIdx = (v['winner'] as num?)?.toInt() ?? (c.challengeWon ? 0 : 1);
+    final players = v['players'] as List<dynamic>;
+    final safeIdx = wIdx >= 0 && wIdx < players.length ? wIdx : 0;
+    final wCol = c.challengeLost
+        ? AppColors.bad
+        : parseHexColor(
+            c.engine.constants.colors[(players[safeIdx]['color'] as num).toInt()].hex,
+          );
+    _bits = c.challengeLost
+        ? const []
+        : List.generate(
+            70,
+            (k) => _Confetti(
+              x: ((k * 37) % 100) / 100.0,
+              y: -((k * 29) % 40) / 40.0,
+              vy: 0.25 + (((k * 13) % 20) / 40.0),
+              vx: ((k % 5) - 2) * 0.03,
+              size: 6.0 + (k % 4) * 2.0,
+              color: [wCol, AppColors.gold, AppColors.ink, wCol][k % 4],
+            ),
+          );
     _anim = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
   }
 
@@ -2918,12 +2962,17 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
     final players = v['players'] as List<dynamic>;
     final terrs = v['terr'] as List<dynamic>;
     final colors = c.engine.constants.colors;
+    final layout = EstLayout.of(context);
+
+    if (c.activeChallenge != null) {
+      return _ChallengeOutcomeOverlay(ctrl: c, land: widget.land);
+    }
+
     final wIdx = (v['winner'] as num).toInt();
     final w = players[wIdx] as Map<String, dynamic>;
     final wCol = parseHexColor(colors[(w['color'] as num).toInt()].hex);
     final mine = c.role == 'guest' ? wIdx == c.me : w['ctrl'] == 'local';
     final objTxt = (c.eval?.objectiveTexts[wIdx] ?? '').replaceFirst(RegExp(r' Se for o seu.*$'), '');
-    final layout = EstLayout.of(context);
 
     int owned(int idx) {
       var n = 0;
@@ -3223,6 +3272,358 @@ class _TutorialCoachBanner extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChallengeHudBanner extends StatelessWidget {
+  const _ChallengeHudBanner({
+    required this.spec,
+    required this.status,
+    required this.difficulty,
+    required this.onExit,
+  });
+
+  final DailyChallengeSpec spec;
+  final ChallengeLiveStatus? status;
+  final String difficulty;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    final star2 = status?.star2Active ?? true;
+    final star3 = status?.star3Active ?? true;
+    final progress = status?.progressText ?? spec.goal.title;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 620),
+      child: EstGlassCard(
+        highlight: spec.isHistorical,
+        ornate: false,
+        borderRadius: 6,
+        padding: EdgeInsets.zero,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 6, 10, 6),
+              decoration: const BoxDecoration(
+                color: Color(0x88060A12),
+                border: Border(bottom: BorderSide(color: AppColors.line)),
+              ),
+              child: Row(
+                children: [
+                  EstIcon(
+                    spec.isHistorical ? EstIconKind.book : EstIconKind.medal,
+                    size: 13,
+                    color: AppColors.gold,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    spec.isHistorical ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                      color: AppColors.gold,
+                    ),
+                  ),
+                  if (difficulty == 'marechal') ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.bad.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border.all(color: AppColors.bad.withValues(alpha: 0.6)),
+                      ),
+                      child: const Text(
+                        'MARECHAL',
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFFFB2A8),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      spec.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: onExit,
+                    borderRadius: BorderRadius.circular(4),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Text(
+                        'Sair',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mute),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      progress,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFD9E1ED),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _MiniStarChip(label: '2★ ≤R${spec.goal.star2MaxRound}', ok: star2),
+                  const SizedBox(width: 6),
+                  _MiniStarChip(label: '3★ ${status?.star3Reason ?? 'Extra'}', ok: star3),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniStarChip extends StatelessWidget {
+  const _MiniStarChip({required this.label, required this.ok});
+
+  final String label;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    final col = ok ? AppColors.gold : const Color(0xFF6B778D);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: ok ? AppColors.gold.withValues(alpha: 0.14) : AppColors.obsidian,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ok ? AppColors.brassDim : AppColors.line),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: col,
+          decoration: ok ? null : TextDecoration.lineThrough,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChallengeOutcomeOverlay extends StatelessWidget {
+  const _ChallengeOutcomeOverlay({required this.ctrl, required this.land});
+
+  final AppController ctrl;
+  final bool land;
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = ctrl.activeChallenge!;
+    final won = ctrl.challengeWon;
+    final stars = ctrl.challengeStarsEarned;
+    final v = ctrl.view;
+    final round = (v?['round'] as num?)?.toInt() ?? 1;
+    final layout = EstLayout.of(context);
+    final accent = won ? AppColors.gold : AppColors.bad;
+    final rank = ctrl.challengeServerRank;
+    final st = ctrl.challengeStatus;
+
+    return Container(
+      color: const Color(0xEE050A13),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(maxWidth: layout.big ? 500 : (land ? 600 : 400)),
+            padding: EdgeInsets.all(layout.big ? 24 : 18),
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: accent, width: 2),
+              boxShadow: [
+                BoxShadow(color: accent.withValues(alpha: 0.2), spreadRadius: 5),
+                const BoxShadow(color: Color(0xCC000000), blurRadius: 55, offset: Offset(0, 18)),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                EstIcon(
+                  won ? (spec.isHistorical ? EstIconKind.cup : EstIconKind.medal) : EstIconKind.shield,
+                  size: 54,
+                  color: accent,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  won
+                      ? (spec.isHistorical ? 'CRÔNICA CONCLUÍDA' : 'DESAFIO CONCLUÍDO')
+                      : 'DERROTA TÁTICA',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  spec.title,
+                  textAlign: TextAlign.center,
+                  style: AppText.serif(size: layout.big ? 30 : 24),
+                ),
+                const SizedBox(height: 8),
+                if (won)
+                  Text(
+                    '★' * stars + '☆' * (3 - stars),
+                    style: const TextStyle(fontSize: 28, color: AppColors.gold, letterSpacing: 4),
+                  )
+                else
+                  Text(
+                    ctrl.challengeEndReason,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13.5, color: Color(0xFFFFB2A8)),
+                  ),
+                if (won && rank != null && rank > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: AppColors.brass),
+                    ),
+                    child: Text(
+                      '#$rank no ranking de hoje!',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.gold,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: AppColors.obsidian,
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Rodada $round · Baixas: ${ctrl.challengeArmiesLost} · Ordens do Quartel: ${ctrl.challengeOrdersUsed}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      if (won) ...[
+                        const SizedBox(height: 8),
+                        const Divider(height: 1, color: AppColors.line),
+                        const SizedBox(height: 6),
+                        Text(
+                          '1★ ${spec.goal.star1Desc}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.gold),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '2★ ${spec.goal.star2Desc}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: (st?.star2Active ?? false) ? AppColors.gold : AppColors.mute,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '3★ ${spec.goal.star3Desc}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: (st?.star3Active ?? false) ? AppColors.gold : AppColors.mute,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (won) ...[
+                  EstButton(
+                    icon: EstIconKind.qr,
+                    label: 'Copiar relatório tático',
+                    variant: EstButtonVariant.pact,
+                    onPressed: () {
+                      final report = buildChallengeShareReport(
+                        spec: spec,
+                        stars: stars,
+                        rounds: round,
+                        armiesLost: ctrl.challengeArmiesLost,
+                        ordersUsed: ctrl.challengeOrdersUsed,
+                        difficulty: ctrl.challengeDifficulty,
+                        serverRank: rank,
+                      );
+                      Clipboard.setData(ClipboardData(text: report));
+                      ctrl.showToast('Relatório tático copiado!');
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: EstButton(label: 'Ver o mapa', onPressed: ctrl.dismissVictory),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: EstButton(
+                        label: won ? 'Tentar 3★' : 'Tentar de novo',
+                        variant: EstButtonVariant.primary,
+                        onPressed: ctrl.requestPlayAgainOnline,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                EstButton(
+                  label: 'Ver Ranking & Códice',
+                  variant: EstButtonVariant.ghost,
+                  onPressed: ctrl.leaveGame,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
