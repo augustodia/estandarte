@@ -88,17 +88,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: Transform.scale(scale: scale, child: child),
                   );
                 },
-                child: ShaderMask(
-                  shaderCallback: (bounds) => const RadialGradient(
-                    center: Alignment(0, -0.1),
-                    radius: 0.78,
-                    colors: [Colors.white, Colors.white, Colors.transparent],
-                    stops: [0.0, 0.30, 1.0],
-                  ).createShader(bounds),
-                  blendMode: BlendMode.dstIn,
-                  child: Opacity(
-                    opacity: layout.big ? 0.16 : 0.10,
-                    child: CustomPaint(painter: _HomeArtPainter(c.mapData)),
+                child: RepaintBoundary(
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const RadialGradient(
+                      center: Alignment(0, -0.1),
+                      radius: 0.78,
+                      colors: [Colors.white, Colors.white, Colors.transparent],
+                      stops: [0.0, 0.30, 1.0],
+                    ).createShader(bounds),
+                    blendMode: BlendMode.dstIn,
+                    child: Opacity(
+                      opacity: layout.big ? 0.16 : 0.10,
+                      child: CustomPaint(painter: _HomeArtPainter(c.mapData)),
+                    ),
                   ),
                 ),
               ),
@@ -225,17 +227,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             );
           },
-          child: Container(
-            width: crestSize,
-            height: crestSize,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(color: Color(0x66D64545), blurRadius: 28, spreadRadius: 2),
-                BoxShadow(color: Color(0x33E6B652), blurRadius: 42),
-              ],
+          child: RepaintBoundary(
+            child: Container(
+              width: crestSize,
+              height: crestSize,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Color(0x66D64545), blurRadius: 28, spreadRadius: 2),
+                  BoxShadow(color: Color(0x33E6B652), blurRadius: 42),
+                ],
+              ),
+              child: EstIcon(EstIconKind.crest, size: crestSize),
             ),
-            child: EstIcon(EstIconKind.crest, size: crestSize),
           ),
         ),
         SizedBox(height: big ? 12 : 8),

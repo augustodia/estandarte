@@ -4,6 +4,9 @@
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <title>Ultimato</title>
@@ -85,6 +88,47 @@
       const s = document.getElementById('boot-splash');
       if (s) { s.classList.add('hide'); setTimeout(() => s.remove(), 300); }
     });
+  </script>
+  <script>
+    (async function purgeLegacySw() {
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(
+            keys
+              .filter((k) => /^estandarte/i.test(k))
+              .map((k) => caches.delete(k))
+          );
+        }
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          let removedLegacy = false;
+          for (const reg of regs) {
+            const url =
+              (reg.active && reg.active.scriptURL) ||
+              (reg.waiting && reg.waiting.scriptURL) ||
+              (reg.installing && reg.installing.scriptURL) ||
+              '';
+            if (!url.includes('flutter_service_worker.js')) {
+              await reg.unregister();
+              removedLegacy = true;
+            }
+          }
+          const ctrlUrl =
+            navigator.serviceWorker.controller &&
+            navigator.serviceWorker.controller.scriptURL;
+          if (
+            removedLegacy &&
+            ctrlUrl &&
+            !ctrlUrl.includes('flutter_service_worker.js') &&
+            !sessionStorage.getItem('ultimato_sw_migrated')
+          ) {
+            sessionStorage.setItem('ultimato_sw_migrated', '1');
+            location.reload();
+          }
+        }
+      } catch (_) {}
+    })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

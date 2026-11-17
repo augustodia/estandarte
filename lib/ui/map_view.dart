@@ -59,7 +59,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
   int _lastSubtleTickMs = 0;
 
   // Precomputed sea route geometry & label/paint cache
-  List<_ComputedSeaRoute>? _seaCache;
+  _SeaCache? _seaCache;
   _MapPaintCache? _paintCache;
 
   _MapPaintCache _getPaintCache() => _paintCache ??= _MapPaintCache(widget.ctrl.mapData);
@@ -130,11 +130,19 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
     super.dispose();
   }
 
-  List<_ComputedSeaRoute> _getSeaCache() {
+  _SeaCache _getSeaCache() {
     if (_seaCache != null) return _seaCache!;
     final md = widget.ctrl.mapData;
-    final out = <_ComputedSeaRoute>[];
+    final routes = <_ComputedSeaRoute>[];
+    final allCases = Path();
+    final staticDashed = Path();
+    final chevrons = Path();
+    final ports = Path();
+    final lx = -_mapPad + 8;
+    final rx = md.width + _mapPad - 8;
+
     for (final r in md.seaRoutes) {
+      late final List<Path> paths;
       if (r.wrap) {
         final left = Path()
           ..moveTo(r.x1, r.y1)
@@ -142,7 +150,20 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
         final right = Path()
           ..moveTo(r.x2, r.y2)
           ..lineTo(md.width + _mapPad + 20, r.y2);
-        out.add(_ComputedSeaRoute(route: r, paths: [left, right]));
+        paths = [left, right];
+        chevrons
+          ..moveTo(lx, r.y1 - 5)
+          ..lineTo(lx - 6, r.y1)
+          ..lineTo(lx, r.y1 + 5)
+          ..moveTo(lx + 8, r.y1 - 5)
+          ..lineTo(lx + 2, r.y1)
+          ..lineTo(lx + 8, r.y1 + 5)
+          ..moveTo(rx, r.y2 - 5)
+          ..lineTo(rx + 6, r.y2)
+          ..lineTo(rx, r.y2 + 5)
+          ..moveTo(rx - 8, r.y2 - 5)
+          ..lineTo(rx - 2, r.y2)
+          ..lineTo(rx - 8, r.y2 + 5);
       } else {
         final dx = r.x2 - r.x1;
         final dy = r.y2 - r.y1;
@@ -164,17 +185,32 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
             }
             return best;
           }
+
           final sg = minDist(mx + nx * h * 2, my + ny * h * 2) >=
                   minDist(mx - nx * h * 2, my - ny * h * 2)
               ? 1.0
               : -1.0;
           path.quadraticBezierTo(mx + nx * h * sg, my + ny * h * sg, r.x2, r.y2);
         }
-        out.add(_ComputedSeaRoute(route: r, paths: [path]));
+        paths = [path];
       }
+      routes.add(_ComputedSeaRoute(route: r, paths: paths));
+      for (final p in paths) {
+        allCases.addPath(p, Offset.zero);
+        staticDashed.addPath(_MapPaintCache.buildDashed(p, 1.5, 5.5, 0), Offset.zero);
+      }
+      ports.addOval(Rect.fromCircle(center: Offset(r.x1, r.y1), radius: 3.1));
+      ports.addOval(Rect.fromCircle(center: Offset(r.x2, r.y2), radius: 3.1));
     }
-    _seaCache = out;
-    return out;
+
+    _seaCache = _SeaCache(
+      routes: routes,
+      allCasesPath: allCases,
+      staticDashedPath: staticDashed,
+      wrapChevronsPath: chevrons,
+      portsPath: ports,
+    );
+    return _seaCache!;
   }
 
   (double contain, double cover, double maxZ) _limits() {
@@ -441,7 +477,7 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
                           repaint: Listenable.merge([c, c.smoke, _shakeCtrl, _animNotifier]),
                           ctrl: c,
                           cache: _getPaintCache(),
-                          seaRoutes: _getSeaCache(),
+                          seaCache: _getSeaCache(),
                           shakeCtrl: _shakeCtrl,
                           bigShake: () => _bigShake,
                           animNotifier: _animNotifier,
@@ -659,7 +695,90 @@ class _MapPaintCache {
   final Map<int, TextPainter> armyNumRad = {};
   final Map<int, Path> trenchDashPaths = {};
   final Map<int, Path> borderDashPaths = {};
+  final Map<int, Path> litSeaDashPaths = {};
+  final Map<int, Path> hazardDashPaths = {};
+  final Map<int, List<Path>> hazardScanSegments = {};
   final Map<int, List<_LabelLayoutEntry>> labelLayoutCache = {};
+  final Map<int, TextPainter> bonusPillCache = {};
+
+  // Baked base board image cache (drastically reduces per-frame polygon rasterization on mobile)
+  ui.Picture? boardPicture;
+  ui.Image? bakedBoardImage;
+  String? bakedPicKey;
+  String? bakedImgKey;
+  String? bakedImgStateSig;
+  int bakedTier = -1;
+  int _bakeGen = 0;
+  bool _disposed = false;
+  final List<ui.Image> _retiredImages = [];
+
+  static const List<double> _tierNominalZooms = [0.58, 1.05, 1.65];
+  static const List<double> _tierBakeScales = [1.55, 1.90, 2.20];
+
+  static int zoomTierFor(double camZ) => camZ < 0.72 ? 0 : (camZ < 1.25 ? 1 : 2);
+
+  static double nominalZoomForTier(int tier) => _tierNominalZooms[tier.clamp(0, 2)];
+
+  static double bakeScaleForTier(int tier) => _tierBakeScales[tier.clamp(0, 2)];
+
+  void retireOldImages() {
+    while (_retiredImages.length > 2) {
+      _retiredImages.removeAt(0).dispose();
+    }
+  }
+
+  void ensureBoardBaked({
+    required String stateSig,
+    required int zoomTier,
+    required Rect worldPadRect,
+    required ui.Picture Function() recordPicture,
+    required VoidCallback onBaked,
+  }) {
+    final fullKey = '$stateSig|$zoomTier';
+    if (bakedPicKey != fullKey || boardPicture == null) {
+      final prevPic = boardPicture;
+      boardPicture = recordPicture();
+      prevPic?.dispose();
+      bakedPicKey = fullKey;
+      final gen = ++_bakeGen;
+      final scale = bakeScaleForTier(zoomTier);
+      final w = max(1, (worldPadRect.width * scale).round());
+      final h = max(1, (worldPadRect.height * scale).round());
+      boardPicture!.toImage(w, h).then((img) {
+        if (_disposed || _bakeGen != gen) {
+          img.dispose();
+          return;
+        }
+        final oldImg = bakedBoardImage;
+        bakedBoardImage = img;
+        bakedImgKey = fullKey;
+        bakedImgStateSig = stateSig;
+        bakedTier = zoomTier;
+        if (oldImg != null) {
+          _retiredImages.add(oldImg);
+          retireOldImages();
+        }
+        onBaked();
+      }, onError: (_) {});
+    }
+  }
+
+  TextPainter bonusPillPainter(int bonus) {
+    return bonusPillCache.putIfAbsent(bonus, () {
+      return TextPainter(
+        text: TextSpan(
+          text: 'BÔNUS RESTANTE: +$bonus',
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+            color: AppColors.gold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    });
+  }
 
   static Paint _makeLightPaint(Rect b, double alpha) => Paint()
     ..shader = ui.Gradient.linear(
@@ -736,7 +855,7 @@ class _MapPaintCache {
     });
   }
 
-  static Path _buildDashed(Path src, double dash, double gap, double phase) {
+  static Path buildDashed(Path src, double dash, double gap, double phase) {
     final out = Path();
     final cycle = dash + gap;
     final offset = phase % cycle;
@@ -757,7 +876,7 @@ class _MapPaintCache {
   Path trenchPathFor(int terrIdx) {
     return trenchDashPaths.putIfAbsent(
       terrIdx,
-      () => _buildDashed(md.territories[terrIdx].path, 3, 3, 0),
+      () => buildDashed(md.territories[terrIdx].path, 3, 3, 0),
     );
   }
 
@@ -769,13 +888,87 @@ class _MapPaintCache {
       final gap = isMove ? 5.0 : 4.0;
       final cycle = dash + gap;
       final phase = ((8 - (bucket & 7)) / 8.0) * cycle;
-      return _buildDashed(md.territories[terrIdx].path, dash, gap, phase);
+      return buildDashed(md.territories[terrIdx].path, dash, gap, phase);
     });
   }
 
-  void dispose() {
-    compassPicture.dispose();
+  /// Cached quantized dashed active sea route (8 discrete phases x 2 directions).
+  Path litSeaDashPathFor(int routeIdx, _ComputedSeaRoute sr, {required bool dirPositive, required int bucket}) {
+    final key = (routeIdx << 4) | (dirPositive ? 8 : 0) | (bucket & 7);
+    return litSeaDashPaths.putIfAbsent(key, () {
+      const dash = 6.0;
+      const gap = 5.0;
+      const cycle = dash + gap;
+      final sign = dirPositive ? 1.0 : -1.0;
+      final phase = (cycle + sign * ((bucket & 7) / 8.0) * cycle) % cycle;
+      final combined = Path();
+      for (final p in sr.paths) {
+        combined.addPath(buildDashed(p, dash, gap, phase), Offset.zero);
+      }
+      return combined;
+    });
   }
+
+  /// Cached radioactive hazard dashed perimeter (8 phases -> zero per-frame computeMetrics).
+  Path hazardDashPathFor(int terrIdx, int bucket) {
+    final key = (terrIdx << 3) | (bucket & 7);
+    return hazardDashPaths.putIfAbsent(key, () {
+      const dash = 5.0;
+      const gap = 4.0;
+      const cycle = dash + gap;
+      final phase = ((bucket & 7) / 8.0) * cycle;
+      return buildDashed(md.territories[terrIdx].path, dash, gap, phase);
+    });
+  }
+
+  /// Precomputed 20 scan spark segments along the radioactive territory perimeter.
+  Path hazardScanSegmentFor(int terrIdx, int slot) {
+    final segs = hazardScanSegments.putIfAbsent(terrIdx, () {
+      const steps = 20;
+      final out = List<Path>.generate(steps, (_) => Path());
+      for (final metric in md.territories[terrIdx].path.computeMetrics()) {
+        final scanLen = metric.length * 0.08;
+        for (var k = 0; k < steps; k++) {
+          final offset = (k / steps) * metric.length;
+          final end = min(metric.length, offset + scanLen);
+          if (end > offset) {
+            out[k].addPath(metric.extractPath(offset, end), Offset.zero);
+          }
+        }
+      }
+      return out;
+    });
+    return segs[slot % segs.length];
+  }
+
+  void dispose() {
+    _disposed = true;
+    compassPicture.dispose();
+    boardPicture?.dispose();
+    boardPicture = null;
+    bakedBoardImage?.dispose();
+    bakedBoardImage = null;
+    for (final img in _retiredImages) {
+      img.dispose();
+    }
+    _retiredImages.clear();
+  }
+}
+
+class _SeaCache {
+  const _SeaCache({
+    required this.routes,
+    required this.allCasesPath,
+    required this.staticDashedPath,
+    required this.wrapChevronsPath,
+    required this.portsPath,
+  });
+
+  final List<_ComputedSeaRoute> routes;
+  final Path allCasesPath;
+  final Path staticDashedPath;
+  final Path wrapChevronsPath;
+  final Path portsPath;
 }
 
 class _ComputedSeaRoute {
@@ -804,7 +997,7 @@ class _WorldMapPainter extends CustomPainter {
     super.repaint,
     required this.ctrl,
     required this.cache,
-    required this.seaRoutes,
+    required this.seaCache,
     required this.shakeCtrl,
     required this.bigShake,
     required this.animNotifier,
@@ -816,7 +1009,7 @@ class _WorldMapPainter extends CustomPainter {
 
   final AppController ctrl;
   final _MapPaintCache cache;
-  final List<_ComputedSeaRoute> seaRoutes;
+  final _SeaCache seaCache;
   final Animation<double> shakeCtrl;
   final bool Function() bigShake;
   final _MapAnimNotifier animNotifier;
@@ -828,6 +1021,39 @@ class _WorldMapPainter extends CustomPainter {
   int get nowMs => _nowMs;
 
   static const Color _oceanColor = AppColors.sea;
+
+  // Pre-allocated static Paint objects to avoid GC pressure on 60/120Hz mobile frames
+  static final Paint _oceanFillPaint = Paint()..color = _oceanColor;
+  static final Paint _boardImgPaint = Paint()..filterQuality = FilterQuality.medium;
+  static final Paint _badgeShadowPaint = Paint()..color = const Color(0x7302060C);
+  static final Paint _badgeFillNormalPaint = Paint()..color = const Color(0xFF0C1626);
+  static final Paint _badgeFillRadPaint = Paint()..color = const Color(0xFF14260E);
+  static final Paint _badgeRingNormalPaint = Paint()
+    ..color = const Color(0xDDFFFFFF)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.7;
+  static final Paint _badgeRingRadPaint = Paint()
+    ..color = const Color(0xFF8CFF4A)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.7;
+  static final Paint _trefoilBgPaint = Paint()..color = const Color(0xFFF4D21A);
+  static final Paint _trefoilStrokePaint = Paint()
+    ..color = const Color(0xFF141204)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+  static final Paint _trefoilDarkPaint = Paint()..color = const Color(0xFF141204);
+  static final Paint _defaultBorderPaint = Paint()
+    ..color = const Color(0xFF081120)
+    ..style = PaintingStyle.stroke
+    ..strokeJoin = StrokeJoin.round;
+  static final Paint _depthFillPaint = Paint()
+    ..color = const Color(0xFF050A13)
+    ..style = PaintingStyle.fill;
+  static final Paint _depthStrokePaint = Paint()
+    ..color = const Color(0xFF050A13)
+    ..style = PaintingStyle.stroke
+    ..strokeJoin = StrokeJoin.round
+    ..strokeWidth = 1.0;
 
   // Exact TREFOIL geometry from main.js
   static final Path _trefoilPath = _buildTrefoil();
@@ -853,7 +1079,229 @@ class _WorldMapPainter extends CustomPainter {
     return p;
   }
 
-  double _unitPx(double units, double maxPx) => min(units, maxPx / camZ);
+  static double _unitPxFor(double z, double units, double maxPx) => min(units, maxPx / z);
+
+  String _computeBoardStateSig({
+    required Map<String, dynamic>? v,
+    required List<dynamic>? terrs,
+    required bool can,
+    required bool bonusOnly,
+    required Map<String, dynamic> poolCont,
+    required int turnIdx,
+    required ({int sel, int? target, int n})? pk,
+    required Set<int>? spot,
+    required dynamic ev,
+  }) {
+    final sb = StringBuffer();
+    if (v == null) {
+      sb.write('null');
+    } else {
+      sb
+        ..write(v['n'])
+        ..write('|')
+        ..write(v['phase'])
+        ..write('|')
+        ..write(v['step'])
+        ..write('|')
+        ..write(v['winner'] ?? -1)
+        ..write('|')
+        ..write(turnIdx)
+        ..write('|');
+      if (terrs != null) {
+        for (var i = 0; i < terrs.length; i++) {
+          sb.write((terrs[i]['o'] as num).toInt());
+          if (can && ctrl.airliftMode) {
+            sb.write((terrs[i]['a'] as num).toInt() >= 2 ? 'A' : 'a');
+          }
+          sb.write(',');
+        }
+      }
+    }
+    sb
+      ..write('|c:')
+      ..write(can ? 1 : 0)
+      ..write('|s:')
+      ..write(ctrl.sel ?? -1)
+      ..write('|t:')
+      ..write(ctrl.target ?? -1)
+      ..write('|h:')
+      ..write(hoverTerr ?? -1)
+      ..write('|tr:')
+      ..write(ctrl.trenchMode ? (ctrl.pendingTrenchTerr ?? -1) : -2)
+      ..write('|al:')
+      ..write(ctrl.airliftMode ? '${ctrl.airliftFrom ?? -1}:${ctrl.airliftTo ?? -1}' : '')
+      ..write('|nk:')
+      ..write(ctrl.nukeMode ? 1 : 0);
+    if (bonusOnly) {
+      sb.write('|bo:');
+      for (var ci = 0; ci < ctrl.mapData.continents.length; ci++) {
+        if (((poolCont['$ci'] as num?)?.toInt() ?? 0) > 0) sb.write(ci);
+      }
+    }
+    if (pk != null) {
+      sb
+        ..write('|pk:')
+        ..write(pk.sel)
+        ..write(':')
+        ..write(pk.target ?? -1);
+    }
+    if (spot != null && spot.isNotEmpty) {
+      final sorted = spot.toList()..sort();
+      sb
+        ..write('|sp:')
+        ..write(sorted.join(','));
+    }
+    if (can && (ctrl.trenchMode || ctrl.airliftMode || ctrl.nukeMode) && ev != null) {
+      sb.write('|hqt:${ctrl.trenchMode ? ev.hq?.trenchBlocks.length : 0}:${ctrl.airliftMode ? ev.hq?.airliftBlocks.length : 0}:${ctrl.nukeMode ? ev.nukeTargetBlocks.length : 0}');
+    }
+    return sb.toString();
+  }
+
+  ui.Picture _recordBoardPicture({
+    required Rect worldPadRect,
+    required double bakeScale,
+    required double nomZ,
+    required Map<String, dynamic>? v,
+    required List<dynamic>? terrs,
+    required List<dynamic> colors,
+    required dynamic ev,
+    required bool can,
+    required Set<int> targets,
+    required bool bonusOnly,
+    required Map<String, dynamic> poolCont,
+    required int turnIdx,
+    required ({int sel, int? target, int n})? pk,
+    required Set<int>? spot,
+  }) {
+    final md = ctrl.mapData;
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    canvas.scale(bakeScale, bakeScale);
+    canvas.translate(-worldPadRect.left, -worldPadRect.top);
+
+    // Base sea fill inside baked world rectangle so auracut & moat blend seamlessly
+    canvas.drawRect(worldPadRect, _oceanFillPaint);
+
+    // Compass Rose at (985, 590) in Indian Ocean (cached Picture)
+    canvas.save();
+    canvas.translate(985, 590);
+    canvas.drawPicture(cache.compassPicture);
+    canvas.restore();
+
+    final cut = _unitPxFor(nomZ, 8.0, 9.0);
+    final aura = cut + _unitPxFor(nomZ, 5.5, 6.0);
+    final moat = _unitPxFor(nomZ, 3.2, 4.0);
+    final depth = _unitPxFor(nomZ, 3.0, 3.5);
+
+    // Continent Aura + Auracut
+    final auraPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = aura;
+    final cutPaint = Paint()
+      ..color = _oceanColor
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = cut;
+    for (final c in md.continents) {
+      auraPaint.color = c.color;
+      canvas.drawPath(c.path, auraPaint);
+      canvas.drawPath(c.path, cutPaint);
+    }
+
+    // 3D Board thickness depth offset downward
+    canvas.save();
+    canvas.translate(0, depth);
+    for (final c in md.continents) {
+      canvas.drawPath(c.path, _depthFillPaint);
+      canvas.drawPath(c.path, _depthStrokePaint);
+    }
+    canvas.restore();
+
+    // Static Sea Routes (all pre-batched into 4 combined Paths -> 4 draw calls total!)
+    canvas.drawPath(
+      seaCache.allCasesPath,
+      Paint()
+        ..color = const Color(0xFF081120)
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 5.5 / nomZ,
+    );
+    canvas.drawPath(
+      seaCache.staticDashedPath,
+      Paint()
+        ..color = const Color(0xFFCFE3FF)
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 1.8 / nomZ,
+    );
+    if (!seaCache.wrapChevronsPath.getBounds().isEmpty) {
+      canvas.drawPath(
+        seaCache.wrapChevronsPath,
+        Paint()
+          ..color = const Color(0xFFCFE3FF)
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..strokeWidth = 2.0 / nomZ,
+      );
+    }
+    canvas.drawPath(seaCache.portsPath, Paint()..color = const Color(0xFFCFE3FF));
+    canvas.drawPath(
+      seaCache.portsPath,
+      Paint()
+        ..color = const Color(0xFF081120)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
+
+    // Territories: fill + #landlight + 1px border
+    final fillPaint = Paint();
+    _defaultBorderPaint.strokeWidth = 1.0 / nomZ;
+    for (var i = 0; i < md.territories.length; i++) {
+      _drawTerritoryFillAndLight(
+        canvas,
+        i,
+        v,
+        terrs,
+        colors,
+        ev,
+        can,
+        targets,
+        bonusOnly,
+        poolCont,
+        turnIdx,
+        pk,
+        spot,
+        fillPaint: fillPaint,
+        borderPaint: _defaultBorderPaint,
+      );
+    }
+
+    // Continent moat separators
+    final moatPaint = Paint()
+      ..color = _oceanColor
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = moat;
+    for (final c in md.continents) {
+      canvas.drawPath(c.path, moatPaint);
+    }
+
+    // Static Continent names (continents with mandatoryBonus pulsing pill draw dynamically in foreground)
+    for (var ci = 0; ci < md.continents.length; ci++) {
+      final bonusCount = bonusOnly ? ((poolCont['$ci'] as num?)?.toInt() ?? 0) : 0;
+      if (bonusCount <= 0) {
+        final c = md.continents[ci];
+        final fillNormal = cache.contFillNormal[ci];
+        final pos = Offset(c.x - fillNormal.width / 2, c.y - fillNormal.height * 0.72);
+        cache.contStroke[ci].paint(canvas, pos);
+        fillNormal.paint(canvas, pos);
+      }
+    }
+
+    return rec.endRecording();
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -870,8 +1318,8 @@ class _WorldMapPainter extends CustomPainter {
       shakeDy = cos(shakeCtrl.value * 37) * amp;
     }
 
-    // 1. Ocean background (--sea #0f1c2e so auracut & moat blend seamlessly)
-    canvas.drawRect(Offset.zero & size, Paint()..color = _oceanColor);
+    // 1. Ocean background (--sea #0f1c2e so edges beyond map rect match seamlessly)
+    canvas.drawRect(Offset.zero & size, _oceanFillPaint);
 
     canvas.save();
     canvas.translate(shakeDx, shakeDy);
@@ -888,59 +1336,6 @@ class _WorldMapPainter extends CustomPainter {
     for (double y = -497; y <= md.height + 500; y += 71) {
       canvas.drawLine(Offset(-720, y), Offset(md.width + 720, y), gratPaint);
     }
-
-    // 3. Compass Rose at (985, 590) in Indian Ocean (cached Picture)
-    canvas.save();
-    canvas.translate(985, 590);
-    canvas.drawPicture(cache.compassPicture);
-    canvas.restore();
-
-    // Compute dynamic contour widths matching scaleMarks()
-    final cut = _unitPx(8.0, 9.0);
-    final aura = cut + _unitPx(5.5, 6.0);
-    final moat = _unitPx(3.2, 4.0);
-    final depth = _unitPx(3.0, 3.5);
-
-    // 4. Continent Aura + Auracut (under land, creating offset colored coastline ring)
-    for (final c in md.continents) {
-      canvas.drawPath(
-        c.path,
-        Paint()
-          ..color = c.color
-          ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = aura,
-      );
-      canvas.drawPath(
-        c.path,
-        Paint()
-          ..color = _oceanColor
-          ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = cut,
-      );
-    }
-
-    // 5. 3D Board thickness depth offset downward
-    canvas.save();
-    canvas.translate(0, depth);
-    for (final c in md.continents) {
-      canvas.drawPath(
-        c.path,
-        Paint()
-          ..color = const Color(0xFF050A13)
-          ..style = PaintingStyle.fill,
-      );
-      canvas.drawPath(
-        c.path,
-        Paint()
-          ..color = const Color(0xFF050A13)
-          ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = 1.0,
-      );
-    }
-    canvas.restore();
 
     // Determine selection / target / dimming state
     final can = ctrl.canPlayNow();
@@ -965,16 +1360,86 @@ class _WorldMapPainter extends CustomPainter {
     final poolCont = (v?['pool']?['cont'] as Map<String, dynamic>?) ?? const {};
     final turnIdx = (v?['turn'] as num?)?.toInt() ?? 0;
 
-    // 6. Sea routes (drawn before highlight passes, matches svg layer order)
-    for (final sr in seaRoutes) {
-      final lit = can &&
-          ctrl.sel != null &&
-          ((sr.route.a == ctrl.sel && targets.contains(sr.route.b)) ||
-              (sr.route.b == ctrl.sel && targets.contains(sr.route.a)));
-      _drawSeaRoute(canvas, sr, lit);
+    // 3-8. Draw baked static board texture (1 GPU quad blit during pan/zoom/animations!)
+    final worldPadRect = Rect.fromLTWH(-54.0, -30.0, md.width + 108.0, md.height + 60.0);
+    final zoomTier = _MapPaintCache.zoomTierFor(camZ);
+    final stateSig = _computeBoardStateSig(
+      v: v,
+      terrs: terrs,
+      can: can,
+      bonusOnly: bonusOnly,
+      poolCont: poolCont,
+      turnIdx: turnIdx,
+      pk: pk,
+      spot: spot,
+      ev: ev,
+    );
+    cache.ensureBoardBaked(
+      stateSig: stateSig,
+      zoomTier: zoomTier,
+      worldPadRect: worldPadRect,
+      recordPicture: () => _recordBoardPicture(
+        worldPadRect: worldPadRect,
+        bakeScale: _MapPaintCache.bakeScaleForTier(zoomTier),
+        nomZ: _MapPaintCache.nominalZoomForTier(zoomTier),
+        v: v,
+        terrs: terrs,
+        colors: colors,
+        ev: ev,
+        can: can,
+        targets: targets,
+        bonusOnly: bonusOnly,
+        poolCont: poolCont,
+        turnIdx: turnIdx,
+        pk: pk,
+        spot: spot,
+      ),
+      onBaked: () => animNotifier.tick(DateTime.now().millisecondsSinceEpoch),
+    );
+
+    final baked = cache.bakedBoardImage;
+    if (baked != null && cache.bakedImgStateSig == stateSig) {
+      canvas.drawImageRect(
+        baked,
+        Rect.fromLTWH(0, 0, baked.width.toDouble(), baked.height.toDouble()),
+        worldPadRect,
+        _boardImgPaint,
+      );
+    } else if (cache.boardPicture != null) {
+      final s = _MapPaintCache.bakeScaleForTier(zoomTier);
+      canvas.save();
+      canvas.translate(worldPadRect.left, worldPadRect.top);
+      canvas.scale(1.0 / s, 1.0 / s);
+      canvas.drawPicture(cache.boardPicture!);
+      canvas.restore();
     }
 
-    // 7. Territories: fill + directional #landlight shading + default 1px border
+    // 6b. Active lit sea route dashes (at most 1-3 active connections, cached in 8 discrete phase buckets)
+    if (can && ctrl.sel != null) {
+      final bucket = ((nowMs / 1000.0 * (20.0 / 11.0) * 8.0).floor()) & 7;
+      final litPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 3.0 / camZ;
+      for (var si = 0; si < seaCache.routes.length; si++) {
+        final sr = seaCache.routes[si];
+        if ((sr.route.a == ctrl.sel && targets.contains(sr.route.b)) ||
+            (sr.route.b == ctrl.sel && targets.contains(sr.route.a))) {
+          canvas.drawPath(
+            cache.litSeaDashPathFor(
+              si,
+              sr,
+              dirPositive: ctrl.sel == sr.route.b,
+              bucket: bucket,
+            ),
+            litPaint,
+          );
+        }
+      }
+    }
+
+    // Collect highlighted territories for foreground borders
     final frontOrder = <int>[];
     for (var i = 0; i < md.territories.length; i++) {
       final isSel = i == ctrl.sel ||
@@ -995,34 +1460,6 @@ class _WorldMapPainter extends CustomPainter {
       if (isSel || isTgt || isSpot || i == hoverTerr) {
         frontOrder.add(i);
       }
-
-      _drawTerritoryFillAndLight(
-        canvas,
-        i,
-        v,
-        terrs,
-        colors,
-        ev,
-        can,
-        targets,
-        bonusOnly,
-        poolCont,
-        turnIdx,
-        pk,
-        spot,
-      );
-    }
-
-    // 8. Continent moat separators over territory borders
-    for (final c in md.continents) {
-      canvas.drawPath(
-        c.path,
-        Paint()
-          ..color = _oceanColor
-          ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round
-          ..strokeWidth = moat,
-      );
     }
 
     // 9. Re-draw highlighted territory strokes on top so borders are never clipped
@@ -1075,9 +1512,9 @@ class _WorldMapPainter extends CustomPainter {
       _drawSmokeOverlay(canvas);
     }
 
-    // 11. Radioactive perimeter hazard animation (hz-line & hz-scan)
+    // 11. Radioactive perimeter hazard animation (cached dashed & spark segments)
     if (fogTerr != null && fogTerr >= 0 && fogTerr < md.territories.length && ctrl.incomingTerr != fogTerr) {
-      _drawHazardOutline(canvas, md.territories[fogTerr].path);
+      _drawHazardOutline(canvas, fogTerr);
     }
 
     // 11b. Trincheiras do Quartel: contorno tracejado dourado, parado (cached)
@@ -1094,10 +1531,14 @@ class _WorldMapPainter extends CustomPainter {
       }
     }
 
-    // 12. Continent names (.cname) + Mandatory continent bonus badge
-    for (var ci = 0; ci < md.continents.length; ci++) {
-      final bonusCount = (poolCont['$ci'] as num?)?.toInt() ?? 0;
-      _drawContinentLabel(canvas, ci, mandatoryBonus: bonusOnly ? bonusCount : 0);
+    // 12b. Dynamic mandatory continent bonus badges (static continent names are baked in board layer)
+    if (bonusOnly) {
+      for (var ci = 0; ci < md.continents.length; ci++) {
+        final bonusCount = (poolCont['$ci'] as num?)?.toInt() ?? 0;
+        if (bonusCount > 0) {
+          _drawContinentLabel(canvas, ci, mandatoryBonus: bonusCount);
+        }
+      }
     }
 
     // 13. Aim lines (.aim & .aim.one) + Occupy / Move / Airlift transfer line
@@ -1182,18 +1623,7 @@ class _WorldMapPainter extends CustomPainter {
     )..layout();
     fillTp.paint(canvas, pos);
 
-    final pillTp = TextPainter(
-      text: TextSpan(
-        text: 'BÔNUS RESTANTE: +$mandatoryBonus',
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.5,
-          color: AppColors.gold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final pillTp = cache.bonusPillPainter(mandatoryBonus);
 
     final pw = pillTp.width + 14;
     final ph = pillTp.height + 5;
@@ -1215,96 +1645,6 @@ class _WorldMapPainter extends CustomPainter {
       canvas,
       Offset(center.dx - pillTp.width / 2, center.dy - pillTp.height / 2),
     );
-  }
-
-  void _drawSeaRoute(Canvas canvas, _ComputedSeaRoute sr, bool lit) {
-    final casePaint = Paint()
-      ..color = const Color(0xFF081120)
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 5.5 / camZ;
-    for (final p in sr.paths) {
-      canvas.drawPath(p, casePaint);
-    }
-
-    final routePaint = Paint()
-      ..color = lit ? Colors.white : const Color(0xFFCFE3FF)
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = (lit ? 3.0 : 1.8) / camZ;
-
-    final dir = (lit && ctrl.sel == sr.route.b) ? 1.0 : -1.0;
-    final phase = lit ? (11.0 + dir * ((nowMs / 800.0 * 20.0) % 11.0)) % 11.0 : 0.0;
-    for (final p in sr.paths) {
-      _drawDashedPath(
-        canvas,
-        p,
-        routePaint,
-        dash: lit ? 6.0 : 1.5,
-        gap: lit ? 5.0 : 5.5,
-        phase: phase,
-      );
-    }
-
-    final r = sr.route;
-    if (r.wrap) {
-      final chevPaint = Paint()
-        ..color = const Color(0xFFCFE3FF)
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = 2.0 / camZ;
-      final lx = -_mapPad + 8;
-      final rx = ctrl.mapData.width + _mapPad - 8;
-      final chevrons = Path()
-        ..moveTo(lx, r.y1 - 5)
-        ..lineTo(lx - 6, r.y1)
-        ..lineTo(lx, r.y1 + 5)
-        ..moveTo(lx + 8, r.y1 - 5)
-        ..lineTo(lx + 2, r.y1)
-        ..lineTo(lx + 8, r.y1 + 5)
-        ..moveTo(rx, r.y2 - 5)
-        ..lineTo(rx + 6, r.y2)
-        ..lineTo(rx, r.y2 + 5)
-        ..moveTo(rx - 8, r.y2 - 5)
-        ..lineTo(rx - 2, r.y2)
-        ..lineTo(rx - 8, r.y2 + 5);
-      canvas.drawPath(chevrons, chevPaint);
-    }
-
-    // Port circles
-    final portFill = Paint()..color = const Color(0xFFCFE3FF);
-    final portStroke = Paint()
-      ..color = const Color(0xFF081120)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    for (final pt in [Offset(r.x1, r.y1), Offset(r.x2, r.y2)]) {
-      canvas.drawCircle(pt, 3.1, portFill);
-      canvas.drawCircle(pt, 3.1, portStroke);
-    }
-  }
-
-  void _drawDashedPath(
-    Canvas canvas,
-    Path path,
-    Paint paint, {
-    double dash = 6,
-    double gap = 5,
-    double phase = 0,
-  }) {
-    final cycle = dash + gap;
-    final offset = phase % cycle;
-    for (final metric in path.computeMetrics()) {
-      double dist = -offset;
-      while (dist < metric.length) {
-        final start = max(0.0, dist);
-        final end = min(dist + dash, metric.length);
-        if (end > start) {
-          canvas.drawPath(metric.extractPath(start, end), paint);
-        }
-        dist += cycle;
-      }
-    }
   }
 
   Color _dimColor(String hex, Color base) {
@@ -1338,8 +1678,10 @@ class _WorldMapPainter extends CustomPainter {
     Map<String, dynamic> poolCont,
     int turnIdx,
     ({int sel, int? target, int n})? pk,
-    Set<int>? spot,
-  ) {
+    Set<int>? spot, {
+    required Paint fillPaint,
+    required Paint borderPaint,
+  }) {
     final tr = ctrl.mapData.territories[i];
     final hex = terrs != null
         ? colors[(v!['players'][(terrs[i]['o'] as num).toInt()]['color'] as num).toInt()].hex
@@ -1391,7 +1733,8 @@ class _WorldMapPainter extends CustomPainter {
       fillColor = Color.lerp(fillColor, Colors.white, 0.16)!;
     }
 
-    canvas.drawPath(tr.path, Paint()..color = fillColor);
+    fillPaint.color = fillColor;
+    canvas.drawPath(tr.path, fillPaint);
 
     // #landlight diagonal lighting gradient per territory bounding box (pre-cached)
     canvas.drawPath(
@@ -1400,14 +1743,7 @@ class _WorldMapPainter extends CustomPainter {
     );
 
     // Default 1px territory coast/border
-    canvas.drawPath(
-      tr.path,
-      Paint()
-        ..color = const Color(0xFF081120)
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = 1.0 / camZ,
-    );
+    canvas.drawPath(tr.path, borderPaint);
   }
 
   void _drawTerritoryHighlightBorder(
@@ -1482,36 +1818,26 @@ class _WorldMapPainter extends CustomPainter {
     }
   }
 
-  void _drawHazardOutline(Canvas canvas, Path trPath) {
-    final dashPhase = (nowMs / 12000.0 * 90.0) % 9.0;
-    _drawDashedPath(
-      canvas,
-      trPath,
+  void _drawHazardOutline(Canvas canvas, int terrIdx) {
+    final bucket = ((nowMs / 12000.0 * 90.0 / 9.0 * 8.0).floor()) & 7;
+    canvas.drawPath(
+      cache.hazardDashPathFor(terrIdx, bucket),
       Paint()
         ..color = const Color(0xD8B4FF86)
         ..style = PaintingStyle.stroke
         ..strokeJoin = StrokeJoin.round
         ..strokeWidth = 1.6 / camZ,
-      dash: 5,
-      gap: 4,
-      phase: dashPhase,
     );
-    // Bright scanning spark along contour
-    for (final metric in trPath.computeMetrics()) {
-      final scanLen = metric.length * 0.08;
-      final offset = ((nowMs % 5000) / 5000.0) * metric.length;
-      final end = offset + scanLen;
-      if (end <= metric.length) {
-        canvas.drawPath(
-          metric.extractPath(offset, end),
-          Paint()
-            ..color = const Color(0xFFF1FFE6)
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..strokeWidth = 2.4 / camZ,
-        );
-      }
-    }
+    // Bright scanning spark along contour (20 pre-cached segments -> zero computeMetrics per frame)
+    final slot = ((nowMs % 5000) / 5000.0 * 20.0).floor() % 20;
+    canvas.drawPath(
+      cache.hazardScanSegmentFor(terrIdx, slot),
+      Paint()
+        ..color = const Color(0xFFF1FFE6)
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 2.4 / camZ,
+    );
   }
 
   void _drawStraightDashedLine(
@@ -1711,18 +2037,16 @@ class _WorldMapPainter extends CustomPainter {
       );
     }
 
+    final motePaint = Paint()..blendMode = BlendMode.plus;
     for (final m in sim.motes) {
       final e = sin(pi * m.l / m.ml);
-      final a = e * (0.45 + 0.55 * sin(sim.time * 7 + m.ph)) * fade;
+      final a = (e * (0.45 + 0.55 * sin(sim.time * 7 + m.ph)) * fade).clamp(0.0, 1.0);
       if (a <= 0.02) continue;
-      canvas.drawCircle(
-        Offset(gxToMap(m.x), gxToMap(m.y)),
-        m.s * 2.2,
-        Paint()
-          ..blendMode = BlendMode.plus
-          ..color = Color.fromRGBO(140, 255, 130, a.clamp(0.0, 1.0))
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-      );
+      final center = Offset(gxToMap(m.x), gxToMap(m.y));
+      motePaint.color = Color.fromRGBO(140, 255, 130, a * 0.36);
+      canvas.drawCircle(center, m.s * 3.0, motePaint);
+      motePaint.color = Color.fromRGBO(185, 255, 175, a * 0.85);
+      canvas.drawCircle(center, m.s * 1.4, motePaint);
     }
 
     for (final q in sim.sparks) {
@@ -1846,20 +2170,21 @@ class _WorldMapPainter extends CustomPainter {
       final tb = terrs[a.to];
       final fade = t < 0.15 ? t / 0.15 : (t > 0.7 ? (1 - t) / 0.3 : 1.0);
       if ((ta.x - tb.x).abs() < ctrl.mapData.width / 2) {
-        final p = Path()
-          ..moveTo(ta.x, ta.y)
-          ..lineTo(tb.x, tb.y);
-        canvas.drawPath(
-          p,
+        final pa = Offset(ta.x, ta.y);
+        final pb = Offset(tb.x, tb.y);
+        canvas.drawLine(
+          pa,
+          pb,
           Paint()
             ..color = a.color.withValues(alpha: 0.55 * fade)
             ..style = PaintingStyle.stroke
             ..strokeCap = StrokeCap.round
             ..strokeWidth = 5.0,
         );
-        _drawDashedPath(
+        _drawStraightDashedLine(
           canvas,
-          p,
+          pa,
+          pb,
           Paint()
             ..color = Colors.white.withValues(alpha: 0.9 * fade)
             ..style = PaintingStyle.stroke
@@ -2112,24 +2437,17 @@ class _WorldMapPainter extends CustomPainter {
       canvas.scale(markK, markK);
 
       // .bshadow
-      canvas.drawCircle(
-        const Offset(0, 2),
-        13.4,
-        Paint()..color = const Color(0x7302060C),
-      );
+      canvas.drawCircle(const Offset(0, 2), 13.4, _badgeShadowPaint);
       // .badge dark navy disc with white ring
       canvas.drawCircle(
         Offset.zero,
         12.5,
-        Paint()..color = isRad ? const Color(0xFF14260E) : const Color(0xFF0C1626),
+        isRad ? _badgeFillRadPaint : _badgeFillNormalPaint,
       );
       canvas.drawCircle(
         Offset.zero,
         12.5,
-        Paint()
-          ..color = isRad ? const Color(0xFF8CFF4A) : const Color(0xDDFFFFFF)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.7,
+        isRad ? _badgeRingRadPaint : _badgeRingNormalPaint,
       );
 
       // .num (cached TextPainter)
@@ -2140,20 +2458,13 @@ class _WorldMapPainter extends CustomPainter {
       if (isRad) {
         canvas.save();
         canvas.translate(13.5, -13.5);
-        canvas.drawCircle(Offset.zero, 7.6, Paint()..color = const Color(0xFFF4D21A));
-        canvas.drawCircle(
-          Offset.zero,
-          7.6,
-          Paint()
-            ..color = const Color(0xFF141204)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2,
-        );
+        canvas.drawCircle(Offset.zero, 7.6, _trefoilBgPaint);
+        canvas.drawCircle(Offset.zero, 7.6, _trefoilStrokePaint);
         canvas.save();
         canvas.scale(0.72, 0.72);
-        canvas.drawPath(_trefoilPath, Paint()..color = const Color(0xFF141204));
+        canvas.drawPath(_trefoilPath, _trefoilDarkPaint);
         canvas.restore();
-        canvas.drawCircle(Offset.zero, 1.1, Paint()..color = const Color(0xFF141204));
+        canvas.drawCircle(Offset.zero, 1.1, _trefoilDarkPaint);
         canvas.restore();
       }
 

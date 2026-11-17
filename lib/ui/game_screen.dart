@@ -1243,76 +1243,83 @@ class _TurnRingButton extends StatelessWidget {
       }
     }
 
-    final hasClock = ctrl.turnDeadlineMs > 0 && (ctrl.turnLimitMs ?? 0) > 0;
-    double clockFrac = 0;
-    int secsLeft = 0;
-    bool low = false;
-    String topText;
-    String subText;
+    return RepaintBoundary(
+      child: ValueListenableBuilder<int>(
+        valueListenable: ctrl.clockTick,
+        builder: (context, _, _) {
+          final hasClock = ctrl.turnDeadlineMs > 0 && (ctrl.turnLimitMs ?? 0) > 0;
+          double clockFrac = 0;
+          int secsLeft = 0;
+          bool low = false;
+          String topText;
+          String subText;
 
-    if (hasClock) {
-      final left = ctrl.turnDeadlineMs - DateTime.now().millisecondsSinceEpoch;
-      secsLeft = max(0, (left / 1000).ceil());
-      clockFrac = (left / ctrl.turnLimitMs!).clamp(0.0, 1.0);
-      low = secsLeft <= 10;
-      topText = secsLeft >= 60
-          ? '${secsLeft ~/ 60}:${(secsLeft % 60).toString().padLeft(2, '0')}'
-          : '$secsLeft';
-      subText = secsLeft >= 60 ? '' : 'seg';
-    } else {
-      topText = '${slices.isNotEmpty ? slices.first.$2 : 0}';
-      subText = 'terr.';
-    }
+          if (hasClock) {
+            final left = ctrl.turnDeadlineMs - DateTime.now().millisecondsSinceEpoch;
+            secsLeft = max(0, (left / 1000).ceil());
+            clockFrac = (left / ctrl.turnLimitMs!).clamp(0.0, 1.0);
+            low = secsLeft <= 10;
+            topText = secsLeft >= 60
+                ? '${secsLeft ~/ 60}:${(secsLeft % 60).toString().padLeft(2, '0')}'
+                : '$secsLeft';
+            subText = secsLeft >= 60 ? '' : 'seg';
+          } else {
+            topText = '${slices.isNotEmpty ? slices.first.$2 : 0}';
+            subText = 'terr.';
+          }
 
-    return Tooltip(
-      message: 'Ordem dos turnos e relógio · Abrir mesa (M)',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: size,
-            height: size,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 4))],
-        ),
-        child: CustomPaint(
-          painter: _TurnRingPainter(
-            slices: slices,
-            totalTerr: totalTerr,
-            clockFrac: clockFrac,
-            low: low,
-          ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  topText,
-                  style: TextStyle(
-                    fontSize: size >= 80 ? 19 : 16,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
-                    color: low ? const Color(0xFFFF8A7A) : AppColors.ink,
+          return Tooltip(
+            message: 'Ordem dos turnos e relógio · Abrir mesa (M)',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: onTap,
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 4))],
                   ),
-                ),
-                if (subText.isNotEmpty)
-                  Text(
-                    subText,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      height: 1.1,
-                      color: AppColors.mute,
+                  child: CustomPaint(
+                    painter: _TurnRingPainter(
+                      slices: slices,
+                      totalTerr: totalTerr,
+                      clockFrac: clockFrac,
+                      low: low,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            topText,
+                            style: TextStyle(
+                              fontSize: size >= 80 ? 19 : 16,
+                              fontWeight: FontWeight.w700,
+                              height: 1.0,
+                              color: low ? const Color(0xFFFF8A7A) : AppColors.ink,
+                            ),
+                          ),
+                          if (subText.isNotEmpty)
+                            Text(
+                              subText,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                height: 1.1,
+                                color: AppColors.mute,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-              ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -1408,7 +1415,18 @@ class _TurnRingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _TurnRingPainter old) => true;
+  bool shouldRepaint(covariant _TurnRingPainter old) {
+    if (old.clockFrac != clockFrac ||
+        old.low != low ||
+        old.totalTerr != totalTerr ||
+        old.slices.length != slices.length) {
+      return true;
+    }
+    for (var i = 0; i < slices.length; i++) {
+      if (old.slices[i] != slices[i]) return true;
+    }
+    return false;
+  }
 }
 
 // ---------- Dice Roll Banner (#dice) ----------

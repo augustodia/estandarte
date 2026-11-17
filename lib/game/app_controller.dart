@@ -149,6 +149,7 @@ class AppController extends ChangeNotifier {
   Timer? _clockTimer;
   Timer? _botTimer;
   Timer? _fxCleanupTimer;
+  final ValueNotifier<int> clockTick = ValueNotifier<int>(0);
 
   // FX / Cinema / Banners
   int _evN = -1;
@@ -2932,7 +2933,7 @@ class AppController extends ChangeNotifier {
         _syncHost();
         return;
       }
-      notifyListeners();
+      clockTick.value++;
     });
   }
 
@@ -4571,6 +4572,7 @@ class AppController extends ChangeNotifier {
     _heartbeatTimer?.cancel();
     _roomsTimer?.cancel();
     _resetSessionState();
+    clockTick.dispose();
     smoke.dispose();
     super.dispose();
   }
