@@ -310,10 +310,11 @@ class _GameScreenState extends State<GameScreen> {
 
           if (c.tutorialGuide != null)
             Positioned(
-              left: 12,
-              right: 12,
-              top: 10,
-              child: Center(
+              left: layout.land ? 10 : 12,
+              right: layout.land ? null : 12,
+              top: layout.land ? 8 : 10,
+              child: Align(
+                alignment: layout.land ? Alignment.topLeft : Alignment.topCenter,
                 child: _TutorialCoachBanner(
                   guide: c.tutorialGuide!,
                   onExit: c.leaveGame,
@@ -322,10 +323,11 @@ class _GameScreenState extends State<GameScreen> {
             )
           else if (c.activeChallenge != null)
             Positioned(
-              left: 12,
-              right: 12,
-              top: 10,
-              child: Center(
+              left: layout.land ? 10 : 12,
+              right: layout.land ? null : 12,
+              top: layout.land ? 8 : 10,
+              child: Align(
+                alignment: layout.land ? Alignment.topLeft : Alignment.topCenter,
                 child: _ChallengeHudBanner(
                   spec: c.activeChallenge!,
                   status: c.challengeStatus,
@@ -1430,7 +1432,7 @@ class _TurnRingButton extends StatelessWidget {
             subText = secsLeft >= 60 ? '' : 'seg';
           } else {
             topText = '${slices.isNotEmpty ? slices.first.$2 : 0}';
-            subText = 'terr.';
+            subText = 'terr';
           }
 
           return Tooltip(
@@ -1459,15 +1461,16 @@ class _TurnRingButton extends StatelessWidget {
                           Text(
                             topText,
                             style: AppText.number(
-                              size: size >= 70 ? 20 : 17,
+                              size: (size * 0.27).clamp(13.0, 21.0),
                               weight: FontWeight.w700,
                               color: low ? AppColors.bad : AppColors.ink,
-                            ),
+                            ).copyWith(height: 1.0),
                           ),
                           if (subText.isNotEmpty)
                             Text(
-                              subText,
-                              style: AppText.label(size: 10, color: AppColors.mute),
+                              subText.toUpperCase(),
+                              style: AppText.label(size: (size * 0.15).clamp(8.0, 10.0), color: AppColors.faint)
+                                  .copyWith(height: 1.0, letterSpacing: 0.4),
                             ),
                         ],
                       ),
@@ -3385,7 +3388,8 @@ class _ConfettiPainter extends CustomPainter {
   bool shouldRepaint(covariant _ConfettiPainter old) => old.t != t;
 }
 
-class _TutorialCoachBanner extends StatelessWidget {
+/// Passo do tutorial. Compacto e recolhível para não cobrir o mapa; abre sozinho quando o passo muda.
+class _TutorialCoachBanner extends StatefulWidget {
   const _TutorialCoachBanner({
     required this.guide,
     required this.onExit,
@@ -3395,85 +3399,87 @@ class _TutorialCoachBanner extends StatelessWidget {
   final VoidCallback onExit;
 
   @override
+  State<_TutorialCoachBanner> createState() => _TutorialCoachBannerState();
+}
+
+class _TutorialCoachBannerState extends State<_TutorialCoachBanner> {
+  var _open = true;
+
+  @override
+  void didUpdateWidget(_TutorialCoachBanner old) {
+    super.didUpdateWidget(old);
+    if (old.guide.step != widget.guide.step) _open = true;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final g = widget.guide;
+    final compact = estCompact(context);
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 540),
-      child: EstGlassCard(
-        highlight: true,
-        ornate: false,
-        borderRadius: 6,
-        padding: EdgeInsets.zero,
+      constraints: BoxConstraints(maxWidth: compact ? 380 : 480),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: AppColors.glassBorder),
+          boxShadow: AppColors.edgeShadows,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
-              decoration: const BoxDecoration(
-                color: Color(0x880B0F14),
-                border: Border(bottom: BorderSide(color: AppColors.line)),
-              ),
-              child: Row(
-                children: [
-                  const EstIcon(EstIconKind.compass, size: 13, color: AppColors.brass),
-                  const SizedBox(width: 7),
-                  Text(
-                    'PASSO ${guide.step}/${guide.total}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: AppColors.gold,
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 11,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    color: AppColors.line,
-                  ),
-                  Expanded(
-                    child: Text(
-                      guide.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
+            InkWell(
+              onTap: () => setState(() => _open = !_open),
+              borderRadius: BorderRadius.circular(Radii.md),
+              child: SizedBox(
+                height: 34,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 10),
+                    // progresso do tutorial em traços
+                    for (var i = 1; i <= g.total; i++)
+                      Container(
+                        width: 10,
+                        height: 3,
+                        margin: const EdgeInsets.only(right: 3),
+                        color: i <= g.step ? AppColors.action : AppColors.glassBorder,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: onExit,
-                    borderRadius: BorderRadius.circular(4),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    const SizedBox(width: 7),
+                    Expanded(
                       child: Text(
-                        'Sair',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.mute,
-                        ),
+                        g.title.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.label(size: 13, color: AppColors.ink, weight: FontWeight.w700),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 9, 14, 11),
-              child: Text(
-                guide.body,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.38,
-                  color: Color(0xFFE8ECF1),
+                    Icon(
+                      _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      size: 18,
+                      color: AppColors.mute,
+                    ),
+                    TextButton(
+                      onPressed: widget.onExit,
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(44, 34),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        foregroundColor: AppColors.mute,
+                      ),
+                      child: Text('SAIR', style: AppText.label(size: 12, color: AppColors.mute)),
+                    ),
+                  ],
                 ),
               ),
             ),
+            if (_open)
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
+                child: Text(
+                  g.body,
+                  style: TextStyle(fontSize: compact ? 13 : 15, height: 1.35, color: AppColors.ink),
+                ),
+              ),
           ],
         ),
       ),
@@ -3501,7 +3507,7 @@ class _ChallengeHudBanner extends StatelessWidget {
     final progress = status?.progressText ?? spec.goal.title;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 620),
+      constraints: BoxConstraints(maxWidth: estCompact(context) ? 420 : 620),
       child: EstGlassCard(
         highlight: spec.isHistorical,
         ornate: false,
@@ -3522,7 +3528,7 @@ class _ChallengeHudBanner extends StatelessWidget {
                   EstIcon(
                     spec.isHistorical ? EstIconKind.book : EstIconKind.medal,
                     size: 13,
-                    color: AppColors.gold,
+                    color: AppColors.medal,
                   ),
                   const SizedBox(width: 7),
                   Text(
@@ -3531,7 +3537,7 @@ class _ChallengeHudBanner extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
-                      color: AppColors.gold,
+                      color: AppColors.medal,
                     ),
                   ),
                   if (difficulty == 'marechal') ...[
@@ -3619,13 +3625,13 @@ class _MiniStarChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final col = ok ? AppColors.gold : const Color(0xFF7D8796);
+    final col = ok ? AppColors.medal : const Color(0xFF7D8796);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: ok ? AppColors.gold.withValues(alpha: 0.14) : AppColors.obsidian,
+        color: ok ? AppColors.medal.withValues(alpha: 0.14) : AppColors.obsidian,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: ok ? AppColors.brassDim : AppColors.line),
+        border: Border.all(color: ok ? const Color(0x66C9A45C) : AppColors.line),
       ),
       child: Text(
         label,
