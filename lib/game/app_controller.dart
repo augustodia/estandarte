@@ -412,6 +412,10 @@ class AppController extends ChangeNotifier {
   // Com conta: o nome de usuário (único) é o nome no jogo e o desafio do dia vale em qualquer aparelho.
   static const _kAccToken = 'ultimato.account.token';
   static const _kAccUser = 'ultimato.account.user';
+  // De quem é o progresso guardado no aparelho (id da conta; vazio = convidado).
+  static const _kProgressOwner = 'ultimato.progress.owner';
+  bool _syncingProgress = false;
+  bool _syncAgain = false;
 
   acc.AccountUser? account;
   String? _accountToken;
@@ -492,10 +496,49 @@ class AppController extends ChangeNotifier {
       final st = await acc.accountMe(serverUrl(), tok);
       if (_accountToken != tok) return;
       _applyState(st);
+      unawaited(syncProgress());
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) _clearAccount();
     }
     notifyListeners();
+  }
+
+  /// Progresso do desafio (estrelas por dia, meta semanal, Códice) na conta: manda o do aparelho, recebe o da
+  /// conta juntado (fica o melhor de cada item) e guarda aqui. Na primeira vez numa conta, o que foi jogado como
+  /// convidado vai junto. Se o aparelho guardava o progresso de outra conta, não manda: só baixa o desta.
+  Future<void> syncProgress() async {
+    final tok = _accountToken;
+    final me = account;
+    if (tok == null || me == null || !netOnline) return;
+    if (_syncingProgress) {
+      _syncAgain = true; // chegou progresso novo durante o envio: manda de novo no fim
+      return;
+    }
+    _syncingProgress = true;
+    try {
+      final owner = AppStorage.instance.getString(_kProgressOwner);
+      final mine = owner == null || owner.isEmpty || owner == '${me.id}';
+      final res = await acc.accountSyncProgress(
+          serverUrl(), tok, mine ? dailyProgress : const {}, mine ? codexProgress : const {});
+      if (_accountToken != tok) return;
+      dailyProgress = res.daily;
+      codexProgress = res.codex;
+      AppStorage.instance.setString('estandarte.daily.done', jsonEncode(dailyProgress));
+      AppStorage.instance.setString('estandarte.codex', jsonEncode(codexProgress));
+      AppStorage.instance.setString(_kProgressOwner, '${me.id}');
+      notifyListeners();
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) {
+        _clearAccount();
+        notifyListeners();
+      }
+    } finally {
+      _syncingProgress = false;
+      if (_syncAgain) {
+        _syncAgain = false;
+        unawaited(syncProgress());
+      }
+    }
   }
 
   /// Roda um pedido de conta: marca ocupado, devolve o erro (ou null) e sai da conta se o token caiu.
@@ -522,6 +565,7 @@ class AppController extends ChangeNotifier {
         _storeAccount(s.token, s.user);
         accountPendingEmail = null;
         accountResendAt = s.codeSent ? DateTime.now().add(const Duration(seconds: 60)) : null;
+        unawaited(syncProgress()); // o que foi jogado como convidado vai para a conta nova
       });
 
   /// Entra com e-mail ou nome de usuário.
@@ -1032,6 +1076,7 @@ class AppController extends ChangeNotifier {
           AppStorage.instance.setString('estandarte.codex', jsonEncode(codexProgress));
         }
       }
+      unawaited(syncProgress()); // com conta, o resultado vale em qualquer aparelho
     }
 
     Telemetry.track(

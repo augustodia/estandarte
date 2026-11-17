@@ -141,6 +141,16 @@ Future<AccountSession> accountResetPassword(String server, String login, String 
     _session(await _call(server, 'POST', '/account/password/reset',
         body: {'login': login, 'code': code, 'password': password}));
 
+/// Junta o progresso do aparelho com o da conta (fica o melhor de cada dia e crônica) e devolve o resultado.
+Future<({Map<String, dynamic> daily, Map<String, dynamic> codex})> accountSyncProgress(
+    String server, String token, Map<String, dynamic> daily, Map<String, dynamic> codex) async {
+  final j = await _call(server, 'POST', '/account/progress', token: token, body: {'daily': daily, 'codex': codex});
+  return (
+    daily: Map<String, dynamic>.from(j['daily'] as Map? ?? const {}),
+    codex: Map<String, dynamic>.from(j['codex'] as Map? ?? const {}),
+  );
+}
+
 Future<void> accountLogout(String server, String token) async {
   await _call(server, 'POST', '/account/logout', token: token);
 }
