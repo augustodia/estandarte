@@ -104,6 +104,15 @@ void main() {
       await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_$tag');
 
+      // teclado aberto: o navegador encolhe a altura útil (interactive-widget=resizes-content)
+      final kbSize = Size(size.width, size.height * (size.width > size.height ? 0.45 : 0.55));
+      tester.view.physicalSize = kbSize * 2;
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
+      await _shot(tester, 'home_kb_$tag');
+      await tester.pumpWidget(_app(RoomsScreen(ctrl: ctrl)));
+      await _shot(tester, 'rooms_kb_$tag');
+      tester.view.physicalSize = size * 2;
+
       // salas online (sem rede no teste: mostra o estado vazio/erro) e desafio do dia
       await tester.pumpWidget(_app(RoomsScreen(ctrl: ctrl)));
       await _shot(tester, 'rooms_$tag');

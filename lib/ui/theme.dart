@@ -1078,7 +1078,14 @@ Future<T?> showEstSheet<T>(
                 ),
               );
 
-        return SafeArea(
+        // Teclado aberto: a janela sobe acima dele (no palco girado o inset já vem rotacionado)
+        final kb = MediaQuery.viewInsetsOf(rCtx);
+        final avail = max(200.0, sz.height - kb.vertical);
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          padding: kb,
+          child: SafeArea(
           child: Align(
             alignment: centered ? Alignment.center : Alignment.bottomCenter,
             child: Padding(
@@ -1093,11 +1100,12 @@ Future<T?> showEstSheet<T>(
                   maxWidth: centered
                       ? min(compactLand ? 580.0 : maxWidth, max(260.0, sz.width - (compactLand ? 32 : 40)))
                       : min(500.0, sz.width),
-                  maxHeight: sz.height * (compactLand ? 0.96 : (centered ? 0.90 : 0.92)),
+                  maxHeight: avail * (compactLand ? 0.96 : (centered ? 0.90 : 0.92)),
                 ),
                 child: animated,
               ),
             ),
+          ),
           ),
         );
       }

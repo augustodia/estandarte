@@ -175,63 +175,93 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    final head = <Widget>[
         EstWordmark(size: compact ? 28 : 36),
         const SizedBox(height: 6),
         Text(
           'ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(),
           style: AppText.label(size: 11),
         ),
-        SizedBox(height: compact ? 14 : 22),
+        SizedBox(height: compact ? 12 : 20),
+        _nameField(compact),
+        SizedBox(height: compact ? 8 : 12),
         _QuickMatchButton(compact: compact, onTap: () => c.startQuickMatch(_nameCtrl.text)),
         SizedBox(height: compact ? 4 : 10),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items),
+    ];
+    final footer = <Widget>[
+        if (!c.netOnline)
+          Padding(
+            padding: const EdgeInsets.only(top: Space.x2),
+            child: Text('SEM INTERNET · SÓ MESA LOCAL', style: AppText.label(size: 11, color: AppColors.mute)),
           ),
-        ),
-        _profileRow(compact),
-      ],
-    );
-  }
+    ];
 
-  Widget _profileRow(bool compact) {
-    return Container(
-      padding: EdgeInsets.only(top: compact ? 6 : 10),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
-      child: Row(
+    return LayoutBuilder(builder: (context, box) {
+      // Pouca altura (teclado aberto no celular deitado): tudo rola junto, com o nome visível no topo.
+      if (box.maxHeight < 340) {
+        return SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...head, ...items, ...footer]),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          EstFactionSeal(color: Factions.colors[1], size: 14),
-          const SizedBox(width: Space.x2),
+          ...head,
           Expanded(
-            child: TextField(
-              controller: _nameCtrl,
-              maxLength: 14,
-              onChanged: c.savePlayerName,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
-              decoration: const InputDecoration(
-                hintText: 'Seu nome de comandante',
-                counterText: '',
-                filled: false,
-                isDense: true,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 8),
-              ),
+            child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items),
             ),
           ),
-          if (!c.netOnline)
-            Padding(
-              padding: const EdgeInsets.only(left: Space.x2),
-              child: Text('SEM INTERNET', style: AppText.label(size: 11, color: AppColors.mute)),
-            )
-          else
-            Text('TOQUE PARA TROCAR', style: AppText.label(size: 11)),
+          ...footer,
         ],
-      ),
+      );
+    });
+  }
+
+  /// Nome do jogador: campo com rótulo, logo abaixo da marca (fica acima do teclado e é o primeiro passo).
+  Widget _nameField(bool compact) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _nameCtrl,
+      builder: (context, value, _) {
+        final empty = value.text.trim().isEmpty;
+        return Container(
+          height: compact ? 42 : 48,
+          padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
+          decoration: BoxDecoration(
+            color: AppColors.panel,
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: empty ? AppColors.ink : AppColors.glassBorder),
+          ),
+          child: Row(
+            children: [
+              Text('SEU NOME', style: AppText.label(size: 12, color: empty ? AppColors.ink : AppColors.faint)),
+              Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
+              Expanded(
+                child: TextField(
+                  controller: _nameCtrl,
+                  maxLength: 14,
+                  onChanged: c.savePlayerName,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.done,
+                  scrollPadding: const EdgeInsets.all(80),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+                  decoration: const InputDecoration(
+                    hintText: 'Como os outros vão te ver',
+                    counterText: '',
+                    filled: false,
+                    isDense: true,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              Icon(Icons.edit_outlined, size: 16, color: empty ? AppColors.ink : AppColors.faint),
+            ],
+          ),
+        );
+      },
     );
   }
 }
