@@ -493,22 +493,6 @@ class _WorldMapViewState extends State<WorldMapView> with TickerProviderStateMix
               ),
             ),
 
-            // Tabletop lighting vignette matching #mapwrap::before
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment(0, -0.15),
-                      radius: 1.05,
-                      colors: [Colors.transparent, Colors.transparent, Color(0xB304080F)],
-                      stops: [0.0, 0.52, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
             // Nuke alarm crimson perimeter glow
             if (alarmActive)
               Positioned.fill(
@@ -610,9 +594,11 @@ class _MapPaintCache {
           text: TextSpan(
             text: tr.name,
             style: const TextStyle(
-              fontSize: 8.0,
+              fontFamily: AppText.cond,
+              fontSize: 9.0,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              letterSpacing: 0.2,
+              color: AppColors.ink,
             ),
           ),
           textDirection: TextDirection.ltr,
@@ -625,32 +611,28 @@ class _MapPaintCache {
           text: TextSpan(
             text: tr.name,
             style: TextStyle(
-              fontSize: 8.0,
+              fontFamily: AppText.cond,
+              fontSize: 9.0,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
               foreground: Paint()
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = 2.4
                 ..strokeJoin = StrokeJoin.round
-                ..color = const Color(0xFF0C1626),
+                ..color = AppColors.deep,
             ),
           ),
           textDirection: TextDirection.ltr,
         )..layout(),
     ];
 
-    lightPaintsNormal = [for (final tr in terrs) _makeLightPaint(tr.bounds, 1.0)];
-    lightPaintsDim = [for (final tr in terrs) _makeLightPaint(tr.bounds, 0.22)];
 
     contStroke = [
       for (final c in md.continents)
         TextPainter(
           text: TextSpan(
-            text: '${c.name} +${c.bonus}',
-            style: AppText.serif(
-              size: 17,
-              letterSpacing: 0.06,
-              color: _oceanColor,
-            ).copyWith(
+            text: '${c.name} +${c.bonus}'.toUpperCase(),
+            style: AppText.label(size: 15, color: _oceanColor, weight: FontWeight.w700).copyWith(
               foreground: Paint()
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = 5.0
@@ -665,18 +647,13 @@ class _MapPaintCache {
       for (final c in md.continents)
         TextPainter(
           text: TextSpan(
-            text: '${c.name} +${c.bonus}',
-            style: AppText.serif(
-              size: 17,
-              letterSpacing: 0.06,
-              color: c.color,
-            ),
+            text: '${c.name} +${c.bonus}'.toUpperCase(),
+            style: AppText.label(size: 15, color: AppColors.mute, weight: FontWeight.w700),
           ),
           textDirection: TextDirection.ltr,
         )..layout(),
     ];
 
-    compassPicture = _buildCompassPicture();
   }
 
   static const Color _oceanColor = AppColors.sea;
@@ -684,14 +661,14 @@ class _MapPaintCache {
   late final List<int> territoryOrder;
   late final List<TextPainter> terrNameFill;
   late final List<TextPainter> terrNameStroke;
-  late final List<Paint> lightPaintsNormal;
-  late final List<Paint> lightPaintsDim;
   late final List<TextPainter> contStroke;
   late final List<TextPainter> contFillNormal;
-  late final ui.Picture compassPicture;
 
   final Map<String, Color> dimColorCache = {};
+  final Map<int, Path> insigniaPaths = {};
+  final Map<String, Color> terrToneCache = {};
   final Map<int, TextPainter> armyNumWhite = {};
+  final Map<int, TextPainter> armyNumDark = {};
   final Map<int, TextPainter> armyNumRad = {};
   final Map<int, Path> trenchDashPaths = {};
   final Map<int, Path> borderDashPaths = {};
@@ -767,12 +744,13 @@ class _MapPaintCache {
     return bonusPillCache.putIfAbsent(bonus, () {
       return TextPainter(
         text: TextSpan(
-          text: 'BÔNUS RESTANTE: +$bonus',
+          text: 'BÔNUS RESTANTE +$bonus',
           style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
-            color: AppColors.gold,
+            fontFamily: AppText.cond,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: AppColors.ink,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -780,74 +758,22 @@ class _MapPaintCache {
     });
   }
 
-  static Paint _makeLightPaint(Rect b, double alpha) => Paint()
-    ..shader = ui.Gradient.linear(
-      b.topLeft,
-      b.bottomRight,
-      [
-        Colors.white.withValues(alpha: 0.24 * alpha),
-        Colors.white.withValues(alpha: 0),
-        Colors.black.withValues(alpha: 0),
-        Colors.black.withValues(alpha: 0.30 * alpha),
-      ],
-      const [0.0, 0.42, 0.58, 1.0],
-    );
 
-  static ui.Picture _buildCompassPicture() {
-    final rec = ui.PictureRecorder();
-    final canvas = Canvas(rec);
-    const col = Color(0x339FC3FF);
-    final circlePaint = Paint()
-      ..color = col
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(Offset.zero, 30, circlePaint);
-    canvas.drawCircle(Offset.zero, 23, circlePaint);
 
-    Path starRay(double len, double w) => Path()
-      ..moveTo(0, 0)
-      ..lineTo(w, -w)
-      ..lineTo(0, -len)
-      ..lineTo(-w, -w)
-      ..close();
-
-    final majorPaint = Paint()..color = col..style = PaintingStyle.fill;
-    final minorPaint = Paint()
-      ..color = col
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    final majorPath = starRay(38, 5);
-    final minorPath = starRay(22, 3.2);
-
-    for (var k = 0; k < 8; k++) {
-      canvas.save();
-      canvas.rotate(k * pi / 4);
-      canvas.drawPath(k.isOdd ? minorPath : majorPath, k.isOdd ? minorPaint : majorPaint);
-      canvas.restore();
-    }
-
-    final nTp = TextPainter(
-      text: TextSpan(
-        text: 'N',
-        style: AppText.serif(size: 11, color: col),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    nTp.paint(canvas, Offset(-nTp.width / 2, -42 - nTp.height / 2));
-    return rec.endRecording();
-  }
-
-  TextPainter armyPainter(int armies, bool rad) {
-    final map = rad ? armyNumRad : armyNumWhite;
+  TextPainter armyPainter(int armies, bool rad, {bool dark = false}) {
+    final map = rad ? armyNumRad : (dark ? armyNumDark : armyNumWhite);
     return map.putIfAbsent(armies, () {
       return TextPainter(
         text: TextSpan(
           text: '$armies',
           style: TextStyle(
-            color: rad ? const Color(0xFFD8FF9A) : Colors.white,
-            fontSize: 14,
+            fontFamily: AppText.cond,
+            fontFamilyFallback: AppText.condFallback,
+            color: rad ? AppColors.rad : (dark ? AppColors.onAction : Colors.white),
+            fontSize: 15,
             fontWeight: FontWeight.w700,
             height: 1.0,
+            fontFeatures: AppText.tabular,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -943,7 +869,6 @@ class _MapPaintCache {
 
   void dispose() {
     _disposed = true;
-    compassPicture.dispose();
     boardPicture?.dispose();
     boardPicture = null;
     bakedBoardImage?.dispose();
@@ -1025,13 +950,22 @@ class _WorldMapPainter extends CustomPainter {
   // Pre-allocated static Paint objects to avoid GC pressure on 60/120Hz mobile frames
   static final Paint _oceanFillPaint = Paint()..color = _oceanColor;
   static final Paint _boardImgPaint = Paint()..filterQuality = FilterQuality.medium;
-  static final Paint _badgeShadowPaint = Paint()..color = const Color(0x7302060C);
-  static final Paint _badgeFillNormalPaint = Paint()..color = const Color(0xFF0C1626);
-  static final Paint _badgeFillRadPaint = Paint()..color = const Color(0xFF14260E);
-  static final Paint _badgeRingNormalPaint = Paint()
-    ..color = const Color(0xDDFFFFFF)
+  static final Paint _badgeShadowPaint = Paint()..color = const Color(0x73000000);
+  static final Paint _badgeShapeFill = Paint();
+  static final Paint _badgeShapeStroke = Paint()
+    ..color = AppColors.deep
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.7;
+    ..strokeJoin = StrokeJoin.round
+    ..strokeWidth = 1.8;
+
+  /// Índice da cor (facção) do dono do território [i], ou -1.
+  static int _ownerColorIndex(Map<String, dynamic> v, List<dynamic> terrs, int i) {
+    final o = (terrs[i]['o'] as num?)?.toInt() ?? -1;
+    final players = v['players'] as List<dynamic>?;
+    if (players == null || o < 0 || o >= players.length) return -1;
+    return ((players[o] as Map<String, dynamic>)['color'] as num?)?.toInt() ?? -1;
+  }
+  static final Paint _badgeFillRadPaint = Paint()..color = const Color(0xFF14260E);
   static final Paint _badgeRingRadPaint = Paint()
     ..color = const Color(0xFF8CFF4A)
     ..style = PaintingStyle.stroke
@@ -1046,14 +980,6 @@ class _WorldMapPainter extends CustomPainter {
     ..color = const Color(0xFF081120)
     ..style = PaintingStyle.stroke
     ..strokeJoin = StrokeJoin.round;
-  static final Paint _depthFillPaint = Paint()
-    ..color = const Color(0xFF050A13)
-    ..style = PaintingStyle.fill;
-  static final Paint _depthStrokePaint = Paint()
-    ..color = const Color(0xFF050A13)
-    ..style = PaintingStyle.stroke
-    ..strokeJoin = StrokeJoin.round
-    ..strokeWidth = 1.0;
 
   // Exact TREFOIL geometry from main.js
   static final Path _trefoilPath = _buildTrefoil();
@@ -1182,16 +1108,9 @@ class _WorldMapPainter extends CustomPainter {
     // Base sea fill inside baked world rectangle so auracut & moat blend seamlessly
     canvas.drawRect(worldPadRect, _oceanFillPaint);
 
-    // Compass Rose at (985, 590) in Indian Ocean (cached Picture)
-    canvas.save();
-    canvas.translate(985, 590);
-    canvas.drawPicture(cache.compassPicture);
-    canvas.restore();
-
     final cut = _unitPxFor(nomZ, 8.0, 9.0);
     final aura = cut + _unitPxFor(nomZ, 5.5, 6.0);
     final moat = _unitPxFor(nomZ, 3.2, 4.0);
-    final depth = _unitPxFor(nomZ, 3.0, 3.5);
 
     // Continent Aura + Auracut
     final auraPaint = Paint()
@@ -1203,20 +1122,12 @@ class _WorldMapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round
       ..strokeWidth = cut;
+    // contorno do continente: uma linha neutra, sem cor e sem relevo falso
+    auraPaint.color = const Color(0xFF242C37);
     for (final c in md.continents) {
-      auraPaint.color = c.color;
       canvas.drawPath(c.path, auraPaint);
       canvas.drawPath(c.path, cutPaint);
     }
-
-    // 3D Board thickness depth offset downward
-    canvas.save();
-    canvas.translate(0, depth);
-    for (final c in md.continents) {
-      canvas.drawPath(c.path, _depthFillPaint);
-      canvas.drawPath(c.path, _depthStrokePaint);
-    }
-    canvas.restore();
 
     // Static Sea Routes (all pre-batched into 4 combined Paths -> 4 draw calls total!)
     canvas.drawPath(
@@ -1230,7 +1141,7 @@ class _WorldMapPainter extends CustomPainter {
     canvas.drawPath(
       seaCache.staticDashedPath,
       Paint()
-        ..color = const Color(0xFFCFE3FF)
+        ..color = const Color(0xFF5B6675)
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = 1.8 / nomZ,
@@ -1239,14 +1150,14 @@ class _WorldMapPainter extends CustomPainter {
       canvas.drawPath(
         seaCache.wrapChevronsPath,
         Paint()
-          ..color = const Color(0xFFCFE3FF)
+          ..color = const Color(0xFF5B6675)
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round
           ..strokeWidth = 2.0 / nomZ,
       );
     }
-    canvas.drawPath(seaCache.portsPath, Paint()..color = const Color(0xFFCFE3FF));
+    canvas.drawPath(seaCache.portsPath, Paint()..color = const Color(0xFF5B6675));
     canvas.drawPath(
       seaCache.portsPath,
       Paint()
@@ -1687,7 +1598,10 @@ class _WorldMapPainter extends CustomPainter {
         ? colors[(v!['players'][(terrs[i]['o'] as num).toInt()]['color'] as num).toInt()].hex
             as String
         : ctrl.mapData.continents[tr.continent].colorHex;
-    final baseColor = parseHexColor(hex);
+    // território um tom abaixo da facção: a insígnia (cor cheia) se destaca sobre ele
+    final baseColor = terrs != null
+        ? cache.terrToneCache.putIfAbsent(hex, () => Color.lerp(parseHexColor(hex), AppColors.deep, 0.40)!)
+        : parseHexColor(hex);
 
     var dimmed = false;
     if (v != null && terrs != null) {
@@ -1735,12 +1649,6 @@ class _WorldMapPainter extends CustomPainter {
 
     fillPaint.color = fillColor;
     canvas.drawPath(tr.path, fillPaint);
-
-    // #landlight diagonal lighting gradient per territory bounding box (pre-cached)
-    canvas.drawPath(
-      tr.path,
-      dimmed ? cache.lightPaintsDim[i] : cache.lightPaintsNormal[i],
-    );
 
     // Default 1px territory coast/border
     canvas.drawPath(tr.path, borderPaint);
@@ -2436,23 +2344,30 @@ class _WorldMapPainter extends CustomPainter {
       canvas.translate(center.dx, center.dy);
       canvas.scale(markK, markK);
 
-      // .bshadow
-      canvas.drawCircle(const Offset(0, 2), 13.4, _badgeShadowPaint);
-      // .badge dark navy disc with white ring
-      canvas.drawCircle(
-        Offset.zero,
-        12.5,
-        isRad ? _badgeFillRadPaint : _badgeFillNormalPaint,
-      );
-      canvas.drawCircle(
-        Offset.zero,
-        12.5,
-        isRad ? _badgeRingRadPaint : _badgeRingNormalPaint,
-      );
+      var dark = false;
+      var nudge = 0.0;
+      if (isRad) {
+        // território radioativo: disco escuro com anel da ogiva
+        canvas.drawCircle(const Offset(0, 2), 13.4, _badgeShadowPaint);
+        canvas.drawCircle(Offset.zero, 12.5, _badgeFillRadPaint);
+        canvas.drawCircle(Offset.zero, 12.5, _badgeRingRadPaint);
+      } else {
+        // exército = insígnia da facção (forma + cor), com contorno escuro para separar do território
+        final ci = _ownerColorIndex(v, terrs, i);
+        final col = ci >= 0 && ci < Factions.colors.length ? Factions.colors[ci] : AppColors.mute;
+        final shape = ci >= 0 && ci < Factions.shapes.length ? Factions.shapes[ci] : FactionShape.circle;
+        final key = ci * 2;
+        final path = cache.insigniaPaths.putIfAbsent(key, () => Factions.path(shape, 11.5));
+        _badgeShapeFill.color = col;
+        canvas.drawPath(path, _badgeShapeFill);
+        canvas.drawPath(path, _badgeShapeStroke);
+        dark = Factions.onColor(col) != Colors.white;
+        nudge = Factions.textNudge(shape, 11.5);
+      }
 
       // .num (cached TextPainter)
-      final numTp = cache.armyPainter(armies, isRad);
-      numTp.paint(canvas, Offset(-numTp.width / 2, -numTp.height / 2 + 0.5));
+      final numTp = cache.armyPainter(armies, isRad, dark: dark);
+      numTp.paint(canvas, Offset(-numTp.width / 2, -numTp.height / 2 + 0.5 + nudge));
 
       // .trefoil radiation badge at (13.5, -13.5)
       if (isRad) {
@@ -2572,8 +2487,9 @@ class _WorldMapPainter extends CustomPainter {
         text: TextSpan(
           text: f.text,
           style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
+            fontFamily: AppText.cond,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = 3.5
@@ -2588,9 +2504,10 @@ class _WorldMapPainter extends CustomPainter {
         text: TextSpan(
           text: f.text,
           style: TextStyle(
+            fontFamily: AppText.cond,
             color: f.color.withValues(alpha: fade),
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
           ),
         ),
         textDirection: TextDirection.ltr,

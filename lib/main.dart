@@ -277,11 +277,9 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                         decoration: BoxDecoration(
                           color: AppColors.obsidian.withValues(alpha: 0.95),
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: AppColors.brass),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
-                          ],
+                          boxShadow: AppColors.edgeShadows,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -352,7 +350,7 @@ class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xD802050A),
+      color: const Color(0xD80B0F14),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -374,7 +372,7 @@ class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
                       Expanded(
                         child: Text(
                           'Sala Protegida',
-                          style: AppText.serif(size: 20, color: const Color(0xFFF9EFD7)),
+                          style: AppText.serif(size: 20, color: const Color(0xFFE8ECF1)),
                         ),
                       ),
                       Container(
@@ -387,8 +385,8 @@ class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
                         child: Text(
                           widget.prompt.isLan ? widget.prompt.code : '#${widget.prompt.code}',
                           style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11.5,
+                            fontFamily: AppText.cond, fontFeatures: AppText.tabular,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: AppColors.gold,
                           ),
@@ -404,7 +402,7 @@ class _RoomPasswordOverlayState extends State<_RoomPasswordOverlay> {
                         ? 'Senha incorreta. Confira com o anfitrião e tente novamente.'
                         : 'Digite a senha definida pelo anfitrião para entrar na mesa.',
                     style: TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 13,
                       height: 1.35,
                       color: widget.prompt.wrong ? AppColors.bad : AppColors.mute,
                       fontWeight: widget.prompt.wrong ? FontWeight.w600 : FontWeight.w400,

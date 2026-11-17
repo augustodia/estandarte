@@ -207,13 +207,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: AppColors.obsidian,
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: AppColors.brassDim),
                       ),
                       child: Text(
                         isLanGuest || isLanHostActive ? code : '#$code',
                         style: const TextStyle(
-                          fontFamily: 'monospace',
+                          fontFamily: AppText.cond, fontFeatures: AppText.tabular,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.0,
@@ -238,13 +238,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF172539), Color(0xFF0C1422)],
-          ),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF8C7141), width: 1.0),
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.line),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -275,7 +271,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: Text(
                     quickSec > 0 ? '${quickSec}s' : 'INICIANDO',
                     style: const TextStyle(
-                      fontFamily: 'monospace',
+                      fontFamily: AppText.cond, fontFeatures: AppText.tabular,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       color: AppColors.gold,
@@ -297,7 +293,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             const SizedBox(height: 8),
             const Text(
               'Aguardando até 4 comandantes. Ao zerar o relógio (ou iniciando agora), bots completam as vagas.',
-              style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFFD5DCE8)),
+              style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFFE8ECF1)),
             ),
           ],
         ),
@@ -327,7 +323,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: AppColors.obsidian.withValues(alpha: 0.58),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.line.withValues(alpha: 0.65)),
               ),
               child: Row(
@@ -344,7 +340,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   const SizedBox(width: 11),
                   const Text(
                     'Aguardando comandante (ou bot ao iniciar)',
-                    style: TextStyle(fontSize: 12.5, color: AppColors.mute),
+                    style: TextStyle(fontSize: 12, color: AppColors.mute),
                   ),
                 ],
               ),
@@ -388,7 +384,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.obsidian.withValues(alpha: 0.78),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.line),
               ),
               child: Column(
@@ -400,7 +396,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       const Spacer(),
                       Text(
                         timeStr,
-                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
                       ),
                     ],
                   ),
@@ -411,7 +407,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       const Spacer(),
                       Text(
                         c.optHq ? 'Quartel (medalhas e ordens)' : 'Cartas de território',
-                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.gold),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.gold),
                       ),
                     ],
                   ),
@@ -446,7 +442,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                             ),
                             child: Text(
                               ex,
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.ink),
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink),
                             ),
                           ),
                       ],
@@ -495,7 +491,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             children: [
               const Text(
                 'Tempo por turno',
-                style: TextStyle(fontSize: 14, color: AppColors.mute),
+                style: TextStyle(fontSize: 13, color: AppColors.mute),
               ),
               Wrap(
                 spacing: 6,
@@ -525,7 +521,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: AppColors.obsidian,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: AppColors.line),
             ),
             child: Column(
@@ -553,7 +549,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                         const SizedBox(width: 6),
                         const Text(
                           'Regras extras',
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -561,7 +557,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                             extrasSummary,
                             textAlign: TextAlign.right,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12.5, color: AppColors.mute),
+                            style: const TextStyle(fontSize: 12, color: AppColors.mute),
                           ),
                         ),
                       ],
@@ -598,7 +594,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Container(
               decoration: BoxDecoration(
                 color: AppColors.obsidian.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.line),
               ),
               child: EstSwitchOpt(
@@ -619,9 +615,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.obsidian.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: c.lobbyHasPass ? const Color(0xFF7D663D) : AppColors.line,
+                  color: c.lobbyHasPass ? const Color(0xFF9AA4B2) : AppColors.line,
                 ),
               ),
               child: Column(
@@ -644,7 +640,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                             const Text(
                               'Senha da sala',
                               style: TextStyle(
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink,
                               ),
@@ -653,7 +649,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                               c.lobbyHasPass
                                   ? 'Ativa · quem entrar sem token digita a senha'
                                   : 'Opcional · entrada livre sem senha',
-                              style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                              style: const TextStyle(fontSize: 11, color: AppColors.mute),
                             ),
                           ],
                         ),
@@ -775,8 +771,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
                   color: AppColors.obsidian,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: const Color(0xFF7D663D)),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF9AA4B2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -812,7 +808,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                           child: SelectableText(
                             '#${c.relayCode!}',
                             style: const TextStyle(
-                              fontFamily: 'monospace',
+                              fontFamily: AppText.cond, fontFeatures: AppText.tabular,
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.4,
@@ -843,7 +839,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Amigos no PC ou navegador entram em Salas Online digitando #${c.relayCode}.',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 11, color: AppColors.mute),
                     ),
                   ],
                 ),
@@ -854,8 +850,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
                   color: AppColors.obsidian,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: const Color(0xFF7D663D)),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF9AA4B2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -891,7 +887,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                           child: SelectableText(
                             c.lanHostAddr!,
                             style: const TextStyle(
-                              fontFamily: 'monospace',
+                              fontFamily: AppText.cond, fontFeatures: AppText.tabular,
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                               color: AppColors.ink,
@@ -915,7 +911,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       c.lanAllAddrs.length > 1
                           ? 'Outros adaptadores: ${c.lanAllAddrs.skip(1).join(' · ')}'
                           : 'Outros aparelhos na mesma rede entram digitando esse endereço.',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 11, color: AppColors.mute),
                     ),
                   ],
                 ),
@@ -954,7 +950,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 Expanded(
                   child: EstButton(
                     small: true,
-                    label: '+ Jogador neste aparelho',
+                    label: '+ Jogador local',
                     onPressed: full ? null : () => _showAddLocalModal(context),
                   ),
                 ),
@@ -977,7 +973,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 ? 'Iniciar agora (completar com bots)'
                 : 'Iniciar Batalha ($n/$maxSeats)',
             variant: EstButtonVariant.primary,
-            height: 48,
             onPressed: (n < 2 && !isQuick) ? null : c.beginGame,
           ),
           const SizedBox(height: 4),
@@ -987,6 +982,46 @@ class _LobbyScreenState extends State<LobbyScreen> {
             onPressed: () => c.leaveGame(),
           ),
         ],
+      );
+    }
+
+    final scr = MediaQuery.sizeOf(context);
+    if (!layout.big && scr.width > scr.height) {
+      // celular deitado: duas colunas na altura toda, sem rolar a tela inteira
+      return Scaffold(
+        backgroundColor: AppColors.deep,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 11,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      headerBar(big: false),
+                      if (showJoinLocal) ...[
+                        const SizedBox(height: 8),
+                        joinLocalBar(inline: false),
+                      ],
+                      const SizedBox(height: 10),
+                      EstSectionTag(sub),
+                      const SizedBox(height: 6),
+                      Expanded(child: SingleChildScrollView(child: seatsWidget())),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 9,
+                  child: SingleChildScrollView(child: actionsWidget()),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -1151,19 +1186,12 @@ class _SeatTile extends StatelessWidget {
     }
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 54),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: BoxConstraints(minHeight: estCompact(context) ? 44 : 52),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        gradient: isMe
-            ? const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF1A2538), Color(0xFF0E1624)],
-              )
-            : AppColors.glassGradient,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: isMe ? const Color(0xFF7D663D) : AppColors.line),
-        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(0, 3))],
+        color: isMe ? AppColors.panel2 : AppColors.panel,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: isMe ? AppColors.glassBorder : AppColors.line),
       ),
       child: Row(
         children: [
@@ -1193,7 +1221,7 @@ class _SeatTile extends StatelessWidget {
                           seat.name,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 14.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: AppColors.ink,
                           ),
@@ -1212,14 +1240,14 @@ class _SeatTile extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
-                            color: const Color(0x28D9B25F),
-                            borderRadius: BorderRadius.circular(3),
+                            color: const Color(0x28F2EEE6),
+                            borderRadius: BorderRadius.circular(2),
                             border: Border.all(color: AppColors.brassDim),
                           ),
                           child: const Text(
                             'VOCÊ',
                             style: TextStyle(
-                              fontSize: 9.5,
+                              fontSize: 10,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.7,
                               color: AppColors.gold,
@@ -1232,7 +1260,7 @@ class _SeatTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 11, color: AppColors.mute),
                       children: [
                         TextSpan(text: '${color.name} · '),
                         TextSpan(
@@ -1242,7 +1270,7 @@ class _SeatTile extends StatelessWidget {
                         if (canCycle && isMe)
                           const TextSpan(
                             text: ' · toque na cor para trocar',
-                            style: TextStyle(color: Color(0xFF7B90AB)),
+                            style: TextStyle(color: Color(0xFF9AA4B2)),
                           ),
                       ],
                     ),

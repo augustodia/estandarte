@@ -8,7 +8,7 @@ import 'theme.dart';
 // Quartel: a janela das medalhas e das ordens táticas (partidas com a opção "Quartel", que troca as cartas).
 // Tudo o que aparece aqui vem do motor de regras: custos, o que está aberto e por que algo não pode ser comprado.
 
-const _title = Color(0xFFFFF3DC);
+const _title = Color(0xFFE8ECF1);
 
 void showQuartelModal(BuildContext context, AppController ctrl) {
   if (ctrl.view == null || ctrl.eval?.hq == null) return;
@@ -31,7 +31,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
               title: 'Quartel',
               onClose: () => Navigator.pop(ctx),
               children: const [
-                Text('Esta partida não usa o Quartel.', style: TextStyle(fontSize: 14, color: AppColors.mute)),
+                Text('Esta partida não usa o Quartel.', style: TextStyle(fontSize: 13, color: AppColors.mute)),
               ],
             );
           }
@@ -63,7 +63,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                 child: EstSectionTag(text),
               );
 
-          Widget note(String text) => Text(text, style: const TextStyle(fontSize: 13.5, color: AppColors.mute));
+          Widget note(String text) => Text(text, style: const TextStyle(fontSize: 13, color: AppColors.mute));
 
           EstIconKind orderIcon(String key) => switch (key) {
                 'airlift' => EstIconKind.airlift,
@@ -79,7 +79,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   gradient: AppColors.glassGradient,
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: border),
                 ),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
@@ -100,7 +100,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                     Text(
                       '$cost',
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: AppColors.gold,
                         fontFeatures: [FontFeature.tabularFigures()],
@@ -177,11 +177,11 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
 
           // um relatório de espionagem: os objetivos possíveis, sem dizer qual é o verdadeiro
           Widget report(HqIntel r) => card(
-                border: const Color(0x88E2B04A),
+                border: const Color(0x88F2EEE6),
                 children: [
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(fontSize: 14, color: AppColors.mute),
+                      style: const TextStyle(fontSize: 13, color: AppColors.mute),
                       children: [
                         const TextSpan(text: 'O objetivo de '),
                         TextSpan(
@@ -211,7 +211,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                           ),
                           child: Text(
                             String.fromCharCode(65 + i),
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.gold),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.gold),
                           ),
                         ),
                         Expanded(
@@ -302,14 +302,14 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
               const SizedBox(height: 12),
               sectionTitle('Mobilização'),
               card(
-                border: const Color(0x88E2B04A),
+                border: const Color(0x88F2EEE6),
                 children: [
                   Row(
                     children: [
                       Expanded(
                         child: Text.rich(
                           TextSpan(
-                            style: const TextStyle(fontSize: 14, color: AppColors.mute),
+                            style: const TextStyle(fontSize: 13, color: AppColors.mute),
                             children: [
                               const TextSpan(text: 'Esforço de guerra: vale '),
                               TextSpan(
@@ -356,7 +356,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                           child: Text(
                             o.name,
                             style: TextStyle(
-                              fontSize: 15.5,
+                              fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: o.key == 'nuke' ? AppColors.rad : AppColors.ink,
                             ),
@@ -421,9 +421,9 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
                           color: AppColors.obsidian,
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(4),
                           border: Border.all(
-                            color: p == me ? const Color(0xFF7D663D) : AppColors.line,
+                            color: p == me ? const Color(0xFF9AA4B2) : AppColors.line,
                           ),
                         ),
                         child: Row(
@@ -434,7 +434,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                             Text(
                               nameOf(p),
                               style: const TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink,
                               ),
@@ -456,16 +456,16 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
-                                  color: const Color(0x33D65E52),
-                                  borderRadius: BorderRadius.circular(3),
+                                  color: const Color(0x33FF6B5E),
+                                  borderRadius: BorderRadius.circular(2),
                                   border: Border.all(color: AppColors.bad.withValues(alpha: 0.6)),
                                 ),
                                 child: const Text(
                                   'SABOTADO',
                                   style: TextStyle(
-                                    fontSize: 8.5,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w800,
-                                    color: Color(0xFFFFB2A8),
+                                    color: Color(0xFFE8ECF1),
                                   ),
                                 ),
                               ),

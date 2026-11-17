@@ -160,10 +160,10 @@ class _GameScreenState extends State<GameScreen> {
       final showEvt = evt != null && v?['phase'] == 'play';
       final ringLeft = layout.wide ? 20.0 : 16.0;
       final ringBottom = layout.wide ? 18.0 : (layout.land ? 12.0 : 10.0);
-      final ringSize = layout.wide ? 82.0 : 68.0;
-      final fitLeft = layout.wide ? 45.0 : 34.0;
-      final fitBottom = layout.wide ? 110.0 : (layout.land ? 88.0 : 86.0);
-      final evLeft = layout.wide ? 16.0 : 92.0;
+      final ringSize = layout.wide ? 76.0 : (layout.land ? 54.0 : 60.0);
+      final fitLeft = layout.wide ? 42.0 : (layout.land ? 27.0 : 30.0);
+      final fitBottom = layout.wide ? 104.0 : (layout.land ? 72.0 : 78.0);
+      final evLeft = layout.wide ? 16.0 : (layout.land ? 10.0 : 84.0);
       final evBottom = layout.land ? 12.0 : 16.0;
 
       String evtLabel = '';
@@ -181,7 +181,7 @@ class _GameScreenState extends State<GameScreen> {
         children: [
           WorldMapView(
             ctrl: c,
-            bottomReserve: layout.wide ? 96.0 : 0.0,
+            bottomReserve: layout.wide ? 96.0 : (layout.land ? 60.0 : 0.0),
             onControllerReady: (fitFn) => _fitZoom = fitFn,
             onZoomControllerReady: (zoomFn) => _zoomBy = zoomFn,
           ),
@@ -224,8 +224,8 @@ class _GameScreenState extends State<GameScreen> {
               left: evLeft,
               top: layout.wide
                   ? ((c.tutorialGuide != null || c.activeChallenge != null) ? 96.0 : 14.0)
-                  : null,
-              bottom: layout.wide ? null : evBottom,
+                  : (layout.land ? 8.0 : null),
+              bottom: layout.wide || layout.land ? null : evBottom,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: max(120, layout.size.width * 0.42),
@@ -239,9 +239,8 @@ class _GameScreenState extends State<GameScreen> {
                       padding: const EdgeInsets.only(left: 8, right: 11),
                       decoration: BoxDecoration(
                         color: AppColors.obsidian.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(color: const Color(0xFF7D663D)),
-                        boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 12)],
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF9AA4B2)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -264,6 +263,21 @@ class _GameScreenState extends State<GameScreen> {
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
+
+          // celular deitado: o painel de ação flutua sobre o mapa, à direita do relógio
+          if (layout.land && !layout.wide && v != null)
+            Positioned(
+              left: ringLeft + ringSize + 10,
+              right: 10,
+              bottom: 8,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 660),
+                  child: _BottomActionBar(ctrl: c, layout: layout),
                 ),
               ),
             ),
@@ -366,20 +380,8 @@ class _GameScreenState extends State<GameScreen> {
       if (layout.land) {
         return Column(
           children: [
+            _TopBar(ctrl: c),
             Expanded(child: mapArea()),
-            Container(
-              decoration: const BoxDecoration(
-                gradient: AppColors.hudGradient,
-                border: Border(top: BorderSide(color: AppColors.line)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _HudPanel(ctrl: c, layout: layout),
-                  Expanded(child: _BottomActionBar(ctrl: c, layout: layout)),
-                ],
-              ),
-            ),
           ],
         );
       }
@@ -422,11 +424,9 @@ class _GameScreenState extends State<GameScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                         decoration: BoxDecoration(
                           color: AppColors.obsidian.withValues(alpha: 0.95),
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: AppColors.brass),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
-                          ],
+                          boxShadow: AppColors.edgeShadows,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -542,28 +542,17 @@ class _HudPanel extends StatelessWidget {
         message: tooltip,
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             child: Ink(
               height: layout.wide ? 50 : (layout.land ? 36 : 38),
               padding: EdgeInsets.symmetric(horizontal: layout.wide ? 6 : (layout.land ? 6 : 8)),
               decoration: BoxDecoration(
-                gradient: callPulse
-                    ? const LinearGradient(
-                        colors: [Color(0xFF3E3012), Color(0xFF231A09)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      )
-                    : const LinearGradient(
-                        colors: [Color(0xFF1A283E), Color(0xFF101928)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: callPulse ? AppColors.gold : const Color(0xFF2D405C)),
-                boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 4, offset: Offset(0, 2))],
+                color: callPulse ? AppColors.panel2 : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: callPulse ? AppColors.gold : const Color(0xFF3A4452)),
               ),
               child: layout.wide
                   ? Stack(
@@ -642,7 +631,7 @@ class _HudPanel extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         decoration: const BoxDecoration(
           gradient: AppColors.wideHudGradient,
-          border: Border(bottom: BorderSide(color: Color(0x332D4A72))),
+          border: Border(bottom: BorderSide(color: Color(0x337D8796))),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -696,22 +685,22 @@ class _HudPanel extends StatelessWidget {
                     child: Container(
                       height: 50,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF102037),
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(color: const Color(0xFF2D4B73)),
+                        color: const Color(0xFF1A2029),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF7D8796)),
                       ),
                       alignment: Alignment.center,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.visibility_outlined, size: 15, color: Color(0xFFA9CDFB)),
+                          Icon(Icons.visibility_outlined, size: 15, color: Color(0xFFE8ECF1)),
                           SizedBox(width: 6),
                           Text(
                             'Assistindo',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFFA9CDFB),
+                              color: Color(0xFFE8ECF1),
                             ),
                           ),
                         ],
@@ -752,7 +741,7 @@ class _HudPanel extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: layout.land ? null : AppColors.hudGradient,
         border: layout.land
-            ? const Border(right: BorderSide(color: Color(0xFF2D4A72)))
+            ? const Border(right: BorderSide(color: Color(0xFF7D8796)))
             : const Border(bottom: BorderSide(color: AppColors.line)),
       ),
       child: Row(
@@ -820,19 +809,19 @@ class _HudPanel extends StatelessWidget {
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF102037),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: const Color(0xFF2D4B73)),
+                color: const Color(0xFF1A2029),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFF7D8796)),
               ),
               alignment: Alignment.center,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Icon(Icons.visibility_outlined, size: 14, color: Color(0xFFA9CDFB)),
+                  Icon(Icons.visibility_outlined, size: 14, color: Color(0xFFE8ECF1)),
                   SizedBox(width: 5),
                   Text(
                     'Assistindo',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFA9CDFB)),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE8ECF1)),
                   ),
                 ],
               ),
@@ -854,6 +843,194 @@ class _HudPanel extends StatelessWidget {
             label: 'Menu',
             tooltip: 'Menu (M)',
             onTap: () => showMenuModal(context, ctrl),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------- Barra superior (celular deitado) ----------
+
+/// Rodada e de quem é a vez à esquerda, etapas do turno no centro, atalhos à direita. Altura fixa de 40.
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.ctrl});
+
+  final AppController ctrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = ctrl.view;
+    if (v == null) return const SizedBox(height: 40);
+    final players = v['players'] as List<dynamic>;
+    final turnIdx = (v['turn'] as num).toInt();
+    final cur = players[turnIdx] as Map<String, dynamic>;
+    final colors = ctrl.engine.constants.colors;
+    final curCol = parseHexColor(colors[(cur['color'] as num).toInt()].hex);
+    final round = (v['round'] as num).toInt();
+    final step = v['step'] as String? ?? 'reinforce';
+    final playing = v['phase'] == 'play';
+    final mine = ctrl.canPlayNow();
+    final meP = (ctrl.me >= 0 && ctrl.me < players.length) ? players[ctrl.me] as Map<String, dynamic> : null;
+    final opts = v['opts'] as Map<String, dynamic>? ?? const {};
+    final hqOn = opts['hq'] == true;
+    final extras = opts['events'] == true ||
+        opts['pacts'] == true ||
+        opts['nukes'] == true ||
+        (hqOn && opts['spy'] == true);
+    final pactsCount = opts['pacts'] == true ? (v['pacts'] as List<dynamic>? ?? const []).length : 0;
+    final offer = v['offer'] as Map<String, dynamic>?;
+    final offerIsMine = offer != null &&
+        (ctrl.role == 'guest'
+            ? (offer['to'] as num).toInt() == ctrl.me
+            : players[(offer['to'] as num).toInt()]['ctrl'] == 'local');
+    final rawCards = meP?['cards'];
+    final hand = hqOn
+        ? ((meP?['medals'] as num?)?.toInt() ?? 0)
+        : rawCards is List
+            ? rawCards.length
+            : (rawCards is num ? rawCards.toInt() : 0);
+
+    Widget btn(EstIconKind icon, String tip, VoidCallback onTap, {String? badge, bool call = false}) => Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Tooltip(
+            message: tip,
+            child: Material(
+              color: call ? AppColors.panel2 : Colors.transparent,
+              borderRadius: BorderRadius.circular(Radii.sm),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(Radii.sm),
+                child: Container(
+                  height: 30,
+                  constraints: const BoxConstraints(minWidth: 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(Radii.sm),
+                    border: Border.all(color: call ? AppColors.ink : AppColors.line),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      EstIcon(icon, size: 16, color: call ? AppColors.ink : AppColors.mute),
+                      if (badge != null) ...[
+                        const SizedBox(width: 4),
+                        Text(badge, style: AppText.number(size: 15, weight: FontWeight.w700)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    final who = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('R${round + 1}', style: AppText.label(size: 13, color: AppColors.faint)),
+        Container(width: 1, height: 14, margin: const EdgeInsets.symmetric(horizontal: 9), color: AppColors.glassBorder),
+        EstFactionSeal(color: curCol, size: 12),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            !playing ? 'FIM DE JOGO' : (mine ? 'SUA VEZ' : '${cur['name'] ?? ''}'.toUpperCase()),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.label(size: 15, color: AppColors.ink, weight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+
+    Widget steps() {
+      String? special;
+      if (ctrl.nukeMode) special = 'OGIVA · ESCOLHA O ALVO';
+      if (ctrl.trenchMode) special = 'TRINCHEIRA · ESCOLHA O TERRITÓRIO';
+      if (ctrl.airliftMode) special = 'PONTE AÉREA';
+      if (v['occupy'] != null) special = 'AVANÇO DE TROPAS';
+      if (special != null) {
+        return Text(
+          special,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.label(size: 13, color: ctrl.nukeMode ? AppColors.rad : AppColors.ink, weight: FontWeight.w700),
+        );
+      }
+      const order = ['reinforce', 'attack', 'move'];
+      const names = ['Reforço', 'Ataque', 'Manobra'];
+      final at = order.indexOf(step);
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < order.length; i++)
+            Container(
+              height: 40,
+              margin: const EdgeInsets.symmetric(horizontal: 9),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: i == at ? AppColors.action : Colors.transparent, width: 2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (i < at) ...[
+                    const Icon(Icons.check_rounded, size: 13, color: AppColors.faint),
+                    const SizedBox(width: 3),
+                  ],
+                  Text(
+                    names[i].toUpperCase(),
+                    style: AppText.label(size: 13, color: i == at ? AppColors.ink : AppColors.faint),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: const BoxDecoration(
+        color: AppColors.deep,
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Align(alignment: Alignment.centerLeft, child: who)),
+          if (playing) steps(),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (meP != null) ...[
+                  btn(EstIconKind.goal, 'Objetivo (O)', () => showObjectiveModal(context, ctrl)),
+                  btn(
+                    hqOn ? EstIconKind.medal : EstIconKind.cards,
+                    hqOn ? 'Quartel (C)' : 'Cartas (C)',
+                    () => showCardsModal(context, ctrl),
+                    badge: '$hand',
+                  ),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text('ASSISTINDO', style: AppText.label(size: 12, color: AppColors.mute)),
+                  ),
+                if (extras)
+                  btn(
+                    EstIconKind.extras,
+                    'Regras extras',
+                    () => showExtrasModal(context, ctrl),
+                    badge: pactsCount > 0 ? '$pactsCount' : null,
+                    call: offerIsMine,
+                  ),
+                btn(EstIconKind.menu, 'Menu (M)', () => showMenuModal(context, ctrl)),
+              ],
+            ),
           ),
         ],
       ),
@@ -890,7 +1067,7 @@ class _SidePanel extends StatelessWidget {
                 ? Text(
                     right.toUpperCase(),
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
                       color: AppColors.mute,
@@ -949,20 +1126,12 @@ class _SidePanel extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 5),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: isNow ? null : const Color(0x88070E18),
-            gradient: isNow
-                ? LinearGradient(
-                    colors: [
-                      Color.lerp(const Color(0xFF0A121E), col, 0.22)!,
-                      const Color(0xD80A121E),
-                    ],
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(5),
+            color: isNow ? AppColors.panel2 : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isWon
                   ? AppColors.gold
-                  : (isNow ? col.withValues(alpha: 0.72) : AppColors.line),
+                  : (isNow ? AppColors.glassBorder : AppColors.line),
             ),
           ),
           child: Stack(
@@ -976,12 +1145,8 @@ class _SidePanel extends StatelessWidget {
                   child: FractionallySizedBox(
                     widthFactor: pct,
                     child: Container(
-                      height: 2.2,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [col, Color.lerp(col, Colors.white, 0.25)!],
-                        ),
-                      ),
+                      height: 2,
+                      color: col,
                     ),
                   ),
                 ),
@@ -1003,7 +1168,7 @@ class _SidePanel extends StatelessWidget {
                                   '${p['name'] ?? ''}',
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     decoration: dead ? TextDecoration.lineThrough : null,
                                     color: AppColors.ink,
@@ -1015,14 +1180,14 @@ class _SidePanel extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: const Color(0x28E6B652),
-                                    borderRadius: BorderRadius.circular(3),
+                                    color: const Color(0x28F2EEE6),
+                                    borderRadius: BorderRadius.circular(2),
                                     border: Border.all(color: AppColors.brassDim),
                                   ),
                                   child: const Text(
                                     'VOCÊ',
                                     style: TextStyle(
-                                      fontSize: 9,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.6,
                                       color: AppColors.gold,
@@ -1034,7 +1199,7 @@ class _SidePanel extends StatelessWidget {
                           ),
                           Text.rich(
                             TextSpan(
-                              style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
+                              style: const TextStyle(fontSize: 11, color: AppColors.mute),
                               children: [
                                 TextSpan(text: tags),
                                 if (off)
@@ -1076,7 +1241,7 @@ class _SidePanel extends StatelessWidget {
                         '${(100 * owned / totalTerr).round()}%',
                         textAlign: TextAlign.right,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -1110,7 +1275,7 @@ class _SidePanel extends StatelessWidget {
                   ? BoxDecoration(
                       color: AppColors.obsidian.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF2E3D52)),
+                      border: Border.all(color: const Color(0xFF3A4452)),
                     )
                   : null,
               child: Row(
@@ -1129,7 +1294,7 @@ class _SidePanel extends StatelessWidget {
                     child: Text(
                       '${log[k]}',
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         height: 1.38,
                         fontWeight: k == 0 ? FontWeight.w600 : FontWeight.w400,
                         color: k == 0 ? AppColors.ink : AppColors.mute,
@@ -1171,7 +1336,7 @@ class _SidePanel extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: AppColors.wideHudGradient,
-        border: Border(top: BorderSide(color: Color(0xFF2D4A72))),
+        border: Border(top: BorderSide(color: Color(0xFF7D8796))),
       ),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Row(
@@ -1279,7 +1444,6 @@ class _TurnRingButton extends StatelessWidget {
                   height: size,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 4))],
                   ),
                   child: CustomPaint(
                     painter: _TurnRingPainter(
@@ -1294,22 +1458,16 @@ class _TurnRingButton extends StatelessWidget {
                         children: [
                           Text(
                             topText,
-                            style: TextStyle(
-                              fontSize: size >= 80 ? 19 : 16,
-                              fontWeight: FontWeight.w700,
-                              height: 1.0,
-                              color: low ? const Color(0xFFFF8A7A) : AppColors.ink,
+                            style: AppText.number(
+                              size: size >= 70 ? 20 : 17,
+                              weight: FontWeight.w700,
+                              color: low ? AppColors.bad : AppColors.ink,
                             ),
                           ),
                           if (subText.isNotEmpty)
                             Text(
                               subText,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                height: 1.1,
-                                color: AppColors.mute,
-                              ),
+                              style: AppText.label(size: 10, color: AppColors.mute),
                             ),
                         ],
                       ),
@@ -1346,7 +1504,15 @@ class _TurnRingPainter extends CustomPainter {
     canvas.scale(s, s);
 
     // Disc
-    canvas.drawCircle(Offset.zero, 50, Paint()..color = const Color(0xE60A1422));
+    canvas.drawCircle(Offset.zero, 50, Paint()..color = AppColors.panel);
+    canvas.drawCircle(
+      Offset.zero,
+      49.5,
+      Paint()
+        ..color = AppColors.line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
 
     // Outer clock track (r=45, width=4)
     canvas.drawCircle(
@@ -1365,9 +1531,9 @@ class _TurnRingPainter extends CustomPainter {
         2 * pi * clockFrac,
         false,
         Paint()
-          ..color = low ? AppColors.bad : AppColors.gold
+          ..color = low ? AppColors.bad : AppColors.action
           ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
+          ..strokeCap = StrokeCap.butt
           ..strokeWidth = 4,
       );
     }
@@ -1391,7 +1557,7 @@ class _TurnRingPainter extends CustomPainter {
           Paint()
             ..color = slices[k].$1
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 10,
+            ..strokeWidth = 6,
         );
         off += sweepAll;
       }
@@ -1495,9 +1661,9 @@ class _DiceTray extends StatelessWidget {
               lost > 0 ? '−$lost' : '✓',
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: lost > 0 ? const Color(0xFFFF8A7A) : const Color(0xFF8DFFB0),
+                color: lost > 0 ? const Color(0xFFFF6B5E) : const Color(0xFFE8ECF1),
               ),
             ),
           ),
@@ -1509,7 +1675,7 @@ class _DiceTray extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         gradient: AppColors.glassGradient,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.glassBorder),
         boxShadow: AppColors.edgeShadows,
       ),
@@ -1552,10 +1718,7 @@ class _FlashOverlay extends StatelessWidget {
               gradient: AppColors.glassGradient,
               borderRadius: BorderRadius.circular(isMini ? 5 : 6),
               border: Border.all(color: banner.color, width: isMini ? 1 : 1.5),
-              boxShadow: [
-                const BoxShadow(color: Color(0xBB000000), blurRadius: 36, offset: Offset(0, 10)),
-                if (!isMini) BoxShadow(color: banner.color.withValues(alpha: 0.30), blurRadius: 30),
-              ],
+              boxShadow: AppColors.edgeShadows,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1564,7 +1727,7 @@ class _FlashOverlay extends StatelessWidget {
                   banner.title,
                   textAlign: TextAlign.center,
                   style: isMini
-                      ? TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: banner.color)
+                      ? TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: banner.color)
                       : AppText.serif(size: 24, color: banner.color, letterSpacing: 0.03),
                 ),
                 if (banner.sub.isNotEmpty) ...[
@@ -1701,7 +1864,7 @@ class _PhaseTrack extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.1,
               color: col,
@@ -1725,7 +1888,7 @@ class _PhaseTrack extends StatelessWidget {
               applyHeightToLastDescent: false,
             ),
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.0,
               height: 1.15,
@@ -1778,7 +1941,7 @@ class _PhaseTrack extends StatelessWidget {
                         Text(
                           stages[i].$2.toUpperCase(),
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                             letterSpacing: 0.8,
                             color: active ? AppColors.ink : AppColors.mute.withValues(alpha: 0.55),
@@ -2294,14 +2457,14 @@ class _BottomActionBar extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const EstIcon(EstIconKind.pact, size: 16, color: Color(0xFFFFE2A3)),
+              const EstIcon(EstIconKind.pact, size: 16, color: Color(0xFFF2EEE6)),
               const SizedBox(width: 6),
               Text(
                 busy ? 'Pacto ativo' : 'Propor pacto',
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFFFFE2A3),
+                  color: Color(0xFFF2EEE6),
                 ),
               ),
             ],
@@ -2340,26 +2503,57 @@ class _BottomActionBar extends StatelessWidget {
       );
     }
 
-    // Compact horizontal bar in land/rot mode
+    // Celular deitado: painel flutuante sobre o mapa. Sem botões, vira uma etiqueta curta do tamanho do texto.
     if (layout.land) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(4, 6, 16, 8),
-        child: Row(
+      final quiet = btns.isEmpty && warnRow == null;
+      return Container(
+        constraints: BoxConstraints(minHeight: quiet ? 32 : 48),
+        padding: EdgeInsets.fromLTRB(12, quiet ? 6 : 6, quiet ? 12 : 6, quiet ? 6 : 6),
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: AppColors.line),
+          boxShadow: AppColors.edgeShadows,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: quiet ? CrossAxisAlignment.center : CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  style: const TextStyle(fontSize: 13, height: 1.25, color: AppColors.ink),
-                  children: msgSpans,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Row(
+              mainAxisSize: quiet ? MainAxisSize.min : MainAxisSize.max,
+              children: [
+                EstFactionSeal(color: curCol, size: 10, highlighted: can),
+                const SizedBox(width: 8),
+                if (quiet)
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(style: const TextStyle(fontSize: 13, height: 1.25, color: AppColors.ink), children: msgSpans),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(style: const TextStyle(fontSize: 13, height: 1.25, color: AppColors.ink), children: msgSpans),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (btns.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Wrap(
+                    spacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      for (final b in btns)
+                        if (b is Expanded) b.child else b,
+                    ],
+                  ),
+                ],
+              ],
             ),
-            if (btns.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: btns),
-            ],
+            ?warnRow,
           ],
         ),
       );
@@ -2376,9 +2570,8 @@ class _BottomActionBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.obsidian.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(color: curCol.withValues(alpha: 0.55)),
-            boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 6))],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -2422,7 +2615,7 @@ class _BottomActionBar extends StatelessWidget {
             ],
             Text.rich(
               TextSpan(
-                style: const TextStyle(fontSize: 13.5, height: 1.3, color: AppColors.ink),
+                style: const TextStyle(fontSize: 13, height: 1.3, color: AppColors.ink),
                 children: msgSpans,
               ),
               textAlign: TextAlign.center,
@@ -2627,14 +2820,9 @@ class _StepperWidget extends StatelessWidget {
       height: height,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF141F31), Color(0xFF0A111D)],
-        ),
-        borderRadius: BorderRadius.circular(5),
+        color: AppColors.deep,
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.line),
-        boxShadow: const [BoxShadow(color: Color(0x77000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2662,7 +2850,7 @@ class _StepperWidget extends StatelessWidget {
                     applyHeightToLastDescent: false,
                   ),
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                     height: 1.05,
                     color: AppColors.ink,
@@ -2677,7 +2865,7 @@ class _StepperWidget extends StatelessWidget {
                       applyHeightToLastDescent: false,
                     ),
                     style: const TextStyle(
-                      fontSize: 9,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                       height: 1.1,
                       color: AppColors.mute,
@@ -2715,7 +2903,7 @@ class _SheetBackdrop extends StatelessWidget {
     return GestureDetector(
       onTap: onTapOutside,
       child: Container(
-        color: const Color(0xCC02060C),
+        color: const Color(0xCC0B0F14),
         alignment: centered ? Alignment.center : Alignment.bottomCenter,
         padding: centered
             ? EdgeInsets.symmetric(horizontal: compactLand ? 16 : 20, vertical: compactLand ? 10 : 20)
@@ -2759,7 +2947,7 @@ class _PassDeviceOverlay extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Passe o aparelho', style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC))),
+          Text('Passe o aparelho', style: AppText.serif(size: 21, color: const Color(0xFFE8ECF1))),
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
@@ -2817,7 +3005,7 @@ class _ConfirmNukeOverlay extends StatelessWidget {
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
-              style: const TextStyle(fontSize: 16, color: AppColors.ink),
+              style: const TextStyle(fontSize: 15, color: AppColors.ink),
               children: [
                 const TextSpan(text: 'Alvo: '),
                 TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -2848,7 +3036,7 @@ class _ConfirmNukeOverlay extends StatelessWidget {
           ])
             Padding(
               padding: const EdgeInsets.only(left: 8, bottom: 3),
-              child: Text('• $b', style: const TextStyle(fontSize: 13.5, color: AppColors.ink)),
+              child: Text('• $b', style: const TextStyle(fontSize: 13, color: AppColors.ink)),
             ),
           const SizedBox(height: 14),
           Row(
@@ -2888,14 +3076,14 @@ class _ConfirmEndOverlay extends StatelessWidget {
         children: [
           Text(
             atk ? 'Encerrar os ataques?' : 'Encerrar o turno?',
-            style: AppText.serif(size: 21, color: const Color(0xFFFFF3DC)),
+            style: AppText.serif(size: 21, color: const Color(0xFFE8ECF1)),
           ),
           const SizedBox(height: 8),
           Text(
             atk
                 ? 'Você passa para o remanejamento e não ataca mais neste turno.'
                 : 'A vez passa para o próximo jogador.',
-            style: const TextStyle(fontSize: 14, color: AppColors.mute),
+            style: const TextStyle(fontSize: 13, color: AppColors.mute),
           ),
           const SizedBox(height: 14),
           Row(
@@ -3008,7 +3196,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
       });
 
     return Container(
-      color: const Color(0xEE050A13),
+      color: const Color(0xEE0B0F14),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -3031,10 +3219,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                   color: AppColors.panel,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: wCol, width: 2),
-                  boxShadow: [
-                    BoxShadow(color: wCol.withValues(alpha: 0.22), spreadRadius: 6),
-                    const BoxShadow(color: Color(0xCC000000), blurRadius: 60, offset: Offset(0, 20)),
-                  ],
+                  boxShadow: AppColors.edgeShadows,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -3054,7 +3239,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                     Text(
                       mine ? 'Você venceu!' : 'Vitória de',
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         letterSpacing: 2.0,
                         color: AppColors.mute,
                       ),
@@ -3080,7 +3265,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                       Text(
                         objTxt,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14, height: 1.35, color: AppColors.ink),
+                        style: const TextStyle(fontSize: 13, height: 1.35, color: AppColors.ink),
                       ),
                     ],
                     const SizedBox(height: 14),
@@ -3097,7 +3282,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                             decoration: BoxDecoration(
                               color: isFirst ? wCol.withValues(alpha: 0.16) : AppColors.obsidian.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(5),
+                              borderRadius: BorderRadius.circular(4),
                               border: Border.all(
                                 color: isFirst ? wCol.withValues(alpha: 0.6) : AppColors.line,
                               ),
@@ -3111,7 +3296,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                                     '${p['name'] ?? ''}',
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
                                       color: isFirst ? AppColors.ink : AppColors.mute,
                                     ),
@@ -3120,7 +3305,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                                 Text(
                                   p['alive'] == true ? '${owned(i)} territórios' : 'eliminado',
                                   style: TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: isFirst ? FontWeight.w700 : FontWeight.w400,
                                     color: isFirst ? AppColors.ink : AppColors.mute,
                                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -3225,7 +3410,7 @@ class _TutorialCoachBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
               decoration: const BoxDecoration(
-                color: Color(0x88060A12),
+                color: Color(0x880B0F14),
                 border: Border(bottom: BorderSide(color: AppColors.line)),
               ),
               child: Row(
@@ -3235,7 +3420,7 @@ class _TutorialCoachBanner extends StatelessWidget {
                   Text(
                     'PASSO ${guide.step}/${guide.total}',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
                       color: AppColors.gold,
@@ -3253,7 +3438,7 @@ class _TutorialCoachBanner extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
@@ -3283,9 +3468,9 @@ class _TutorialCoachBanner extends StatelessWidget {
               child: Text(
                 guide.body,
                 style: const TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 12,
                   height: 1.38,
-                  color: Color(0xFFD9E1ED),
+                  color: Color(0xFFE8ECF1),
                 ),
               ),
             ),
@@ -3329,7 +3514,7 @@ class _ChallengeHudBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 6, 10, 6),
               decoration: const BoxDecoration(
-                color: Color(0x88060A12),
+                color: Color(0x880B0F14),
                 border: Border(bottom: BorderSide(color: AppColors.line)),
               ),
               child: Row(
@@ -3343,7 +3528,7 @@ class _ChallengeHudBanner extends StatelessWidget {
                   Text(
                     spec.isHistorical ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
                       color: AppColors.gold,
@@ -3355,15 +3540,15 @@ class _ChallengeHudBanner extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
                         color: AppColors.bad.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: BorderRadius.circular(2),
                         border: Border.all(color: AppColors.bad.withValues(alpha: 0.6)),
                       ),
                       child: const Text(
                         'MARECHAL',
                         style: TextStyle(
-                          fontSize: 8.5,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFFFFB2A8),
+                          color: Color(0xFFE8ECF1),
                         ),
                       ),
                     ),
@@ -3406,9 +3591,9 @@ class _ChallengeHudBanner extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFFD9E1ED),
+                        color: Color(0xFFE8ECF1),
                       ),
                     ),
                   ),
@@ -3434,7 +3619,7 @@ class _MiniStarChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final col = ok ? AppColors.gold : const Color(0xFF6B778D);
+    final col = ok ? AppColors.gold : const Color(0xFF7D8796);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
@@ -3445,7 +3630,7 @@ class _MiniStarChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: FontWeight.w700,
           color: col,
           decoration: ok ? null : TextDecoration.lineThrough,
@@ -3474,7 +3659,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
     final st = ctrl.challengeStatus;
 
     return Container(
-      color: const Color(0xEE050A13),
+      color: const Color(0xEE0B0F14),
       child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -3486,10 +3671,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
               color: AppColors.panel,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: accent, width: 2),
-              boxShadow: [
-                BoxShadow(color: accent.withValues(alpha: 0.2), spreadRadius: 5),
-                const BoxShadow(color: Color(0xCC000000), blurRadius: 55, offset: Offset(0, 18)),
-              ],
+              boxShadow: AppColors.edgeShadows,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3527,7 +3709,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                   Text(
                     ctrl.challengeEndReason,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13.5, color: Color(0xFFFFB2A8)),
+                    style: const TextStyle(fontSize: 13, color: Color(0xFFE8ECF1)),
                   ),
                 if (won && rank != null && rank > 0) ...[
                   const SizedBox(height: 8),
@@ -3535,7 +3717,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                       color: AppColors.gold.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppColors.brass),
                     ),
                     child: Text(
@@ -3553,7 +3735,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
                     color: AppColors.obsidian,
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppColors.line),
                   ),
                   child: Column(
@@ -3563,7 +3745,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                         'Rodada $round · Baixas: ${ctrl.challengeArmiesLost} · Ordens do Quartel: ${ctrl.challengeOrdersUsed}',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.ink,
                         ),
@@ -3677,12 +3859,11 @@ class _MapLensBar extends StatelessWidget {
 
     return Material(
       color: AppColors.obsidian.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(5),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AppColors.line),
-          boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 3))],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

@@ -8,6 +8,10 @@ import '../platform/lan_host.dart';
 import 'modals.dart';
 import 'theme.dart';
 
+/// Tela inicial (sistema "Centro de Operações").
+///
+/// Deitado: coluna de comando à esquerda (marca, um único botão claro, lista de modos, nome) e o mapa à direita,
+/// com o desafio do dia num cartão flutuante. Em pé: tudo numa coluna. Sem animação de fundo: o mapa é estático.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.ctrl});
 
@@ -17,667 +21,252 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _nameCtrl;
-  late final AnimationController _artCtrl;
-  late final AnimationController _crestCtrl;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.ctrl.savedName);
-    _artCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 60))
-      ..repeat(reverse: true);
-    _crestCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 3200))
-      ..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _artCtrl.dispose();
-    _crestCtrl.dispose();
     super.dispose();
   }
 
+  AppController get c => widget.ctrl;
+
   @override
   Widget build(BuildContext context) {
-    final c = widget.ctrl;
-    final layout = EstLayout.of(context);
-    final sz = layout.size;
-    final compactLand = !layout.big && sz.width > sz.height && sz.height <= 520;
-    final twoColBig = layout.big && !layout.tall;
+    final sz = MediaQuery.sizeOf(context);
+    final landscape = sz.width > sz.height && sz.width >= 640;
+    final compact = estCompact(context);
 
     return Scaffold(
       backgroundColor: AppColors.deep,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background radial glow matching #home
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: twoColBig ? const Alignment(-0.4, -0.4) : const Alignment(0, -1.0),
-                radius: twoColBig ? 1.05 : 1.15,
-                colors: const [Color(0x991C2D46), Color(0x0009101B)],
-              ),
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: twoColBig ? const Alignment(0.55, 0.35) : const Alignment(0, 1.0),
-                radius: 0.95,
-                colors: const [Color(0x44382A16), Color(0x0009101B)],
-              ),
-            ),
-          ),
-
-          // #homeart animated map silhouette with radial vignette mask
           Positioned.fill(
+            left: landscape ? _panelWidth(sz) : 0,
             child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _artCtrl,
-                builder: (context, child) {
-                  final t = Curves.easeInOut.transform(_artCtrl.value);
-                  final scale = 1.0 + 0.06 * t;
-                  final dx = -0.01 * sz.width * t;
-                  final dy = 0.01 * sz.height * t;
-                  return Transform.translate(
-                    offset: Offset(dx, dy),
-                    child: Transform.scale(scale: scale, child: child),
-                  );
-                },
-                child: RepaintBoundary(
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => const RadialGradient(
-                      center: Alignment(0, -0.1),
-                      radius: 0.78,
-                      colors: [Colors.white, Colors.white, Colors.transparent],
-                      stops: [0.0, 0.30, 1.0],
-                    ).createShader(bounds),
-                    blendMode: BlendMode.dstIn,
-                    child: Opacity(
-                      opacity: layout.big ? 0.16 : 0.10,
-                      child: CustomPaint(painter: _HomeArtPainter(c.mapData)),
+              child: RepaintBoundary(
+                child: Opacity(
+                  opacity: landscape ? 1 : 0.35,
+                  child: CustomPaint(painter: _HomeMapPainter(c.mapData)),
+                ),
+              ),
+            ),
+          ),
+          if (landscape) ...[
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _panelWidth(sz),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.deep,
+                  border: Border(right: BorderSide(color: AppColors.line)),
+                ),
+                child: SafeArea(
+                  right: false,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(compact ? 20 : 28, compact ? 16 : 28, compact ? 20 : 28, compact ? 10 : 18),
+                    child: _commandColumn(compact: compact, withDaily: false),
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              left: false,
+              child: Padding(
+                padding: EdgeInsets.all(compact ? 14 : 22),
+                child: Stack(
+                  children: [
+                    Positioned(right: 0, top: 0, child: _howToPlay()),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      width: min(300.0, sz.width - _panelWidth(sz) - 40),
+                      child: _DailyCard(ctrl: c, compact: compact, onTap: _openDaily, floating: true),
                     ),
+                  ],
+                ),
+              ),
+            ),
+          ] else
+            SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                    child: _commandColumn(compact: compact, withDaily: true),
                   ),
                 ),
               ),
             ),
-          ),
-
-          // Foreground content
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: layout.big ? 28 : 16,
-                  vertical: compactLand ? 10 : (layout.big ? 28 : 16),
-                ),
-                child: twoColBig
-                    ? _buildTwoColDesktop(layout, sz)
-                    : compactLand
-                        ? _buildCompactLandscape()
-                        : _buildSingleColumn(layout),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildTwoColDesktop(EstLayout layout, Size sz) {
-    final gap = (sz.width * 0.06).clamp(32.0, 96.0);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 450),
-          child: _buildBrand(alignLeft: true, big: true, sz: sz),
-        ),
-        SizedBox(width: gap),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: EstGlassCard(
-            padding: const EdgeInsets.all(22),
-            borderRadius: 6,
-            highlight: true,
-            child: _buildForm(big: true, compactLand: false),
-          ),
-        ),
-      ],
-    );
+  double _panelWidth(Size sz) => sz.width >= 1100 ? 400 : (sz.width * 0.42).clamp(300.0, 360.0);
+
+  void _openDaily() {
+    c.savePlayerName(_nameCtrl.text);
+    c.openDailyScreen();
   }
 
-  Widget _buildSingleColumn(EstLayout layout) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: layout.big ? 460 : 400),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildBrand(alignLeft: false, big: layout.big, sz: layout.size),
-          SizedBox(height: layout.big ? 28 : 14),
-          if (layout.big)
-            EstGlassCard(
-              padding: const EdgeInsets.all(22),
-              borderRadius: 6,
-              highlight: true,
-              child: _buildForm(big: true, compactLand: false),
-            )
-          else
-            _buildForm(big: false, compactLand: false),
-          if (!layout.big) ...[
-            const SizedBox(height: 10),
-            _buildMetaFooter(alignLeft: false),
-          ],
-        ],
+  Widget _howToPlay() => EstButton(
+        small: true,
+        icon: EstIconKind.book,
+        label: 'Como jogar',
+        onPressed: () => showRulesModal(context, c),
+      );
+
+  Widget _commandColumn({required bool compact, required bool withDaily}) {
+    final items = <Widget>[
+      if (c.hasSavedGuest)
+        _ModeRow(
+          title: 'Voltar à partida online',
+          sub: 'Você saiu de uma partida que ainda está em curso',
+          compact: compact,
+          strong: true,
+          onTap: c.resumeSavedGuest,
+        ),
+      if (c.hasSavedLocal)
+        _ModeRow(
+          title: 'Continuar partida salva',
+          sub: 'Mesa local deste aparelho',
+          compact: compact,
+          strong: true,
+          onTap: c.resumeSavedLocal,
+        ),
+      _ModeRow(
+        title: 'Mesa local',
+        sub: LanHost.supported ? 'Bots, rede local ou código de sala' : 'Bots, QR ou código de sala',
+        compact: compact,
+        onTap: () => c.startLocalSetup(hostName: _nameCtrl.text),
       ),
-    );
-  }
-
-  Widget _buildCompactLandscape() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 720),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildBrand(alignLeft: false, big: false, sz: const Size(720, 400), smallCrest: true),
-                const SizedBox(height: 8),
-                _buildMetaFooter(alignLeft: false),
-              ],
-            ),
-          ),
-          const SizedBox(width: 24),
-          Expanded(child: _buildForm(big: false, compactLand: true)),
-        ],
+      _ModeRow(
+        title: 'Salas online',
+        sub: 'Escolha uma mesa ou entre com código',
+        compact: compact,
+        onTap: () {
+          c.savePlayerName(_nameCtrl.text);
+          c.openRoomsBrowser();
+        },
       ),
-    );
-  }
-
-  Widget _buildBrand({
-    required bool alignLeft,
-    required bool big,
-    required Size sz,
-    bool smallCrest = false,
-  }) {
-    final crestSize = smallCrest ? 60.0 : (big ? 84.0 : 72.0);
-    final titleSize = alignLeft ? (sz.width * 0.054).clamp(48.0, 72.0) : 40.0;
-
-    return Column(
-      crossAxisAlignment: alignLeft ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedBuilder(
-          animation: _crestCtrl,
-          builder: (context, child) {
-            final t = sin(_crestCtrl.value * pi);
-            return Transform.translate(
-              offset: Offset(0, -3 * t),
-              child: Transform.rotate(
-                angle: -0.026 * t,
-                child: child,
-              ),
-            );
-          },
-          child: RepaintBoundary(
-            child: Container(
-              width: crestSize,
-              height: crestSize,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: Color(0x66D64545), blurRadius: 28, spreadRadius: 2),
-                  BoxShadow(color: Color(0x33E6B652), blurRadius: 42),
-                ],
-              ),
-              child: EstIcon(EstIconKind.crest, size: crestSize),
-            ),
-          ),
-        ),
-        SizedBox(height: big ? 12 : 8),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: alignLeft ? Alignment.centerLeft : Alignment.center,
-          child: ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFFFF6DF), Color(0xFFD8C39A)],
-            ).createShader(bounds),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: 'U'),
-                  TextSpan(
-                    text: 'LTIMATO',
-                    style: TextStyle(fontSize: titleSize * 0.78),
-                  ),
-                ],
-              ),
-              maxLines: 1,
-              softWrap: false,
-              textAlign: alignLeft ? TextAlign.left : TextAlign.center,
-              style: AppText.serif(
-                size: titleSize,
-                letterSpacing: alignLeft ? 0.06 : 0.08,
-                height: 1.0,
-                color: Colors.white,
-              ).copyWith(
-                shadows: const [
-                  Shadow(color: Color(0x88000000), blurRadius: 6, offset: Offset(0, 2)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Conquiste territórios, cumpra seu objetivo secreto.',
-          textAlign: alignLeft ? TextAlign.left : TextAlign.center,
-          style: TextStyle(
-            fontSize: big ? 19 : 14,
-            color: big ? AppColors.ink : AppColors.mute,
-            height: 1.35,
-          ),
-        ),
-        if (big) ...[
-          const SizedBox(height: 10),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 410),
-            child: Text(
-              'Estratégia por turnos para 2 a 6 jogadores. Entre na fila rápida online, crie uma mesa com amigos ou jogue sem internet.',
-              textAlign: alignLeft ? TextAlign.left : TextAlign.center,
-              style: const TextStyle(
-                fontSize: 15,
-                height: 1.5,
-                color: AppColors.mute,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: alignLeft ? WrapAlignment.start : WrapAlignment.center,
-            children: const [
-              _FeaturePill(icon: EstIconKind.medal, text: 'Quartel & Ordens'),
-              _FeaturePill(icon: EstIconKind.bolt, text: 'Fila Rápida 45s'),
-              _FeaturePill(icon: EstIconKind.sword, text: '2 a 6 Comandantes'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildMetaFooter(alignLeft: alignLeft),
-        ],
+      _ModeRow(
+        title: 'Tutorial',
+        sub: 'Aprenda o básico jogando',
+        compact: compact,
+        onTap: () => c.startTutorial(playerName: _nameCtrl.text),
+      ),
+      if (withDaily) ...[
+        const SizedBox(height: Space.x3),
+        _DailyCard(ctrl: c, compact: compact, onTap: _openDaily, floating: false),
+        const SizedBox(height: Space.x2),
+        Align(alignment: Alignment.centerLeft, child: _howToPlay()),
       ],
-    );
-  }
-
-  Widget _buildMetaFooter({required bool alignLeft}) {
-    final c = widget.ctrl;
-    return Column(
-      crossAxisAlignment: alignLeft ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (!c.netOnline)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 4),
-            child: Text(
-              '✓ Pronto para jogar sem internet',
-              style: TextStyle(fontSize: 13, color: Color(0xFF9FE6B4)),
-            ),
-          ),
-        Text(
-          'versão $appVersion',
-          style: TextStyle(
-            fontSize: 11,
-            color: AppColors.mute.withValues(alpha: 0.6),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildForm({required bool big, required bool compactLand}) {
-    final c = widget.ctrl;
-    final btnHeight = big ? 46.0 : 42.0;
-    final btnFs = big ? 14.5 : 13.5;
+    ];
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Plaqueta de Comandante (rebaixada estilo gabinete imperial)
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
-          decoration: BoxDecoration(
-            color: AppColors.obsidian.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: Row(
-            children: [
-              const EstIcon(EstIconKind.crest, size: 17),
-              const SizedBox(width: 9),
-              const Text(
-                'COMANDANTE',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: AppColors.mute,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _nameCtrl,
-                  maxLength: 14,
-                  onChanged: c.savePlayerName,
-                  textAlign: TextAlign.right,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: TextStyle(
-                    fontSize: big ? 15.5 : 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'Seu apelido',
-                    counterText: '',
-                    filled: false,
-                    isDense: true,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 6),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Icon(Icons.edit_outlined, size: 14, color: AppColors.mute.withValues(alpha: 0.65)),
-            ],
+        EstWordmark(size: compact ? 28 : 36),
+        const SizedBox(height: 6),
+        Text(
+          'ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(),
+          style: AppText.label(size: 11),
+        ),
+        SizedBox(height: compact ? 14 : 22),
+        _QuickMatchButton(compact: compact, onTap: () => c.startQuickMatch(_nameCtrl.text)),
+        SizedBox(height: compact ? 4 : 10),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items),
           ),
         ),
-        SizedBox(height: big ? 14 : 10),
-
-        // Ordem de Batalha Principal: Partida Rápida Online
-        Container(
-          padding: EdgeInsets.all(compactLand ? 11 : (big ? 15 : 13)),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF172539), Color(0xFF0C1422)],
-            ),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFF8C7141), width: 1.0),
-            boxShadow: const [
-              BoxShadow(color: Color(0x77000000), blurRadius: 16, offset: Offset(0, 6)),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  const EstIcon(EstIconKind.bolt, size: 15, color: AppColors.brass),
-                  const SizedBox(width: 7),
-                  const Expanded(
-                    child: Text(
-                      'PARTIDA RÁPIDA',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.4,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.obsidian,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF6B5734)),
-                    ),
-                    child: const Text(
-                      'ONLINE · 45S',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.0,
-                        color: AppColors.gold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (!compactLand) ...[
-                const SizedBox(height: 8),
-                const EstRuleDivider(diamond: false),
-                const SizedBox(height: 8),
-                const Text(
-                  '4 comandantes · Quartel ativo · 1 min/turno',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.mute),
-                ),
-              ],
-              const SizedBox(height: 11),
-              EstButton(
-                icon: EstIconKind.sword,
-                label: 'ENTRAR EM BATALHA',
-                variant: EstButtonVariant.primary,
-                height: big ? 46 : 42,
-                fontSize: big ? 14.5 : 13.5,
-                onPressed: () => c.startQuickMatch(_nameCtrl.text),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: big ? 10 : 8),
-
-        // Grid tático de Modos Secundários
-        Row(
-          children: [
-            Expanded(
-              child: _TacticalTile(
-                icon: EstIconKind.globe,
-                title: 'Salas Online',
-                sub: 'Mesas e código',
-                compact: compactLand,
-                onTap: () {
-                  c.savePlayerName(_nameCtrl.text);
-                  c.openRoomsBrowser();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _TacticalTile(
-                icon: EstIconKind.board,
-                title: 'Mesa Local',
-                sub: LanHost.supported ? 'Bots, LAN ou código' : 'Bots, QR ou código',
-                compact: compactLand,
-                onTap: () => c.startLocalSetup(hostName: _nameCtrl.text),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _DailyHomeCard(
-          ctrl: c,
-          compact: compactLand,
-          onTap: () {
-            c.savePlayerName(_nameCtrl.text);
-            c.openDailyScreen();
-          },
-        ),
-
-        if (c.hasSavedGuest || c.hasSavedLocal) ...[
-          const SizedBox(height: 8),
-          if (c.hasSavedGuest)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: EstButton(
-                icon: EstIconKind.globe,
-                label: 'Reconectar à partida em curso',
-                variant: EstButtonVariant.pact,
-                height: btnHeight,
-                fontSize: btnFs,
-                onPressed: c.resumeSavedGuest,
-              ),
-            ),
-          if (c.hasSavedLocal)
-            EstButton(
-              icon: EstIconKind.board,
-              label: 'Retomar campanha salva',
-              variant: EstButtonVariant.pact,
-              height: btnHeight,
-              fontSize: btnFs,
-              onPressed: c.resumeSavedLocal,
-            ),
-        ],
-
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: EstButton(
-                icon: EstIconKind.compass,
-                label: 'Tutorial',
-                variant: EstButtonVariant.ghost,
-                height: 38,
-                fontSize: 13.5,
-                onPressed: () => c.startTutorial(playerName: _nameCtrl.text),
-              ),
-            ),
-            Container(width: 1, height: 18, color: AppColors.line),
-            Expanded(
-              child: EstButton(
-                icon: EstIconKind.book,
-                label: 'Como jogar',
-                variant: EstButtonVariant.ghost,
-                height: 38,
-                fontSize: 13.5,
-                onPressed: () => showRulesModal(context, c),
-              ),
-            ),
-          ],
-        ),
+        _profileRow(compact),
       ],
     );
   }
-}
 
-class _FeaturePill extends StatelessWidget {
-  const _FeaturePill({required this.icon, required this.text});
-  final EstIconKind icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _profileRow(bool compact) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.panel.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.line),
-      ),
+      padding: EdgeInsets.only(top: compact ? 6 : 10),
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          EstIcon(icon, size: 13, color: AppColors.brass),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFDDE3EE),
+          EstFactionSeal(color: Factions.colors[1], size: 14),
+          const SizedBox(width: Space.x2),
+          Expanded(
+            child: TextField(
+              controller: _nameCtrl,
+              maxLength: 14,
+              onChanged: c.savePlayerName,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+              decoration: const InputDecoration(
+                hintText: 'Seu nome de comandante',
+                counterText: '',
+                filled: false,
+                isDense: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 8),
+              ),
             ),
           ),
+          if (!c.netOnline)
+            Padding(
+              padding: const EdgeInsets.only(left: Space.x2),
+              child: Text('SEM INTERNET', style: AppText.label(size: 11, color: AppColors.mute)),
+            )
+          else
+            Text('TOQUE PARA TROCAR', style: AppText.label(size: 11)),
         ],
       ),
     );
   }
 }
 
-class _TacticalTile extends StatelessWidget {
-  const _TacticalTile({
-    required this.icon,
-    required this.title,
-    required this.sub,
-    required this.onTap,
-    this.compact = false,
-  });
+/// O único botão claro da tela: a fila online.
+class _QuickMatchButton extends StatelessWidget {
+  const _QuickMatchButton({required this.compact, required this.onTap});
 
-  final EstIconKind icon;
-  final String title;
-  final String sub;
-  final VoidCallback onTap;
   final bool compact;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(5),
+      color: AppColors.action,
+      borderRadius: BorderRadius.circular(Radii.sm),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(5),
-        child: Ink(
-          padding: EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: compact ? 10 : 12,
-          ),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF162336), Color(0xFF0C1422)],
-            ),
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  EstIcon(icon, size: 15, color: AppColors.brass),
-                  const Spacer(),
-                  const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.mute),
-                ],
-              ),
-              SizedBox(height: compact ? 6 : 8),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        child: SizedBox(
+          height: compact ? 46 : 52,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'PARTIDA RÁPIDA',
+                    style: AppText.label(size: compact ? 17 : 19, color: AppColors.onAction, weight: FontWeight.w700)
+                        .copyWith(letterSpacing: 1.0),
+                  ),
                 ),
-              ),
-              if (!compact) ...[
-                const SizedBox(height: 2),
-                Text(
-                  sub,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
-                ),
+                Text('ONLINE · ~45 S', style: AppText.label(size: 12, color: const Color(0xFF4A525E))),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -685,16 +274,72 @@ class _TacticalTile extends StatelessWidget {
   }
 }
 
-class _DailyHomeCard extends StatelessWidget {
-  const _DailyHomeCard({
+class _ModeRow extends StatelessWidget {
+  const _ModeRow({
+    required this.title,
+    required this.sub,
+    required this.onTap,
+    required this.compact,
+    this.strong = false,
+  });
+
+  final String title;
+  final String sub;
+  final VoidCallback onTap;
+  final bool compact;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: compact ? 44 : 52,
+        padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.title(size: compact ? 15 : 18, color: strong ? AppColors.action : AppColors.ink),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.mute),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.faint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyCard extends StatelessWidget {
+  const _DailyCard({
     required this.ctrl,
     required this.compact,
     required this.onTap,
+    required this.floating,
   });
 
   final AppController ctrl;
   final bool compact;
   final VoidCallback onTap;
+  final bool floating;
 
   @override
   Widget build(BuildContext context) {
@@ -702,92 +347,56 @@ class _DailyHomeCard extends StatelessWidget {
     final spec = snap?.challenge;
     final isHist = spec?.isHistorical == true || DateTime.now().weekday == DateTime.thursday;
     final stars = ctrl.todayChallengeStars;
-    final title = spec?.title ?? (isHist ? 'Crônica de Quinta' : 'Desafio do Dia');
+    final title = spec?.title ?? (isHist ? 'Crônica de quinta' : 'Desafio do dia');
     final sub = spec != null
-        ? (isHist
-            ? '${spec.era} · Quinta Histórica'
-            : '${spec.subtitle} · Ranking ${snap?.totalRanked ?? 0}')
-        : (ctrl.dailyLoading ? 'Sincronizando com o servidor…' : 'Ranking diário e Crônicas de Quinta');
+        ? (isHist ? '${spec.era} · mesma partida para todos' : '${spec.subtitle} · ${snap?.totalRanked ?? 0} no ranking')
+        : (ctrl.dailyLoading ? 'Sincronizando…' : 'Mesma partida para todos. Vença em menos rodadas.');
 
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(5),
+      color: AppColors.panel,
+      borderRadius: BorderRadius.circular(Radii.md),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(Radii.md),
         child: Ink(
-          padding: EdgeInsets.symmetric(horizontal: 13, vertical: compact ? 9 : 11),
+          padding: EdgeInsets.all(compact ? Space.x3 : Space.x4),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isHist
-                  ? const [Color(0xFF232018), Color(0xFF101723)]
-                  : const [Color(0xFF172235), Color(0xFF0C1422)],
-            ),
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: isHist ? AppColors.brass : AppColors.line),
+            borderRadius: BorderRadius.circular(Radii.md),
+            border: Border.all(color: AppColors.line),
+            boxShadow: floating ? AppColors.edgeShadows : null,
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              EstIcon(
-                isHist ? EstIconKind.book : EstIconKind.medal,
-                size: 17,
-                color: AppColors.gold,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          isHist ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA',
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
-                            color: AppColors.gold,
-                          ),
-                        ),
-                        if (stars > 0) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            '★' * stars + '☆' * (3 - stars),
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              color: AppColors.gold,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ],
-                      ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      (isHist ? 'Quinta histórica' : 'Desafio do dia').toUpperCase(),
+                      style: AppText.label(size: 11),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
+                  ),
+                  for (var i = 0; i < 3; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(
+                        i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                        size: 15,
+                        color: AppColors.medal,
                       ),
                     ),
-                    if (!compact)
-                      Text(
-                        sub,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.mute),
-                      ),
-                  ],
-                ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mute),
+              const SizedBox(height: Space.x1),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.title(size: compact ? 18 : 22)),
+              const SizedBox(height: 2),
+              Text(
+                sub,
+                maxLines: compact ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, height: 1.35, color: AppColors.mute),
+              ),
             ],
           ),
         ),
@@ -796,18 +405,17 @@ class _DailyHomeCard extends StatelessWidget {
   }
 }
 
-class _HomeArtPainter extends CustomPainter {
-  const _HomeArtPainter(this.mapData);
+/// O mapa de fundo da tela inicial: territórios em tons escuros do continente, sem números.
+class _HomeMapPainter extends CustomPainter {
+  const _HomeMapPainter(this.mapData);
 
   final MapData mapData;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    const pad = 30.0;
-    final srcW = mapData.width + 2 * pad;
-    final srcH = mapData.height + 2 * pad;
-    final scale = max(size.width / srcW, size.height / srcH);
+    canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.sea);
+    final scale = max(size.width / mapData.width, size.height / mapData.height) * 1.02;
     final tx = (size.width - mapData.width * scale) / 2;
     final ty = (size.height - mapData.height * scale) / 2;
 
@@ -815,23 +423,29 @@ class _HomeArtPainter extends CustomPainter {
     canvas.translate(tx, ty);
     canvas.scale(scale, scale);
 
+    final grid = Paint()
+      ..color = const Color(0xFF111821)
+      ..strokeWidth = 1 / scale;
+    for (var x = 0.0; x <= mapData.width; x += 71) {
+      canvas.drawLine(Offset(x, 0), Offset(x, mapData.height.toDouble()), grid);
+    }
+    for (var y = 0.0; y <= mapData.height; y += 71) {
+      canvas.drawLine(Offset(0, y), Offset(mapData.width.toDouble(), y), grid);
+    }
+
     final stroke = Paint()
       ..color = AppColors.deep
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
+      ..strokeWidth = 1.4 / scale
       ..strokeJoin = StrokeJoin.round;
-
     for (final tr in mapData.territories) {
-      final fill = Paint()
-        ..color = mapData.continents[tr.continent].color
-        ..style = PaintingStyle.fill;
-      canvas.drawPath(tr.path, fill);
+      final base = mapData.continents[tr.continent].color;
+      canvas.drawPath(tr.path, Paint()..color = Color.lerp(base, AppColors.deep, 0.78)!);
       canvas.drawPath(tr.path, stroke);
     }
-
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _HomeArtPainter old) => false;
+  bool shouldRepaint(covariant _HomeMapPainter old) => old.mapData != mapData;
 }

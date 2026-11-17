@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../core/palette.dart';
 import 'game_engine_stub.dart'
     if (dart.library.js_interop) 'game_engine_web.dart'
     if (dart.library.ffi) 'game_engine_native.dart';
@@ -154,14 +155,17 @@ class EngineConstants {
   final int mobilizeCost;
 
   factory EngineConstants.fromJson(Map<String, dynamic> j) {
-    final cols = (j['colors'] as List<dynamic>? ?? const [])
-        .map(
-          (e) => EngineColor(
-            name: (e as Map<String, dynamic>)['N'] as String? ?? '',
-            hex: e['C'] as String? ?? '#999999',
-          ),
-        )
-        .toList();
+    final rawCols = j['colors'] as List<dynamic>? ?? const [];
+    final cols = [
+      for (var i = 0; i < rawCols.length; i++)
+        EngineColor(
+          name: (rawCols[i] as Map<String, dynamic>)['N'] as String? ?? '',
+          // tom de exibição do aplicativo (ver core/palette.dart); o índice da cor é o mesmo do motor
+          hex: i < factionDisplayHex.length
+              ? factionDisplayHex[i]
+              : (rawCols[i] as Map<String, dynamic>)['C'] as String? ?? '#999999',
+        ),
+    ];
     final evs = (j['events'] as List<dynamic>? ?? const [])
         .map((e) {
           final m = e as Map<String, dynamic>;
