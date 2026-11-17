@@ -7,6 +7,7 @@ import '../core/map_data.dart';
 import '../game/app_controller.dart';
 import '../game/daily_challenge.dart';
 import '../game/fx_models.dart';
+import 'account_sheet.dart';
 import 'map_view.dart';
 import 'modals.dart';
 import 'quartel_modal.dart';
@@ -3699,6 +3700,16 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+                if (ctrl.challengeNeedsAccount && !ctrl.signedIn) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'O ranking é das contas: entre para o próximo resultado contar.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12.5, color: AppColors.mute),
+                  ),
+                  const SizedBox(height: 6),
+                  EstButton(small: true, label: 'Entrar ou criar conta', onPressed: () => showAccountSheet(context, ctrl)),
                 ],
                 const SizedBox(height: 14),
                 Container(

@@ -256,12 +256,17 @@ Future<Map<String, dynamic>> startDailyRun(
 Future<Map<String, dynamic>> submitDailyRun(
   String server,
   Map<String, dynamic> payload, {
+  String? accountToken,
   Duration timeout = const Duration(seconds: 25),
 }) async {
   final r = await http
       .post(
         Uri.parse('${_httpBase(server)}/daily/submit'),
-        headers: const {'Content-Type': 'application/json'},
+        // com conta, o servidor grava o resultado nela (nome da conta, vale em qualquer aparelho)
+        headers: {
+          'Content-Type': 'application/json',
+          if (accountToken != null && accountToken.isNotEmpty) 'Authorization': 'Bearer $accountToken',
+        },
         body: jsonEncode(payload),
       )
       .timeout(timeout);

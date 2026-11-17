@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/map_data.dart';
 import '../game/app_controller.dart';
 import '../platform/lan_host.dart';
+import 'account_sheet.dart';
 import 'modals.dart';
 import 'theme.dart';
 
@@ -27,11 +28,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: widget.ctrl.savedName);
+    _nameCtrl = TextEditingController(text: widget.ctrl.account?.username ?? widget.ctrl.savedName);
+    widget.ctrl.addListener(_syncAccountName);
+  }
+
+  // Com conta, o nome vem dela (entrar em outro aparelho ou trocar o nome reflete aqui).
+  void _syncAccountName() {
+    final a = widget.ctrl.account;
+    if (a != null && _nameCtrl.text != a.username) _nameCtrl.text = a.username;
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    widget.ctrl.removeListener(_syncAccountName);
     _nameCtrl.dispose();
     super.dispose();
   }
@@ -225,6 +235,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Nome do jogador: campo com rótulo, logo abaixo da marca (fica acima do teclado e é o primeiro passo).
   Widget _nameField(bool compact) {
+    final acct = c.account;
+    if (acct != null) return _accountRow(compact, acct.username, c.accountNeedsConfirm);
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: _nameCtrl,
       builder: (context, value, _) {
@@ -262,11 +274,70 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              Icon(Icons.edit_outlined, size: 16, color: empty ? AppColors.ink : AppColors.faint),
+              Container(width: 1, height: 18, margin: const EdgeInsets.only(left: 6), color: AppColors.line),
+              _SignInLink(onTap: () => showAccountSheet(context, c)),
             ],
           ),
         );
       },
+    );
+  }
+
+  /// Com conta: o nome é o da conta; tocar abre a conta. E-mail sem confirmar ganha um aviso.
+  Widget _accountRow(bool compact, String name, bool needsConfirm) {
+    return Material(
+      color: AppColors.panel,
+      borderRadius: BorderRadius.circular(Radii.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Radii.sm),
+        onTap: () => showAccountSheet(context, c),
+        child: Container(
+          height: compact ? 42 : 48,
+          padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: needsConfirm ? AppColors.medal : AppColors.glassBorder),
+          ),
+          child: Row(
+            children: [
+              Text('CONTA', style: AppText.label(size: 12)),
+              Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+                ),
+              ),
+              if (needsConfirm)
+                Padding(
+                  padding: const EdgeInsets.only(left: Space.x2),
+                  child: Text('CONFIRMAR E-MAIL', style: AppText.label(size: 11.5, color: AppColors.medal)),
+                ),
+              const Icon(Icons.chevron_right, size: 18, color: AppColors.faint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Entrar" discreto no fim do campo de nome: conta é opcional.
+class _SignInLink extends StatelessWidget {
+  const _SignInLink({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(Radii.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Text('ENTRAR', style: AppText.label(size: 12, color: AppColors.ink)),
+      ),
     );
   }
 }

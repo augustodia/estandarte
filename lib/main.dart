@@ -5,6 +5,7 @@ import 'engine/game_engine.dart';
 import 'game/app_controller.dart';
 import 'game/fx_models.dart';
 import 'platform/storage.dart';
+import 'ui/account_sheet.dart';
 import 'ui/daily_screen.dart';
 import 'ui/game_screen.dart';
 import 'ui/home_screen.dart';
@@ -153,6 +154,32 @@ class _EstandarteRoot extends StatefulWidget {
 
 class _EstandarteRootState extends State<_EstandarteRoot> {
   bool _handledPendingUrl = false;
+  bool _accountOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.ctrl.addListener(_onAccountPrompt);
+  }
+
+  @override
+  void dispose() {
+    widget.ctrl.removeListener(_onAccountPrompt);
+    super.dispose();
+  }
+
+  // Online pediu conta: abre a janela de entrar/criar com o motivo.
+  void _onAccountPrompt() {
+    final reason = widget.ctrl.accountPrompt;
+    if (reason == null || _accountOpen) return;
+    widget.ctrl.accountPrompt = null;
+    _accountOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showAccountSheet(context, widget.ctrl, reason: reason);
+      _accountOpen = false;
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -178,7 +205,11 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
   }
 
   void _promptSalaJoin(String code) {
-    final nameCtrl = TextEditingController(text: widget.ctrl.savedName);
+    final c = widget.ctrl;
+    if (!c.signedIn) {
+      c.joinOnlineRoom(code, ''); // pede a conta antes
+      return;
+    }
     showEstSheet<void>(
       context,
       maxWidth: 420,
@@ -186,20 +217,13 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
         title: 'Entrar na sala $code',
         onClose: () => Navigator.pop(ctx),
         children: [
-          const Text('Seu nome', style: TextStyle(fontSize: 13, color: AppColors.mute)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: nameCtrl,
-            maxLength: 14,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Como quer ser chamado',
-              counterText: '',
-            ),
-            onSubmitted: (_) {
-              Navigator.pop(ctx);
-              widget.ctrl.joinOnlineRoom(code, nameCtrl.text);
-            },
+          Text.rich(
+            TextSpan(children: [
+              const TextSpan(text: 'Você entra como '),
+              TextSpan(text: c.onlineName, style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600)),
+              const TextSpan(text: '.'),
+            ]),
+            style: const TextStyle(fontSize: 14, color: AppColors.mute),
           ),
           const SizedBox(height: 14),
           Row(
@@ -210,7 +234,7 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
                   variant: EstButtonVariant.primary,
                   onPressed: () {
                     Navigator.pop(ctx);
-                    widget.ctrl.joinOnlineRoom(code, nameCtrl.text);
+                    c.joinOnlineRoom(code, '');
                   },
                 ),
               ),

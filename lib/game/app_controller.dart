@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/map_data.dart';
 import '../core/names.dart';
 import '../engine/game_engine.dart';
+import '../net/account_api.dart' as acc;
 import '../net/online_client.dart';
 import '../net/telemetry.dart';
 import '../platform/lan_host.dart';
@@ -200,6 +201,8 @@ class AppController extends ChangeNotifier {
   int get challengeArmiesLost => _challengeArmiesLost;
   int get challengeOrdersUsed => _challengeOrdersUsed;
   int? challengeServerRank;
+  /// Venceu o desafio sem conta: o resultado não entra no ranking (a tela convida a entrar).
+  bool challengeNeedsAccount = false;
   List<DailyRankEntry> challengeSubmitRanking = [];
   bool challengeResultSubmitted = false;
   String? _challengeRunId;
@@ -252,8 +255,10 @@ class AppController extends ChangeNotifier {
       optSpy = savedCfg['spy'] == true;
     }
 
+    _loadAccount();
     _unsubConn = WebEnv.listenConnectivity((on) {
       netOnline = on;
+      if (on) unawaited(refreshAccount());
       notifyListeners();
     });
     _unsubVis = WebEnv.listenVisibility((hidden) {
@@ -402,6 +407,188 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  // ── Conta ────────────────────────────────────────────────────────────────────
+  // Opcional: sem conta, tudo funciona igual (convidado, mesa local, rede de casa).
+  // Com conta: o nome de usuário (único) é o nome no jogo e o desafio do dia vale em qualquer aparelho.
+  static const _kAccToken = 'ultimato.account.token';
+  static const _kAccUser = 'ultimato.account.user';
+
+  acc.AccountUser? account;
+  String? _accountToken;
+  bool accountBusy = false;
+
+  /// E-mail novo esperando o código (troca de e-mail de conta já confirmada).
+  String? accountPendingEmail;
+
+  /// Quando dá para pedir outro código.
+  DateTime? accountResendAt;
+
+  bool get signedIn => account != null && _accountToken != null;
+
+  /// Pedido para a tela abrir a janela da conta (com o motivo). A tela limpa depois de abrir.
+  String? accountPrompt;
+
+  /// Online só com conta: sem ela, pede para entrar e não segue.
+  bool _onlineGate() {
+    if (signedIn) return true;
+    accountPrompt = 'Para jogar online, entre ou crie uma conta. É grátis e o seu nome fica só seu.';
+    notifyListeners();
+    return false;
+  }
+
+  /// Nome online: sempre o da conta.
+  String get onlineName => account?.username ?? 'Jogador';
+
+  /// Falta confirmar o e-mail do cadastro ou o de uma troca.
+  bool get accountNeedsConfirm => signedIn && (!account!.emailVerified || accountPendingEmail != null);
+
+  /// Para onde foi o último código.
+  String get accountCodeEmail => accountPendingEmail ?? account?.email ?? '';
+
+  int get accountResendIn {
+    final at = accountResendAt;
+    if (at == null) return 0;
+    final s = at.difference(DateTime.now()).inMilliseconds;
+    return s <= 0 ? 0 : (s / 1000).ceil();
+  }
+
+  void _loadAccount() {
+    _accountToken = AppStorage.instance.getString(_kAccToken);
+    final u = _readJsonStorage(_kAccUser);
+    account = _accountToken != null && u != null ? acc.AccountUser.fromJson(u) : null;
+    if (account == null) _accountToken = null;
+    if (netOnline) unawaited(refreshAccount());
+  }
+
+  void _storeAccount(String token, acc.AccountUser u) {
+    _accountToken = token;
+    account = u;
+    AppStorage.instance.setString(_kAccToken, token);
+    AppStorage.instance.setString(_kAccUser, jsonEncode(u.toJson()));
+    savePlayerName(u.username);
+  }
+
+  void _applyState(acc.AccountState st) {
+    final tok = _accountToken;
+    if (tok != null) _storeAccount(tok, st.user);
+    accountPendingEmail = st.pendingEmail;
+    if (st.resendIn > 0) accountResendAt = DateTime.now().add(Duration(seconds: st.resendIn));
+  }
+
+  void _clearAccount() {
+    _accountToken = null;
+    account = null;
+    accountPendingEmail = null;
+    accountResendAt = null;
+    AppStorage.instance.remove(_kAccToken);
+    AppStorage.instance.remove(_kAccUser);
+  }
+
+  /// Confere a sessão guardada. Sem internet, mantém a conta como estava.
+  Future<void> refreshAccount() async {
+    final tok = _accountToken;
+    if (tok == null) return;
+    try {
+      final st = await acc.accountMe(serverUrl(), tok);
+      if (_accountToken != tok) return;
+      _applyState(st);
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) _clearAccount();
+    }
+    notifyListeners();
+  }
+
+  /// Roda um pedido de conta: marca ocupado, devolve o erro (ou null) e sai da conta se o token caiu.
+  Future<acc.AccountError?> _accountRun(Future<void> Function() run) async {
+    if (accountBusy) return null;
+    accountBusy = true;
+    notifyListeners();
+    try {
+      await run();
+      return null;
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken != null) _clearAccount();
+      return e;
+    } finally {
+      accountBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Cria a conta e entra; o código de confirmação vai para o e-mail.
+  Future<acc.AccountError?> accountSignUp(String email, String username, String password) =>
+      _accountRun(() async {
+        final s = await acc.accountRegister(serverUrl(), email.trim(), username.trim(), password);
+        _storeAccount(s.token, s.user);
+        accountPendingEmail = null;
+        accountResendAt = s.codeSent ? DateTime.now().add(const Duration(seconds: 60)) : null;
+      });
+
+  /// Entra com e-mail ou nome de usuário.
+  Future<acc.AccountError?> accountSignIn(String login, String password) => _accountRun(() async {
+        final s = await acc.accountLogin(serverUrl(), login.trim(), password);
+        _storeAccount(s.token, s.user);
+        accountPendingEmail = null;
+        accountResendAt = null;
+        unawaited(refreshAccount()); // traz troca de e-mail pendente e o tempo do reenvio
+      });
+
+  Future<acc.AccountError?> accountVerify(String code) => _accountRun(() async {
+        final u = await acc.accountVerify(serverUrl(), _accountToken!, code.trim());
+        _storeAccount(_accountToken!, u);
+        accountPendingEmail = null;
+        accountResendAt = null;
+      });
+
+  Future<acc.AccountError?> accountResendCode() => _accountRun(() async {
+        final secs = await acc.accountResendCode(serverUrl(), _accountToken!);
+        accountResendAt = DateTime.now().add(Duration(seconds: secs));
+      });
+
+  /// Troca o e-mail: com e-mail confirmado o novo fica pendente até o código; sem, troca na hora.
+  Future<acc.AccountError?> accountChangeEmail(String email) => _accountRun(() async {
+        final st = await acc.accountChangeEmail(serverUrl(), _accountToken!, email.trim());
+        _applyState(st);
+        if (st.codeSent) accountResendAt = DateTime.now().add(const Duration(seconds: 60));
+      });
+
+  /// Troca o nome de usuário (continua único).
+  Future<acc.AccountError?> accountRename(String username) => _accountRun(() async {
+        final u = await acc.accountRename(serverUrl(), _accountToken!, username.trim());
+        _storeAccount(_accountToken!, u);
+      });
+
+  /// null = nome livre. Sem internet devolve null (o cadastro confere de novo).
+  Future<String?> accountCheckUsername(String username) async {
+    try {
+      return await acc.accountCheckUsername(serverUrl(), username.trim());
+    } on acc.AccountError {
+      return null;
+    }
+  }
+
+  /// Sai da conta neste aparelho (o nome fica, para continuar jogando como convidado).
+  Future<void> accountSignOut() async {
+    final tok = _accountToken;
+    _clearAccount();
+    notifyListeners();
+    if (tok != null) {
+      try {
+        await acc.accountLogout(serverUrl(), tok);
+      } catch (_) {} // sem internet: o token vence sozinho no servidor
+    }
+  }
+
+  /// Só para as fotos de tela: entra numa conta sem servidor.
+  @visibleForTesting
+  void debugSetAccount(acc.AccountUser? u, {String? pendingEmail}) {
+    account = u;
+    _accountToken = u == null ? null : 'teste';
+    accountPendingEmail = pendingEmail;
+    accountResendAt = u == null ? null : DateTime.now().add(const Duration(seconds: 42));
+    notifyListeners();
+  }
+
   void setHoverInfoTerr(int? t) {
     if (hoverInfoTerr == t) return;
     hoverInfoTerr = t;
@@ -530,6 +717,7 @@ class AppController extends ChangeNotifier {
     challengeEndReason = '';
     challengeStarsEarned = 0;
     challengeServerRank = null;
+    challengeNeedsAccount = false;
     challengeSubmitRanking = List<DailyRankEntry>.from(dailySnapshot?.ranking ?? const []);
     challengeResultSubmitted = false;
     _challengeStartedMs = DateTime.now().millisecondsSinceEpoch;
@@ -854,7 +1042,8 @@ class AppController extends ChangeNotifier {
       immediate: !netOnline,
     );
 
-    if (netOnline && !challengeResultSubmitted) {
+    challengeNeedsAccount = netOnline && !signedIn && status.won;
+    if (netOnline && signedIn && !challengeResultSubmitted) {
       challengeResultSubmitted = true;
       final name = cleanName(savedName).isNotEmpty ? cleanName(savedName) : 'Comandante';
       unawaited(
@@ -870,7 +1059,7 @@ class AppController extends ChangeNotifier {
           'armiesLost': _challengeArmiesLost,
           'ordersUsed': _challengeOrdersUsed,
           'durationSec': durSec,
-        }).then((res) {
+        }, accountToken: _accountToken).then((res) {
           final rank = (res['rank'] as num?)?.toInt();
           final rawEntries = (res['entries'] as List<dynamic>? ?? const []);
           final parsed = [for (final e in rawEntries) DailyRankEntry.fromJson(e as Map<String, dynamic>)];
@@ -1225,6 +1414,7 @@ class AppController extends ChangeNotifier {
 
   void updateSeatName(int index, String raw) {
     if (online != null) return;
+    if (index == 0 && (relayCode != null || relayStarting) && signedIn) return; // na mesa pela internet, o seu nome é o da conta
     if (index < 0 || index >= seats.length) return;
     final clean = cleanName(raw);
     if (clean.isEmpty) return;
@@ -1462,6 +1652,11 @@ class AppController extends ChangeNotifier {
     if (!netOnline) {
       showToast('Sem internet: abrir sala por código precisa de conexão.', 4000);
       return;
+    }
+    if (!_onlineGate()) return; // mesa pela internet: quem abre também joga com o nome da conta
+    if (seats.isNotEmpty && seats[0].ctrl == 'local') {
+      seats[0].name = uniqueName(onlineName, seats, (x) => x.name, self: seats[0]);
+      _broadcastLobby();
     }
     SoundPlayer.unlock();
     _relayRetryTimer?.cancel();
@@ -2304,6 +2499,7 @@ class AppController extends ChangeNotifier {
 
   void openRoomsBrowser() {
     SoundPlayer.unlock();
+    if (!_onlineGate()) return;
     screen = AppScreen.rooms;
     roomsError = null;
     notifyListeners();
@@ -2319,9 +2515,8 @@ class AppController extends ChangeNotifier {
   }
 
   void createOnlineRoom(String playerName, {bool isPublic = true, String? pass}) {
-    final nm = cleanName(playerName);
-    final finalName = nm.isNotEmpty ? nm : 'Jogador';
-    savePlayerName(finalName);
+    if (!_onlineGate()) return;
+    final finalName = onlineName;
     final cleanP = pass != null ? _cleanRoomPass(pass) : '';
     _connectOnlineQuery(
       'create=1',
@@ -2334,9 +2529,8 @@ class AppController extends ChangeNotifier {
   }
 
   void startQuickMatch(String playerName) {
-    final nm = cleanName(playerName);
-    final finalName = nm.isNotEmpty ? nm : 'Jogador';
-    savePlayerName(finalName);
+    if (!_onlineGate()) return;
+    final finalName = onlineName;
     _connectOnlineQuery(
       'quick=1',
       host: true,
@@ -2359,9 +2553,8 @@ class AppController extends ChangeNotifier {
       showToast('Digite o código de 5 letras ou cole o link da sala.');
       return;
     }
-    final nm = cleanName(playerName);
-    final finalName = nm.isNotEmpty ? nm : 'Convidado';
-    if (!watchOnly) savePlayerName(finalName);
+    if (!_onlineGate()) return;
+    final finalName = onlineName;
     final srv = serverUrl();
     final tok = token ?? _loadRoomToken(srv, cleanCode);
     final q = StringBuffer('room=${Uri.encodeQueryComponent(cleanCode)}');
@@ -2458,12 +2651,14 @@ class AppController extends ChangeNotifier {
             'name': name,
             if (ses.token != null) 'token': ses.token,
             if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+            if (!isLan && _accountToken != null) 'acc': _accountToken,
           });
         } else {
           link.send({
             't': 'hello',
             'name': name,
             if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+            if (!isLan && _accountToken != null) 'acc': _accountToken,
           });
         }
         if (ses.code != null && !ses.lan) {
@@ -2522,6 +2717,7 @@ class AppController extends ChangeNotifier {
           'name': ses.name,
           'token': ?tok,
           if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
+          if (!ses.lan && _accountToken != null) 'acc': _accountToken,
         });
         notifyListeners();
       },
@@ -2625,6 +2821,7 @@ class AppController extends ChangeNotifier {
       'name': ses?.name ?? (savedName.isNotEmpty ? savedName : 'Convidado'),
       if (ses?.token != null) 'token': ses!.token,
       'pass': clean,
+      if (ses != null && !ses.lan && _accountToken != null) 'acc': _accountToken,
     });
   }
 
@@ -2680,6 +2877,11 @@ class AppController extends ChangeNotifier {
     }
     if (t == 'gone') {
       final m = msg['m'] as String? ?? 'Sala encerrada.';
+      if (msg['auth'] == true) {
+        // o servidor não aceitou a conta (sessão vencida ou sem conta): confere e pede para entrar
+        unawaited(refreshAccount());
+        accountPrompt = m;
+      }
       if (online != null) {
         online!.gone = true;
         AppStorage.instance.remove('estandarte.online');
@@ -4452,6 +4654,7 @@ class AppController extends ChangeNotifier {
     challengeEndReason = '';
     challengeStarsEarned = 0;
     challengeServerRank = null;
+    challengeNeedsAccount = false;
     challengeSubmitRanking = [];
     challengeResultSubmitted = false;
     _challengeRunId = null;
