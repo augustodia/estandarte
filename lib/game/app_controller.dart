@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/map_data.dart';
 import '../core/names.dart';
 import '../engine/game_engine.dart';
+import '../net/account_api.dart' as acc;
 import '../net/online_client.dart';
 import '../net/telemetry.dart';
 import '../platform/lan_host.dart';
@@ -252,8 +253,10 @@ class AppController extends ChangeNotifier {
       optSpy = savedCfg['spy'] == true;
     }
 
+    _loadAccount();
     _unsubConn = WebEnv.listenConnectivity((on) {
       netOnline = on;
+      if (on) unawaited(refreshAccount());
       notifyListeners();
     });
     _unsubVis = WebEnv.listenVisibility((hidden) {
@@ -399,6 +402,117 @@ class AppController extends ChangeNotifier {
         'estandarte.name',
         clean.length > 14 ? clean.substring(0, 14) : clean,
       );
+    }
+  }
+
+  // ── Conta ────────────────────────────────────────────────────────────────────
+  // Opcional: sem conta, tudo funciona igual (convidado, mesa local, rede de casa).
+  // Com conta, o nome vem dela e o desafio do dia vale em qualquer aparelho.
+  static const _kAccToken = 'ultimato.account.token';
+  static const _kAccUser = 'ultimato.account.user';
+
+  acc.AccountUser? account;
+  String? _accountToken;
+  bool accountBusy = false;
+
+  bool get signedIn => account != null && _accountToken != null;
+
+  void _loadAccount() {
+    _accountToken = AppStorage.instance.getString(_kAccToken);
+    final u = _readJsonStorage(_kAccUser);
+    account = _accountToken != null && u != null ? acc.AccountUser.fromJson(u) : null;
+    if (account == null) _accountToken = null;
+    if (netOnline) unawaited(refreshAccount());
+  }
+
+  void _storeAccount(String token, acc.AccountUser u) {
+    _accountToken = token;
+    account = u;
+    AppStorage.instance.setString(_kAccToken, token);
+    AppStorage.instance.setString(_kAccUser, jsonEncode(u.toJson()));
+    savePlayerName(u.displayName);
+  }
+
+  void _clearAccount() {
+    _accountToken = null;
+    account = null;
+    AppStorage.instance.remove(_kAccToken);
+    AppStorage.instance.remove(_kAccUser);
+  }
+
+  /// Só para as fotos de tela: entra numa conta sem servidor.
+  @visibleForTesting
+  void debugSetAccount(acc.AccountUser? u) {
+    account = u;
+    _accountToken = u == null ? null : 'teste';
+    notifyListeners();
+  }
+
+  /// Confere a sessão guardada. Sem internet, mantém a conta como estava.
+  Future<void> refreshAccount() async {
+    final tok = _accountToken;
+    if (tok == null) return;
+    try {
+      final u = await acc.accountMe(serverUrl(), tok);
+      if (_accountToken != tok) return;
+      _storeAccount(tok, u);
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) _clearAccount();
+    }
+    notifyListeners();
+  }
+
+  /// Cria a conta e entra. Devolve a mensagem de erro, ou null se deu certo.
+  Future<String?> accountSignUp(String username, String password, String displayName) =>
+      _accountCall(() => acc.accountRegister(serverUrl(), username.trim(), password, displayName.trim()));
+
+  Future<String?> accountSignIn(String username, String password) =>
+      _accountCall(() => acc.accountLogin(serverUrl(), username.trim(), password));
+
+  Future<String?> _accountCall(Future<acc.AccountSession> Function() run) async {
+    if (accountBusy) return null;
+    accountBusy = true;
+    notifyListeners();
+    try {
+      final s = await run();
+      _storeAccount(s.token, s.user);
+      return null;
+    } on acc.AccountError catch (e) {
+      return e.message;
+    } finally {
+      accountBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Troca o nome no jogo da conta. Devolve a mensagem de erro, ou null.
+  Future<String?> accountRename(String displayName) async {
+    final tok = _accountToken;
+    if (tok == null || accountBusy) return null;
+    accountBusy = true;
+    notifyListeners();
+    try {
+      final u = await acc.accountRename(serverUrl(), tok, displayName.trim());
+      _storeAccount(tok, u);
+      return null;
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized) _clearAccount();
+      return e.message;
+    } finally {
+      accountBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Sai da conta neste aparelho (o nome fica, para continuar jogando como convidado).
+  Future<void> accountSignOut() async {
+    final tok = _accountToken;
+    _clearAccount();
+    notifyListeners();
+    if (tok != null) {
+      try {
+        await acc.accountLogout(serverUrl(), tok);
+      } catch (_) {} // sem internet: o token vence sozinho no servidor
     }
   }
 
@@ -870,7 +984,7 @@ class AppController extends ChangeNotifier {
           'armiesLost': _challengeArmiesLost,
           'ordersUsed': _challengeOrdersUsed,
           'durationSec': durSec,
-        }).then((res) {
+        }, accountToken: _accountToken).then((res) {
           final rank = (res['rank'] as num?)?.toInt();
           final rawEntries = (res['entries'] as List<dynamic>? ?? const []);
           final parsed = [for (final e in rawEntries) DailyRankEntry.fromJson(e as Map<String, dynamic>)];

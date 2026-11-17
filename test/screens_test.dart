@@ -10,6 +10,8 @@ import 'package:estandarte/core/map_data.dart';
 import 'package:estandarte/engine/game_engine.dart';
 import 'package:estandarte/game/app_controller.dart';
 import 'package:estandarte/game/fx_models.dart';
+import 'package:estandarte/net/account_api.dart';
+import 'package:estandarte/ui/account_sheet.dart';
 import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
 import 'package:estandarte/ui/daily_screen.dart';
@@ -103,6 +105,22 @@ void main() {
       // início
       await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_$tag');
+
+      // conta: entrar, criar, e o início com a conta
+      final homeCtx = tester.element(find.byType(HomeScreen));
+      showAccountSheet(homeCtx, ctrl);
+      await _shot(tester, 'account_$tag');
+      Navigator.of(homeCtx, rootNavigator: true).pop();
+      showAccountSheet(homeCtx, ctrl, startOnSignUp: true);
+      await _shot(tester, 'account_new_$tag');
+      Navigator.of(homeCtx, rootNavigator: true).pop();
+      ctrl.debugSetAccount(const AccountUser(id: 1, username: 'luiz_97', displayName: 'Luiz'));
+      await _shot(tester, 'home_acct_$tag');
+      showAccountSheet(homeCtx, ctrl);
+      await _shot(tester, 'account_in_$tag');
+      Navigator.of(homeCtx, rootNavigator: true).pop();
+      ctrl.debugSetAccount(null);
+      await tester.pump(const Duration(milliseconds: 400));
 
       // teclado aberto: o navegador encolhe a altura útil (interactive-widget=resizes-content)
       final kbSize = Size(size.width, size.height * (size.width > size.height ? 0.45 : 0.55));
