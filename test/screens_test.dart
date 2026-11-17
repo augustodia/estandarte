@@ -201,7 +201,12 @@ void main() {
       for (var k = 0; k < 4000 && ctrl.view?['phase'] == 'play'; k++) {
         await tester.pump(const Duration(seconds: 2));
       }
-      if (ctrl.view?['phase'] != 'play') await _shot(tester, 'victory_$tag');
+      if (ctrl.view?['phase'] != 'play') {
+        for (var k = 0; k < 12; k++) {
+          await tester.pump(const Duration(seconds: 1));
+        }
+        await _shot(tester, 'victory_$tag');
+      }
 
       // tutorial
       await tester.pumpWidget(const SizedBox());
