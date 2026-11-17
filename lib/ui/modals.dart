@@ -174,11 +174,7 @@ class _DomainMeter extends StatelessWidget {
         builder: (context, val, _) => FractionallySizedBox(
           widthFactor: val,
           child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [color, Color.lerp(color, Colors.white, 0.35)!],
-              ),
-            ),
+            color: color,
           ),
         ),
       ),
@@ -278,24 +274,13 @@ void showCardsModal(BuildContext context, AppController ctrl) {
                     duration: const Duration(milliseconds: 140),
                     transform: Matrix4.translationValues(0, isOn ? -5 : 0, 0),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFFE8ECF1), Color(0xFFE8ECF1)],
-                      ),
+                      color: AppColors.ink,
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: isOn ? AppColors.gold : const Color(0xFF9AA4B2),
                         width: isOn ? 2.4 : 1.4,
                       ),
-                      boxShadow: isOn
-                          ? const [
-                              BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 8)),
-                              BoxShadow(color: Color(0x66F2EEE6), spreadRadius: 2),
-                            ]
-                          : const [
-                              BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2)),
-                            ],
+                      boxShadow: isOn ? AppColors.edgeShadows : null,
                     ),
                     child: Material(
                       color: Colors.transparent,

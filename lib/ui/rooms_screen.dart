@@ -709,9 +709,7 @@ class _RoomTabButton extends StatelessWidget {
           color: active ? AppColors.panel2 : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
           border: active ? Border.all(color: const Color(0xFF7D8796)) : null,
-          boxShadow: active
-              ? const [BoxShadow(color: Color(0x88000000), blurRadius: 3, offset: Offset(0, 1))]
-              : null,
+          
         ),
         alignment: Alignment.center,
         child: Row(

@@ -241,7 +241,6 @@ class _GameScreenState extends State<GameScreen> {
                         color: AppColors.obsidian.withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF9AA4B2)),
-                        boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 12)],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -424,9 +423,7 @@ class _GameScreenState extends State<GameScreen> {
                           color: AppColors.obsidian.withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: AppColors.brass),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
-                          ],
+                          boxShadow: AppColors.edgeShadows,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -550,20 +547,9 @@ class _HudPanel extends StatelessWidget {
               height: layout.wide ? 50 : (layout.land ? 36 : 38),
               padding: EdgeInsets.symmetric(horizontal: layout.wide ? 6 : (layout.land ? 6 : 8)),
               decoration: BoxDecoration(
-                gradient: callPulse
-                    ? const LinearGradient(
-                        colors: [Color(0xFF3A4452), Color(0xFF1A2029)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      )
-                    : const LinearGradient(
-                        colors: [Color(0xFF262E39), Color(0xFF1A2029)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
+                color: callPulse ? AppColors.panel2 : Colors.transparent,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: callPulse ? AppColors.gold : const Color(0xFF3A4452)),
-                boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 4, offset: Offset(0, 2))],
               ),
               child: layout.wide
                   ? Stack(
@@ -949,20 +935,12 @@ class _SidePanel extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 5),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: isNow ? null : const Color(0x880B0F14),
-            gradient: isNow
-                ? LinearGradient(
-                    colors: [
-                      Color.lerp(const Color(0xFF0B0F14), col, 0.22)!,
-                      const Color(0xD80B0F14),
-                    ],
-                  )
-                : null,
+            color: isNow ? AppColors.panel2 : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isWon
                   ? AppColors.gold
-                  : (isNow ? col.withValues(alpha: 0.72) : AppColors.line),
+                  : (isNow ? AppColors.glassBorder : AppColors.line),
             ),
           ),
           child: Stack(
@@ -976,12 +954,8 @@ class _SidePanel extends StatelessWidget {
                   child: FractionallySizedBox(
                     widthFactor: pct,
                     child: Container(
-                      height: 2.2,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [col, Color.lerp(col, Colors.white, 0.25)!],
-                        ),
-                      ),
+                      height: 2,
+                      color: col,
                     ),
                   ),
                 ),
@@ -1279,7 +1253,6 @@ class _TurnRingButton extends StatelessWidget {
                   height: size,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 4))],
                   ),
                   child: CustomPaint(
                     painter: _TurnRingPainter(
@@ -1552,10 +1525,7 @@ class _FlashOverlay extends StatelessWidget {
               gradient: AppColors.glassGradient,
               borderRadius: BorderRadius.circular(isMini ? 5 : 6),
               border: Border.all(color: banner.color, width: isMini ? 1 : 1.5),
-              boxShadow: [
-                const BoxShadow(color: Color(0xBB000000), blurRadius: 36, offset: Offset(0, 10)),
-                if (!isMini) BoxShadow(color: banner.color.withValues(alpha: 0.30), blurRadius: 30),
-              ],
+              boxShadow: AppColors.edgeShadows,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2378,7 +2348,6 @@ class _BottomActionBar extends StatelessWidget {
             color: AppColors.obsidian.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: curCol.withValues(alpha: 0.55)),
-            boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 16, offset: Offset(0, 6))],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -2627,14 +2596,9 @@ class _StepperWidget extends StatelessWidget {
       height: height,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A2029), Color(0xFF0B0F14)],
-        ),
+        color: AppColors.deep,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.line),
-        boxShadow: const [BoxShadow(color: Color(0x77000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -3031,10 +2995,7 @@ class _VictoryOverlayState extends State<_VictoryOverlay> with SingleTickerProvi
                   color: AppColors.panel,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: wCol, width: 2),
-                  boxShadow: [
-                    BoxShadow(color: wCol.withValues(alpha: 0.22), spreadRadius: 6),
-                    const BoxShadow(color: Color(0xCC000000), blurRadius: 60, offset: Offset(0, 20)),
-                  ],
+                  boxShadow: AppColors.edgeShadows,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -3486,10 +3447,7 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
               color: AppColors.panel,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: accent, width: 2),
-              boxShadow: [
-                BoxShadow(color: accent.withValues(alpha: 0.2), spreadRadius: 5),
-                const BoxShadow(color: Color(0xCC000000), blurRadius: 55, offset: Offset(0, 18)),
-              ],
+              boxShadow: AppColors.edgeShadows,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3682,7 +3640,6 @@ class _MapLensBar extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AppColors.line),
-          boxShadow: const [BoxShadow(color: Color(0xAA000000), blurRadius: 10, offset: Offset(0, 3))],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

@@ -238,13 +238,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF262E39), Color(0xFF12171E)],
-          ),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: const Color(0xFF9AA4B2), width: 1.0),
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.line),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1151,19 +1147,12 @@ class _SeatTile extends StatelessWidget {
     }
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 54),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: BoxConstraints(minHeight: estCompact(context) ? 44 : 52),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        gradient: isMe
-            ? const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF262E39), Color(0xFF12171E)],
-              )
-            : AppColors.glassGradient,
+        color: isMe ? AppColors.panel2 : AppColors.panel,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: isMe ? const Color(0xFF9AA4B2) : AppColors.line),
-        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(0, 3))],
+        border: Border.all(color: isMe ? AppColors.glassBorder : AppColors.line),
       ),
       child: Row(
         children: [

@@ -279,9 +279,7 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
                           color: AppColors.obsidian.withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: AppColors.brass),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0xBB000000), blurRadius: 20, offset: Offset(0, 6)),
-                          ],
+                          boxShadow: AppColors.edgeShadows,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
