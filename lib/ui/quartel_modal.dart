@@ -240,7 +240,7 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                   report(r),
                   note(
                     r.texts.length > 1
-                        ? 'Um dos dois é falso, e o relatório não diz qual — observe o que ${nameOf(spied)} faz no mapa ou espione de novo para confirmar o verdadeiro. '
+                        ? 'Um dos dois é falso, e o relatório não diz qual: observe o que ${nameOf(spied)} faz no mapa. '
                             'Seus ataques contra ${nameOf(spied)} neste turno somam +1 ao maior dado. O relatório fica guardado no Quartel, e só você o lê.'
                         : 'Objetivo de ${nameOf(spied)} confirmado! '
                             'Seus ataques contra ${nameOf(spied)} neste turno somam +1 ao maior dado. O relatório fica guardado no Quartel, e só você o lê.',
@@ -338,7 +338,10 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
               ),
               const SizedBox(height: 4),
               sectionTitle('Ordens abertas'),
-              note('Abertas para todos. Cada jogador compra no máximo uma por turno; a comprada dá lugar a outra.'),
+              note(hq.leaving.isNotEmpty
+                  ? 'Abertas para todos. Cada jogador compra no máximo uma por turno; a comprada dá lugar a outra. '
+                      'A cada rodada a mais antiga sai e entra uma nova.'
+                  : 'Abertas para todos. Cada jogador compra no máximo uma por turno.'),
               const SizedBox(height: 8),
               for (final o in hq.orders)
                 card(
@@ -365,6 +368,10 @@ void showQuartelModal(BuildContext context, AppController ctrl) {
                         costTag(o.cost),
                       ],
                     ),
+                    if (o.key == hq.leaving) ...[
+                      const SizedBox(height: 6),
+                      Text('SAI NA PRÓXIMA RODADA', style: AppText.label(size: 11, color: AppColors.medal)),
+                    ],
                     const SizedBox(height: 5),
                     note(
                       o.key == 'nuke'

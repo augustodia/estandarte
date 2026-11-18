@@ -675,8 +675,8 @@ void showExtrasModal(BuildContext context, AppController ctrl) {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final b in const [
-                  '1ª espionagem no alvo: revela 2 objetivos possíveis (1 verdadeiro e 1 falso).',
-                  '2ª espionagem no mesmo alvo: confirma o objetivo verdadeiro com certeza.',
+                  'Custa 3 medalhas e revela 2 objetivos possíveis do alvo: 1 verdadeiro e 1 falso, sem dizer qual.',
+                  'Espionar de novo o mesmo alvo não revela mais nada: o objetivo nunca é confirmado.',
                   'Ataques contra o alvo espionado no turno somam +1 ao maior dado (até 6).',
                   'Os relatórios ficam guardados no Quartel e só você lê.',
                 ])
@@ -1816,11 +1816,11 @@ void showRulesModal(BuildContext context, AppController ctrl) {
                   ),
                   _RuleBullet(
                     'Ordens abertas',
-                    '3 ordens ficam disponíveis para todos (Ponte aérea, Trincheira, Sabotagem, Espionagem e Ogiva). Cada jogador usa no máximo uma por turno e outra entra no lugar.',
+                    '3 ordens ficam disponíveis para todos (Ponte aérea, Trincheira, Sabotagem, Espionagem e Ogiva). Cada jogador usa no máximo uma por turno e outra entra no lugar. A cada rodada a mais antiga sai e entra uma que estava fora.',
                   ),
                   _RuleBullet(
                     'Espionagem',
-                    '1ª vez revela 2 objetivos possíveis (1 verdadeiro e 1 falso); 2ª vez confirma o real, além de dar +1 ao maior dado contra o alvo no turno.',
+                    'revela 2 objetivos possíveis do alvo (1 verdadeiro e 1 falso, sem dizer qual) e dá +1 ao maior dado contra ele no turno. Espionar de novo não confirma nada.',
                   ),
                 ]),
                 const EstSectionTag('CARTAS DE TERRITÓRIO (CLÁSSICO)'),

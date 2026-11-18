@@ -52,7 +52,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     (
       'spy',
       'Espionagem',
-      'Ordem do Quartel (2 medalhas): a 1ª revela 2 objetivos possíveis do alvo; a 2ª confirma o verdadeiro. Dá +1 no maior dado de ataque contra ele no turno.',
+      'Ordem do Quartel (3 medalhas): revela 2 objetivos possíveis do alvo, um deles falso, sem dizer qual. Dá +1 no maior dado de ataque contra ele no turno.',
     ),
     (
       'events',
