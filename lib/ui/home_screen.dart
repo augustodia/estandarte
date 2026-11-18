@@ -11,8 +11,10 @@ import 'theme.dart';
 
 /// Tela inicial (sistema "Centro de Operações").
 ///
-/// Deitado: coluna de comando à esquerda (marca, um único botão claro, lista de modos, nome) e o mapa à direita,
-/// com o desafio do dia num cartão flutuante. Em pé: tudo numa coluna. Sem animação de fundo: o mapa é estático.
+/// Os modos se organizam pelo tempo que a pessoa tem, numa tabela de três linhas:
+/// AGORA (partida rápida e salas online), NO SEU TEMPO (correspondência, 24 h por jogada) e NA MESA (local, sem
+/// internet). A conta é um selo no canto; o tutorial e as regras ficam no rodapé. Deitado: a tabela numa coluna à
+/// esquerda e o mapa à direita, com o desafio do dia flutuando. Em pé: tudo numa coluna.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.ctrl});
 
@@ -23,29 +25,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final TextEditingController _nameCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameCtrl = TextEditingController(text: widget.ctrl.account?.username ?? widget.ctrl.savedName);
-    widget.ctrl.addListener(_syncAccountName);
-  }
-
-  // Com conta, o nome vem dela (entrar em outro aparelho ou trocar o nome reflete aqui).
-  void _syncAccountName() {
-    final a = widget.ctrl.account;
-    if (a != null && _nameCtrl.text != a.username) _nameCtrl.text = a.username;
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    widget.ctrl.removeListener(_syncAccountName);
-    _nameCtrl.dispose();
-    super.dispose();
-  }
-
   AppController get c => widget.ctrl;
 
   @override
@@ -64,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IgnorePointer(
               child: RepaintBoundary(
                 child: Opacity(
-                  opacity: landscape ? 1 : 0.35,
+                  opacity: landscape ? 1 : 0.3,
                   child: CustomPaint(painter: _HomeMapPainter(c.mapData)),
                 ),
               ),
@@ -85,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   right: false,
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(compact ? 20 : 28, compact ? 16 : 28, compact ? 20 : 28, compact ? 10 : 18),
-                    child: _commandColumn(compact: compact, withDaily: false, roomy: false),
+                    child: _commandColumn(dense: compact, portrait: false),
                   ),
                 ),
               ),
@@ -96,12 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: EdgeInsets.all(compact ? 14 : 22),
                 child: Stack(
                   children: [
-                    Positioned(right: 0, top: 0, child: _howToPlay()),
+                    Positioned(right: 0, top: 0, child: _AccountSeal(ctrl: c, onTap: _openAccount)),
                     Positioned(
                       right: 0,
                       bottom: 0,
                       width: min(300.0, sz.width - _panelWidth(sz) - 40),
-                      child: _DailyCard(ctrl: c, compact: compact, onTap: _openDaily, floating: true),
+                      child: _DailyCard(ctrl: c, compact: compact, onTap: c.openDailyScreen, floating: true),
                     ),
                   ],
                 ),
@@ -111,10 +90,10 @@ class _HomeScreenState extends State<HomeScreen> {
             SafeArea(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 36, 24, 20),
-                    child: _commandColumn(compact: compact, withDaily: true, roomy: true),
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                    child: _commandColumn(dense: false, portrait: true),
                   ),
                 ),
               ),
@@ -124,233 +103,159 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  double _panelWidth(Size sz) => sz.width >= 1100 ? 400 : (sz.width * 0.42).clamp(300.0, 360.0);
+  double _panelWidth(Size sz) => sz.width >= 1100 ? 420 : (sz.width * 0.44).clamp(320.0, 380.0);
 
-  void _openDaily() {
-    c.savePlayerName(_nameCtrl.text);
-    c.openDailyScreen();
-  }
+  void _openAccount() => showAccountSheet(context, c);
 
-  Widget _howToPlay() => EstButton(
-        small: true,
-        icon: EstIconKind.book,
-        label: 'Como jogar',
-        onPressed: () => showRulesModal(context, c),
-      );
-
-  Widget _commandColumn({required bool compact, required bool withDaily, required bool roomy}) {
-    // Em pé sobra altura: tamanhos cheios e respiro entre os blocos. Deitado, segue enxuto.
-    final dense = compact && !roomy;
-    final gapHead = roomy ? 32.0 : (compact ? 14.0 : 22.0);
-    final gapName = roomy ? 14.0 : (compact ? 8.0 : 12.0);
-    final gapList = roomy ? 22.0 : (compact ? 8.0 : 14.0);
-    final items = <Widget>[
+  Widget _commandColumn({required bool dense, required bool portrait}) {
+    final resume = <Widget>[
       if (c.hasSavedGuest)
-        _ModeRow(
+        _ResumeRow(
           title: 'Voltar à partida online',
-          sub: 'Você saiu de uma partida que ainda está em curso',
-          compact: dense,
-          strong: true,
+          sub: 'Ainda em curso',
+          dense: dense,
           onTap: c.resumeSavedGuest,
         ),
       if (c.hasSavedLocal)
-        _ModeRow(
+        _ResumeRow(
           title: 'Continuar partida salva',
           sub: 'Mesa local deste aparelho',
-          compact: dense,
-          strong: true,
+          dense: dense,
           onTap: c.resumeSavedLocal,
         ),
-      _ModeRow(
-        title: 'Mesa local',
-        sub: LanHost.supported ? 'Bots, rede local ou código de sala' : 'Bots, QR ou código de sala',
-        compact: dense,
-        onTap: () => c.startLocalSetup(hostName: _nameCtrl.text),
-      ),
-      _ModeRow(
-        title: 'Salas online',
-        sub: 'Escolha uma mesa ou entre com código',
-        compact: dense,
-        onTap: () {
-          c.savePlayerName(_nameCtrl.text);
-          c.openRoomsBrowser();
-        },
-      ),
-      _ModeRow(
-        title: 'Tutorial',
-        sub: 'Aprenda o básico jogando',
-        compact: dense,
-        onTap: () => c.startTutorial(playerName: _nameCtrl.text),
-      ),
-      if (withDaily) ...[
-        SizedBox(height: roomy ? 28 : Space.x3),
-        _DailyCard(ctrl: c, compact: dense, onTap: _openDaily, floating: false),
-        SizedBox(height: roomy ? 16 : Space.x2),
-        Align(alignment: Alignment.centerLeft, child: _howToPlay()),
-      ],
     ];
+
+    final ledger = _PaceLedger(ctrl: c, dense: dense);
 
     final head = <Widget>[
-        EstWordmark(size: dense ? 28 : 36),
-        const SizedBox(height: 6),
-        Text(
-          'ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(),
-          style: AppText.label(size: 11),
-        ),
-        SizedBox(height: gapHead),
-        _nameField(dense),
-        SizedBox(height: gapName),
-        _QuickMatchButton(compact: dense, onTap: () => c.startQuickMatch(_nameCtrl.text)),
-        SizedBox(height: gapList),
-    ];
-    final footer = <Widget>[
-        if (!c.netOnline)
-          Padding(
-            padding: const EdgeInsets.only(top: Space.x2),
-            child: Text('SEM INTERNET · SÓ MESA LOCAL', style: AppText.label(size: 11, color: AppColors.mute)),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EstWordmark(size: dense ? 28 : 36),
+                const SizedBox(height: 6),
+                Text('ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(), style: AppText.label(size: 11)),
+              ],
+            ),
           ),
+          if (portrait) _AccountSeal(ctrl: c, onTap: _openAccount),
+        ],
+      ),
+      SizedBox(height: portrait ? 36 : (dense ? 16 : 30)),
+      for (final r in resume) ...[r, SizedBox(height: dense ? 8 : 10)],
     ];
 
+    final footer = _Footer(ctrl: c, dense: dense);
+
     return LayoutBuilder(builder: (context, box) {
-      // Pouca altura (teclado aberto no celular deitado): tudo rola junto, com o nome visível no topo.
-      if (box.maxHeight < 340) {
+      if (portrait) {
         return SingleChildScrollView(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...head, ...items, ...footer]),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: box.maxHeight),
+            child: IntrinsicHeight(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ...head,
+                  ledger,
+                  const SizedBox(height: 28),
+                  _DailyStrip(ctrl: c, onTap: c.openDailyScreen),
+                  const Spacer(),
+                  const SizedBox(height: 20),
+                  footer,
+                ],
+              ),
+            ),
+          ),
         );
       }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ...head,
           Expanded(
             child: SingleChildScrollView(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...head, ledger]),
             ),
           ),
-          ...footer,
+          SizedBox(height: dense ? 6 : 12),
+          footer,
         ],
       );
     });
   }
+}
 
-  /// Nome do jogador: campo com rótulo, logo abaixo da marca (fica acima do teclado e é o primeiro passo).
-  Widget _nameField(bool compact) {
-    final acct = c.account;
-    if (acct != null) return _accountRow(compact, acct.username, c.accountNeedsConfirm);
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: _nameCtrl,
-      builder: (context, value, _) {
-        final empty = value.text.trim().isEmpty;
-        return Container(
-          height: compact ? 42 : 48,
-          padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
-          decoration: BoxDecoration(
-            color: AppColors.panel,
-            borderRadius: BorderRadius.circular(Radii.sm),
-            border: Border.all(color: empty ? AppColors.ink : AppColors.glassBorder),
-          ),
-          child: Row(
-            children: [
-              Text('SEU NOME', style: AppText.label(size: 12, color: empty ? AppColors.ink : AppColors.faint)),
-              Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
-              Expanded(
-                child: TextField(
-                  controller: _nameCtrl,
-                  maxLength: 14,
-                  onChanged: c.savePlayerName,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.done,
-                  scrollPadding: const EdgeInsets.all(80),
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
-                  decoration: const InputDecoration(
-                    hintText: 'Como os outros vão te ver',
-                    counterText: '',
-                    filled: false,
-                    isDense: true,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-              Container(width: 1, height: 18, margin: const EdgeInsets.only(left: 6), color: AppColors.line),
-              _SignInLink(onTap: () => showAccountSheet(context, c)),
-            ],
-          ),
-        );
-      },
-    );
-  }
+/// Os modos pelo tempo que você tem: uma coluna estreita com o ritmo e, ao lado, o que jogar.
+class _PaceLedger extends StatelessWidget {
+  const _PaceLedger({required this.ctrl, required this.dense});
 
-  /// Com conta: o nome é o da conta; tocar abre a conta. E-mail sem confirmar ganha um aviso.
-  Widget _accountRow(bool compact, String name, bool needsConfirm) {
-    return Material(
-      color: AppColors.panel,
-      borderRadius: BorderRadius.circular(Radii.sm),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.sm),
-        onTap: () => showAccountSheet(context, c),
-        child: Container(
-          height: compact ? 42 : 48,
-          padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Radii.sm),
-            border: Border.all(color: needsConfirm ? AppColors.medal : AppColors.glassBorder),
-          ),
-          child: Row(
-            children: [
-              Text('CONTA', style: AppText.label(size: 12)),
-              Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
-              Expanded(
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
-                ),
-              ),
-              if (needsConfirm)
-                Padding(
-                  padding: const EdgeInsets.only(left: Space.x2),
-                  child: Text('CONFIRMAR E-MAIL', style: AppText.label(size: 11.5, color: AppColors.medal)),
-                ),
-              const Icon(Icons.chevron_right, size: 18, color: AppColors.faint),
-            ],
-          ),
+  final AppController ctrl;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ctrl;
+    final yours = c.corrYourTurn;
+    final playing = c.corrGames.where((g) => g.playing).length;
+    final String corrSub;
+    if (!c.signedIn) {
+      corrSub = '24 h por jogada · avisamos por e-mail';
+    } else if (yours > 0) {
+      corrSub = yours == 1 ? 'Uma partida espera a sua jogada' : '$yours partidas esperam a sua jogada';
+    } else if (playing > 0) {
+      corrSub = playing == 1 ? '1 em andamento · vez dos outros' : '$playing em andamento · vez dos outros';
+    } else {
+      corrSub = '24 h por jogada · avisamos por e-mail';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _QuickMatchRow(dense: dense, onTap: () => c.startQuickMatch(c.onlineName)),
+        _LedgerRow(
+          pace: null,
+          title: 'Salas online',
+          sub: 'Mesas abertas ou entrar com código',
+          dense: dense,
+          small: true,
+          onTap: c.openRoomsBrowser,
         ),
-      ),
+        _LedgerRow(
+          pace: 'NO SEU\nTEMPO',
+          title: 'Correspondência',
+          sub: corrSub,
+          dense: dense,
+          badge: yours > 0 ? '$yours' : null,
+          onTap: c.openCorrScreen,
+        ),
+        _LedgerRow(
+          pace: 'NA MESA',
+          title: 'Mesa local',
+          sub: LanHost.supported ? 'Bots, rede local ou código · sem internet' : 'Bots, QR ou código · sem internet',
+          dense: dense,
+          onTap: () => c.startLocalSetup(),
+          last: true,
+        ),
+      ],
     );
   }
 }
 
-/// "Entrar" discreto no fim do campo de nome: conta é opcional.
-class _SignInLink extends StatelessWidget {
-  const _SignInLink({required this.onTap});
+const double _paceCol = 74;
+
+/// AGORA: a linha clara, o único botão claro da tela.
+class _QuickMatchRow extends StatelessWidget {
+  const _QuickMatchRow({required this.dense, required this.onTap});
+
+  final bool dense;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Radii.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Text('ENTRAR', style: AppText.label(size: 12, color: AppColors.ink)),
-      ),
-    );
-  }
-}
-
-/// O único botão claro da tela: a fila online.
-class _QuickMatchButton extends StatelessWidget {
-  const _QuickMatchButton({required this.compact, required this.onTap});
-
-  final bool compact;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
+    const dim = Color(0xFF59616D);
     return Material(
       color: AppColors.action,
       borderRadius: BorderRadius.circular(Radii.sm),
@@ -358,21 +263,30 @@ class _QuickMatchButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(Radii.sm),
         child: SizedBox(
-          height: compact ? 46 : 52,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'PARTIDA RÁPIDA',
-                    style: AppText.label(size: compact ? 17 : 19, color: AppColors.onAction, weight: FontWeight.w700)
-                        .copyWith(letterSpacing: 1.0),
-                  ),
+          height: dense ? 48 : 56,
+          child: Row(
+            children: [
+              SizedBox(
+                width: _paceCol,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: Space.x3),
+                  child: Text('AGORA', style: AppText.label(size: 11.5, color: dim, weight: FontWeight.w700)),
                 ),
-                Text('ONLINE · ~45 S', style: AppText.label(size: 12, color: const Color(0xFF4A525E))),
-              ],
-            ),
+              ),
+              Expanded(
+                child: Text(
+                  'PARTIDA RÁPIDA',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.label(size: dense ? 17 : 19, color: AppColors.onAction, weight: FontWeight.w700)
+                      .copyWith(letterSpacing: 1.0),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: Space.x3, left: Space.x2),
+                child: Text('~45 S', style: AppText.label(size: 12, color: dim)),
+              ),
+            ],
           ),
         ),
       ),
@@ -380,31 +294,51 @@ class _QuickMatchButton extends StatelessWidget {
   }
 }
 
-class _ModeRow extends StatelessWidget {
-  const _ModeRow({
+class _LedgerRow extends StatelessWidget {
+  const _LedgerRow({
+    required this.pace,
     required this.title,
     required this.sub,
+    required this.dense,
     required this.onTap,
-    required this.compact,
-    this.strong = false,
+    this.small = false,
+    this.badge,
+    this.last = false,
   });
 
+  final String? pace;
   final String title;
   final String sub;
+  final bool dense;
+  final bool small;
+  final String? badge;
+  final bool last;
   final VoidCallback onTap;
-  final bool compact;
-  final bool strong;
 
   @override
   Widget build(BuildContext context) {
+    final h = small ? (dense ? 42.0 : 48.0) : (dense ? 50.0 : 62.0);
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: compact ? 44 : 52,
-        padding: const EdgeInsets.symmetric(horizontal: Space.x1),
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
+        height: h,
+        decoration: BoxDecoration(
+          border: Border(
+            top: pace != null ? const BorderSide(color: AppColors.line) : BorderSide.none,
+            bottom: last ? const BorderSide(color: AppColors.line) : BorderSide.none,
+          ),
+        ),
         child: Row(
           children: [
+            SizedBox(
+              width: _paceCol,
+              child: pace == null
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.only(left: Space.x3),
+                      child: Text(pace!, style: AppText.label(size: 11.5).copyWith(height: 1.2)),
+                    ),
+            ),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -414,20 +348,230 @@ class _ModeRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppText.title(size: compact ? 15 : 18, color: strong ? AppColors.action : AppColors.ink),
+                    style: small
+                        ? const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)
+                        : AppText.title(size: dense ? 16 : 19),
                   ),
-                  const SizedBox(height: 1),
+                  SizedBox(height: small ? 1 : 2),
                   Text(
                     sub,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: AppColors.mute),
+                    style: TextStyle(fontSize: small ? 11.5 : 12, color: badge != null ? AppColors.ink : AppColors.mute),
                   ),
                 ],
               ),
             ),
+            if (badge != null)
+              Container(
+                constraints: const BoxConstraints(minWidth: 22),
+                height: 22,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(11)),
+                child: Text(badge!, style: AppText.number(size: 13, color: AppColors.onAction, weight: FontWeight.w700)),
+              ),
+            const SizedBox(width: Space.x2),
             const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.faint),
+            const SizedBox(width: Space.x1),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Partida guardada para retomar: aparece acima da tabela, com a cor de ação no título.
+class _ResumeRow extends StatelessWidget {
+  const _ResumeRow({required this.title, required this.sub, required this.dense, required this.onTap});
+
+  final String title;
+  final String sub;
+  final bool dense;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.panel,
+      borderRadius: BorderRadius.circular(Radii.sm),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        child: Container(
+          height: dense ? 42 : 48,
+          padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: AppColors.glassBorder),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: title, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink)),
+                    TextSpan(text: '  ·  $sub', style: const TextStyle(color: AppColors.mute)),
+                  ]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13.5),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.faint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Selo da conta: o nome (ou ENTRAR). E-mail sem confirmar ganha um ponto.
+class _AccountSeal extends StatelessWidget {
+  const _AccountSeal({required this.ctrl, required this.onTap});
+
+  final AppController ctrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = ctrl.account;
+    final warn = ctrl.accountNeedsConfirm;
+    return Material(
+      color: AppColors.deep,
+      borderRadius: BorderRadius.circular(Radii.sm),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        child: Container(
+          height: 36,
+          constraints: const BoxConstraints(maxWidth: 190),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: warn ? AppColors.medal : AppColors.glassBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EstIcon(EstIconKind.crest, size: 14, color: a == null ? AppColors.mute : AppColors.ink),
+              const SizedBox(width: 8),
+              Flexible(
+                child: a == null
+                    ? Text('ENTRAR', style: AppText.label(size: 13, color: AppColors.ink, weight: FontWeight.w700))
+                    : Text(
+                        a.username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                      ),
+              ),
+              if (warn) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(color: AppColors.medal, shape: BoxShape.circle),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rodapé: tutorial e regras. Para quem chega pela primeira vez, o tutorial vem na frente e aceso.
+class _Footer extends StatelessWidget {
+  const _Footer({required this.ctrl, required this.dense});
+
+  final AppController ctrl;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ctrl;
+    final fresh = c.isNewcomer;
+    Widget link(String label, VoidCallback onTap, {bool lit = false}) => InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(Radii.sm),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x2),
+            child: Text(label, style: AppText.label(size: 12.5, color: lit ? AppColors.ink : AppColors.mute)),
+          ),
+        );
+    return Row(
+      children: [
+        if (fresh) ...[
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(right: 6),
+            decoration: const BoxDecoration(color: AppColors.ink, shape: BoxShape.circle),
+          ),
+          link('PRIMEIRA VEZ? TUTORIAL', () => c.startTutorial(), lit: true),
+        ] else
+          link('TUTORIAL', () => c.startTutorial()),
+        Container(width: 1, height: 12, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
+        link('COMO JOGAR', () => showRulesModal(context, c)),
+        const Spacer(),
+        if (!c.netOnline) Text('SEM INTERNET', style: AppText.label(size: 11, color: AppColors.bad)),
+      ],
+    );
+  }
+}
+
+/// Desafio do dia em pé: uma faixa fina abaixo da tabela.
+class _DailyStrip extends StatelessWidget {
+  const _DailyStrip({required this.ctrl, required this.onTap});
+
+  final AppController ctrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = ctrl.dailySnapshot?.challenge;
+    final isHist = spec?.isHistorical == true || DateTime.now().weekday == DateTime.thursday;
+    final stars = ctrl.todayChallengeStars;
+    final title = spec?.title ?? (isHist ? 'Crônica de quinta' : 'Mesma partida para todos');
+    return Material(
+      color: AppColors.panel,
+      borderRadius: BorderRadius.circular(Radii.sm),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Radii.sm),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            children: [
+              Text((isHist ? 'QUINTA HISTÓRICA' : 'DESAFIO DO DIA'), style: AppText.label(size: 11)),
+              Container(width: 1, height: 14, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                ),
+              ),
+              for (var i = 0; i < 3; i++)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Icon(
+                    i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                    size: 15,
+                    color: AppColors.medal,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

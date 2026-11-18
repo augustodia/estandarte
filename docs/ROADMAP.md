@@ -53,10 +53,16 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
 - [x] **Contas por e-mail:** cadastro com e-mail confirmado por código (Brevo), nome de usuário único (ignora maiúsculas, acentos e letras parecidas), entrar por e-mail ou nome, trocar nome e e-mail, **esqueci a senha / trocar senha** por código.
 - [x] **Migração de convidado:** ao entrar numa conta pela primeira vez, as estrelas, a meta semanal e o Códice jogados como convidado vão para a conta (fica o melhor de cada dia/crônica) e passam a valer em qualquer aparelho.
 - [x] `/daily/submit` exige token: o ranking é das contas (selo de verificado com e-mail confirmado).
+- [x] **Correspondência (24 h por jogada):** partidas de dias, guardadas no Postgres (`async_games`), com e-mail de
+  "sua vez", prazo vencido passando a vez e bot assumindo depois de três prazos seguidos. Lista própria (sua vez,
+  vez dos outros, sala de espera, encerradas), convite por link `?partida=CÓDIGO`.
+- [x] **Início reorganizado pelo ritmo:** AGORA (partida rápida e salas), NO SEU TEMPO (correspondência) e NA MESA
+  (local, sem internet); conta num selo no canto, tutorial e regras no rodapé.
 
 ### O que falta fazer nesta fase
 - [ ] **Entrar com Google / Apple** (menos atrito no cadastro).
-- [ ] **Modo por Correspondência (Assíncrono — 24h por turno)** e **Lista de Amigos / Emotes Táticos**.
+- [ ] **Lista de Amigos / Emotes Táticos** (convidar amigos direto para a correspondência).
+- [ ] Notificação no aparelho (push) além do e-mail de "sua vez".
 - [ ] Recompensas cosméticas permanentes (brasões/insígnias das Quintas Históricas) ligadas à conta.
 
 ---
