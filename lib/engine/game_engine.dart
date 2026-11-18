@@ -79,7 +79,11 @@ class HqEval {
     required this.trenchBlocks,
     required this.airliftBlocks,
     required this.intel,
+    this.leaving = '',
   });
+
+  /// Ordem que sai da vitrine no começo da próxima rodada ('' se nada gira).
+  final String leaving;
 
   /// Relatórios de espionagem de quem está olhando (só ele os recebe).
   final List<HqIntel> intel;
@@ -120,6 +124,7 @@ class HqEval {
       sabotageBlocks: strMap('sabotageBlocks'),
       trenchBlocks: strMap('trenchBlocks'),
       airliftBlocks: strMap('airliftBlocks'),
+      leaving: raw['leaving'] as String? ?? '',
       intel: (raw['intel'] as List<dynamic>? ?? const []).map((e) {
         final m = e as Map<String, dynamic>;
         return HqIntel(
