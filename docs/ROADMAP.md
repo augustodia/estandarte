@@ -34,7 +34,7 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
   - Cliente (`Telemetry.track`) e servidor (`MetricsSink` / `MemoryRingSink` + `/metrics` + `/metrics/summary` + `METRICS_LOG=1`) prontos sem exigir banco acoplado agora. Ver detalhes em [backend-estandarte/docs/METRICS.md](file:///f:/Projetos/estandarte/backend-estandarte/docs/METRICS.md).
 
 ### O que falta nesta fase
-- [ ] Ligar `MetricsSink` ao Postgres (já existe) para guardar o histórico além da janela em RAM / logs.
+- [x] Métricas no Postgres: eventos por 90 dias, contagem diária sem prazo e teto para não encher o banco grátis.
 - [x] `GET /metrics/summary` só com a chave de administrador `METRICS_KEY`.
 - [ ] Registro formal da marca **Ultimato** (INPI).
 
