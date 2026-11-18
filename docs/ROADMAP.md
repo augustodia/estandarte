@@ -61,7 +61,9 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
 
 ### O que falta fazer nesta fase
 - [ ] **Entrar com Google / Apple** (menos atrito no cadastro).
-- [ ] **Lista de Amigos / Emotes Táticos** (convidar amigos direto para a correspondência).
+- [x] **Amigos:** pedir amizade pelo nome de usuário, ver quem está jogando ou com o jogo aberto, desafiar por
+  correspondência com um toque e convidar amigos da sala de espera (convite na lista e por e-mail).
+- [ ] **Emotes táticos** nas partidas online.
 - [ ] Notificação no aparelho (push) além do e-mail de "sua vez".
 - [ ] Recompensas cosméticas permanentes (brasões/insígnias das Quintas Históricas) ligadas à conta.
 

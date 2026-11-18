@@ -18,6 +18,7 @@ import 'package:estandarte/ui/corr_screen.dart';
 import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
 import 'package:estandarte/ui/daily_screen.dart';
+import 'package:estandarte/ui/friends_screen.dart';
 import 'package:estandarte/ui/home_screen.dart';
 import 'package:estandarte/ui/lobby_screen.dart';
 import 'package:estandarte/ui/modals.dart';
@@ -191,6 +192,32 @@ void main() {
       await _shot(tester, 'home_corr_$tag');
       await tester.pumpWidget(_app(CorrScreen(ctrl: ctrl)));
       await _shot(tester, 'corr_$tag');
+
+      // amigos: início com pedido e gente online, a lista, convites na correspondência e a lista vazia
+      ctrl.debugSetFriends(const FriendLists(
+        friends: [FriendInfo('Beto', status: 'playing'), FriendInfo('Carla', status: 'online'), FriendInfo('Davi')],
+        incoming: ['Eva'],
+        outgoing: ['Fábio'],
+      ));
+      ctrl.debugSetCorr(_corrSample(), invites: const [
+        AsyncInviteInfo(id: 'Q8RT2M', from: 'Carla', seats: [
+          AsyncSeatInfo(name: 'Carla', color: 2),
+          AsyncSeatInfo(name: 'Gil', color: 4),
+        ]),
+      ]);
+      await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
+      await _shot(tester, 'home_social_$tag');
+      await tester.pumpWidget(_app(FriendsScreen(ctrl: ctrl)));
+      await _shot(tester, 'friends_$tag');
+      await tester.pumpWidget(_app(CorrScreen(ctrl: ctrl)));
+      await _shot(tester, 'corr_invites_$tag');
+      ctrl.debugSetFriends(const FriendLists());
+      await tester.pumpWidget(_app(FriendsScreen(ctrl: ctrl)));
+      await _shot(tester, 'friends_empty_$tag');
+      ctrl.debugSetFriends(const FriendLists(
+        friends: [FriendInfo('Beto', status: 'playing'), FriendInfo('Carla', status: 'online'), FriendInfo('Davi')],
+      ));
+
       ctrl.debugSetCorr(const []);
       await tester.pumpWidget(_app(CorrScreen(ctrl: ctrl)));
       await _shot(tester, 'corr_empty_$tag');
@@ -206,12 +233,18 @@ void main() {
       ];
       await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
       await _shot(tester, 'lobby_corr_$tag');
+      final lobbyCtx = tester.element(find.byType(LobbyScreen));
+      showCorrInviteSheet(lobbyCtx, ctrl);
+      await _shot(tester, 'corr_invite_sheet_$tag');
+      Navigator.of(lobbyCtx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 600));
       ctrl.online = null;
       ctrl.guestLink = null;
       ctrl.lobbyCode = null;
       ctrl.lobbyOwner = false;
       ctrl.seats = [];
       ctrl.debugSetCorr(const []);
+      ctrl.debugSetFriends(const FriendLists());
 
       ctrl.debugSetAccount(null);
       await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
