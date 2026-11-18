@@ -218,9 +218,8 @@ class _PaceLedger extends StatelessWidget {
         _LedgerRow(
           pace: null,
           title: 'Salas online',
-          sub: 'Mesas abertas ou entrar com código',
+          sub: 'Escolha uma mesa ou entre com código',
           dense: dense,
-          small: true,
           onTap: c.openRoomsBrowser,
         ),
         _LedgerRow(
@@ -284,7 +283,7 @@ class _QuickMatchRow extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(right: Space.x3, left: Space.x2),
-                child: Text('~45 S', style: AppText.label(size: 12, color: dim)),
+                child: Text('ONLINE · ~45 S', style: AppText.label(size: 12, color: dim)),
               ),
             ],
           ),
@@ -301,7 +300,6 @@ class _LedgerRow extends StatelessWidget {
     required this.sub,
     required this.dense,
     required this.onTap,
-    this.small = false,
     this.badge,
     this.last = false,
   });
@@ -310,14 +308,13 @@ class _LedgerRow extends StatelessWidget {
   final String title;
   final String sub;
   final bool dense;
-  final bool small;
   final String? badge;
   final bool last;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final h = small ? (dense ? 42.0 : 48.0) : (dense ? 50.0 : 62.0);
+    final h = dense ? 50.0 : 62.0;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -348,16 +345,14 @@ class _LedgerRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: small
-                        ? const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)
-                        : AppText.title(size: dense ? 16 : 19),
+                    style: AppText.title(size: dense ? 16 : 19),
                   ),
-                  SizedBox(height: small ? 1 : 2),
+                  const SizedBox(height: 2),
                   Text(
                     sub,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: small ? 11.5 : 12, color: badge != null ? AppColors.ink : AppColors.mute),
+                    style: TextStyle(fontSize: 12, color: badge != null ? AppColors.ink : AppColors.mute),
                   ),
                 ],
               ),
