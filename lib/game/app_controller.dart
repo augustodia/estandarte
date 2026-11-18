@@ -232,6 +232,7 @@ class AppController extends ChangeNotifier {
 
   // Correspondência (24 h por jogada): as partidas da conta, de quem é a vez e o prazo
   List<acc.AsyncGameInfo> corrGames = const [];
+  List<acc.AsyncInviteInfo> corrInvites = const [];
   bool corrLoading = false;
   bool corrLoaded = false;
   String? corrError;
@@ -504,6 +505,9 @@ class AppController extends ChangeNotifier {
 
   void _clearAccount() {
     corrGames = const [];
+    corrInvites = const [];
+    friends = const acc.FriendLists();
+    friendsLoaded = false;
     corrLoaded = false;
     _accountToken = null;
     account = null;
@@ -523,6 +527,7 @@ class AppController extends ChangeNotifier {
       _applyState(st);
       unawaited(syncProgress());
       unawaited(refreshCorr(silent: true));
+      unawaited(refreshFriends(silent: true));
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) _clearAccount();
     }
@@ -690,9 +695,13 @@ class AppController extends ChangeNotifier {
     _roomsTimer?.cancel();
     _roomsTimer = null;
     _corrTimer?.cancel();
+    _friendsTimer?.cancel();
     screen = AppScreen.home;
     notifyListeners();
-    if (signedIn) unawaited(refreshCorr(silent: true));
+    if (signedIn) {
+      unawaited(refreshCorr(silent: true));
+      unawaited(refreshFriends(silent: true));
+    }
   }
 
   // ---------------- Correspondência ----------------
@@ -704,9 +713,10 @@ class AppController extends ChangeNotifier {
     corrLoading = true;
     if (!silent) notifyListeners();
     try {
-      final list = await acc.asyncMine(serverUrl(), tok);
+      final res = await acc.asyncMine(serverUrl(), tok);
       if (_accountToken != tok) return;
-      corrGames = list;
+      corrGames = res.games;
+      corrInvites = res.invites;
       corrLoaded = true;
       corrError = null;
     } on acc.AccountError catch (e) {
@@ -739,7 +749,8 @@ class AppController extends ChangeNotifier {
   bool corrCreating = false;
 
   /// Cria a sala de espera no servidor e entra nela (as regras se acertam na sala, como numa mesa online).
-  Future<void> createCorrGame() async {
+  /// [invite]: amigos chamados já na criação (recebem o convite e um e-mail).
+  Future<void> createCorrGame({List<String> invite = const []}) async {
     if (!_onlineGate() || corrCreating) return;
     if (!netOnline) {
       showToast('Sem internet: a correspondência precisa de conexão.', 4000);
@@ -748,8 +759,11 @@ class AppController extends ChangeNotifier {
     corrCreating = true;
     notifyListeners();
     try {
-      final id = await acc.asyncCreate(serverUrl(), _accountToken!);
-      if (id.isNotEmpty) openCorrGame(id);
+      final id = await acc.asyncCreate(serverUrl(), _accountToken!, invite: invite);
+      if (id.isNotEmpty) {
+        if (invite.isNotEmpty) showToast('Convite enviado para ${invite.join(', ')}.');
+        openCorrGame(id);
+      }
     } on acc.AccountError catch (e) {
       if (e.unauthorized) {
         _clearAccount();
@@ -783,9 +797,141 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  /// Recusa o convite de um amigo (some da lista).
+  Future<void> declineCorrInvite(String id) async {
+    final tok = _accountToken;
+    if (tok == null) return;
+    corrInvites = corrInvites.where((i) => i.id != id).toList();
+    notifyListeners();
+    try {
+      await acc.asyncDeclineInvite(serverUrl(), tok, id);
+    } on acc.AccountError catch (e) {
+      showToast(e.message);
+      unawaited(refreshCorr(silent: true));
+    }
+  }
+
+  /// Chama um amigo para a sala de espera da correspondência aberta agora.
+  Future<bool> inviteToCorr(String name) async {
+    final tok = _accountToken;
+    final id = lobbyCode ?? online?.code;
+    if (tok == null || id == null || !inCorr) return false;
+    try {
+      await acc.asyncInvite(serverUrl(), tok, id, name);
+      showToast('Convite enviado para $name.');
+      return true;
+    } on acc.AccountError catch (e) {
+      showToast(e.message, 4000);
+      return false;
+    }
+  }
+
+  // ---------------- Amigos ----------------
+
+  acc.FriendLists friends = const acc.FriendLists();
+  bool friendsLoading = false;
+  bool friendsLoaded = false;
+  String? friendsError;
+  Timer? _friendsTimer;
+
+  /// Amigos com o jogo aberto agora (o número no início).
+  int get friendsOnline => friends.friends.where((f) => f.online).length;
+
+  Future<void> refreshFriends({bool silent = false}) async {
+    final tok = _accountToken;
+    if (tok == null || !netOnline || friendsLoading) return;
+    friendsLoading = true;
+    if (!silent) notifyListeners();
+    try {
+      final l = await acc.friendsList(serverUrl(), tok);
+      if (_accountToken != tok) return;
+      friends = l;
+      friendsLoaded = true;
+      friendsError = null;
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) _clearAccount();
+      if (!silent || !friendsLoaded) friendsError = e.message;
+    } finally {
+      friendsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void openFriendsScreen() {
+    SoundPlayer.unlock();
+    if (!_onlineGate()) return;
+    _corrTimer?.cancel();
+    _roomsTimer?.cancel();
+    screen = AppScreen.friends;
+    friendsError = null;
+    notifyListeners();
+    unawaited(refreshFriends());
+    _friendsTimer?.cancel();
+    _friendsTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (screen == AppScreen.friends) {
+        unawaited(refreshFriends(silent: true));
+      } else {
+        _friendsTimer?.cancel();
+      }
+    });
+  }
+
+  /// Pede amizade; devolve a mensagem de erro (null se deu certo).
+  Future<String?> addFriend(String name) async {
+    final tok = _accountToken;
+    if (tok == null) return 'Entre na sua conta.';
+    final clean = name.trim();
+    if (clean.isEmpty) return 'Digite o nome de usuário.';
+    try {
+      final r = await acc.friendRequest(serverUrl(), tok, clean);
+      showToast(r.accepted ? 'Agora você e ${r.name} são amigos.' : 'Pedido enviado para ${r.name}.');
+      unawaited(refreshFriends(silent: true));
+      return null;
+    } on acc.AccountError catch (e) {
+      return e.message;
+    }
+  }
+
+  Future<void> acceptFriend(String name) => _friendAction(
+        name,
+        () => acc.friendAccept(serverUrl(), _accountToken!, name),
+        'Agora você e $name são amigos.',
+      );
+
+  /// Desfaz a amizade, recusa ou cancela o pedido.
+  Future<void> removeFriend(String name) => _friendAction(
+        name,
+        () => acc.friendRemove(serverUrl(), _accountToken!, name),
+        null,
+      );
+
+  Future<void> _friendAction(String name, Future<void> Function() run, String? done) async {
+    if (_accountToken == null) return;
+    try {
+      await run();
+      if (done != null) showToast(done);
+    } on acc.AccountError catch (e) {
+      showToast(e.message);
+    }
+    await refreshFriends(silent: true);
+  }
+
+  /// Desafia um amigo: cria uma partida por correspondência já com o convite e abre a sala de espera.
+  void challengeFriend(String name) => unawaited(createCorrGame(invite: [name]));
+
   /// Só para as fotos de tela.
   @visibleForTesting
-  void debugSetCorr(List<acc.AsyncGameInfo> games) {
+  void debugSetFriends(acc.FriendLists l) {
+    friends = l;
+    friendsLoaded = true;
+    friendsError = null;
+    notifyListeners();
+  }
+
+  /// Só para as fotos de tela.
+  @visibleForTesting
+  void debugSetCorr(List<acc.AsyncGameInfo> games, {List<acc.AsyncInviteInfo> invites = const []}) {
+    corrInvites = invites;
     corrGames = games;
     corrLoaded = true;
     corrError = null;
@@ -4983,6 +5129,7 @@ class AppController extends ChangeNotifier {
     _heartbeatTimer?.cancel();
     _roomsTimer?.cancel();
     _corrTimer?.cancel();
+    _friendsTimer?.cancel();
     _resetSessionState();
     clockTick.dispose();
     smoke.dispose();

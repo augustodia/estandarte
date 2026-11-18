@@ -60,11 +60,28 @@ class _CorrScreenState extends State<CorrScreen> {
     ];
 
     final body = <Widget>[];
+    final invites = c.corrInvites;
+    if (invites.isNotEmpty) {
+      body.add(Row(
+        children: [
+          Text('CONVITES', style: AppText.label(size: 11.5, color: AppColors.ink)),
+          const SizedBox(width: 8),
+          Text('${invites.length}', style: AppText.number(size: 12, color: AppColors.faint)),
+          const SizedBox(width: 12),
+          const Expanded(child: Divider(height: 1, thickness: 1, color: AppColors.line)),
+        ],
+      ));
+      body.add(const SizedBox(height: 10));
+      for (var i = 0; i < invites.length; i++) {
+        if (i > 0) body.add(const SizedBox(height: 6));
+        body.add(_InviteRow(ctrl: c, invite: invites[i]));
+      }
+    }
     if (!c.corrLoaded && c.corrLoading) {
       body.add(const _Note('Buscando as suas partidas…'));
     } else if (c.corrError != null && games.isEmpty) {
       body.add(_Note(c.corrError!, bad: true));
-    } else if (games.isEmpty) {
+    } else if (games.isEmpty && invites.isEmpty) {
       body.add(_EmptyState(wide: layout.wide));
     } else {
       for (final (label, list) in groups) {
@@ -373,6 +390,74 @@ class _GameRow extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Convite de um amigo: quem chamou, quem já está na sala, Entrar ou recusar.
+class _InviteRow extends StatelessWidget {
+  const _InviteRow({required this.ctrl, required this.invite});
+
+  final AppController ctrl;
+  final AsyncInviteInfo invite;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ctrl.engine.constants.colors;
+    final inv = invite;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: AppColors.panel2,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        border: Border.all(color: AppColors.glassBorder),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 74,
+            child: Wrap(
+              spacing: 1,
+              runSpacing: 1,
+              children: [
+                for (final s in inv.seats)
+                  EstFactionSeal(color: parseHexColor(colors[s.color % colors.length].hex), size: 13),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${inv.from} te chamou',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '#${inv.id} · ${inv.seats.length} de 6',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.number(size: 12.5, color: AppColors.faint, weight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          EstButton(small: true, label: 'Entrar', onPressed: () => ctrl.openCorrGame(inv.id)),
+          const SizedBox(width: 6),
+          EstIconButton(
+            icon: EstIconKind.close,
+            size: 32,
+            iconSize: 12,
+            tooltip: 'Recusar',
+            onPressed: () => ctrl.declineCorrInvite(inv.id),
+          ),
+        ],
       ),
     );
   }

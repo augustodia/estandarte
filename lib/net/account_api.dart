@@ -232,17 +232,100 @@ class AsyncGameInfo {
       );
 }
 
-/// Cria a sala de espera de uma partida por correspondência; devolve o código.
-Future<String> asyncCreate(String server, String token) async =>
-    (await _call(server, 'POST', '/async/create', token: token))['id'] as String? ?? '';
+/// Cria a sala de espera de uma partida por correspondência (já chamando os amigos de [invite]); devolve o código.
+Future<String> asyncCreate(String server, String token, {List<String> invite = const []}) async =>
+    (await _call(server, 'POST', '/async/create', token: token, body: {if (invite.isNotEmpty) 'invite': invite}))['id']
+        as String? ??
+    '';
 
-/// As partidas por correspondência da conta (as que esperam por você primeiro).
-Future<List<AsyncGameInfo>> asyncMine(String server, String token) async {
+/// Convite de um amigo para a sala de espera de uma partida por correspondência.
+class AsyncInviteInfo {
+  const AsyncInviteInfo({required this.id, required this.from, this.seats = const [], this.atMs = 0});
+  final String id;
+  final String from;
+  final List<AsyncSeatInfo> seats;
+  final int atMs;
+
+  factory AsyncInviteInfo.fromJson(Map<String, dynamic> j) => AsyncInviteInfo(
+        id: j['id'] as String? ?? '',
+        from: j['from'] as String? ?? '',
+        seats: [
+          for (final s in (j['seats'] as List<dynamic>? ?? const []))
+            AsyncSeatInfo.fromJson(Map<String, dynamic>.from(s as Map)),
+        ],
+        atMs: (j['at'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// As partidas por correspondência da conta (as que esperam por você primeiro) e os convites que ainda valem.
+Future<({List<AsyncGameInfo> games, List<AsyncInviteInfo> invites})> asyncMine(String server, String token) async {
   final j = await _call(server, 'GET', '/async/mine', token: token);
-  return [
-    for (final g in (j['games'] as List<dynamic>? ?? const []))
-      AsyncGameInfo.fromJson(Map<String, dynamic>.from(g as Map)),
-  ];
+  return (
+    games: [
+      for (final g in (j['games'] as List<dynamic>? ?? const []))
+        AsyncGameInfo.fromJson(Map<String, dynamic>.from(g as Map)),
+    ],
+    invites: [
+      for (final g in (j['invites'] as List<dynamic>? ?? const []))
+        AsyncInviteInfo.fromJson(Map<String, dynamic>.from(g as Map)),
+    ],
+  );
+}
+
+Future<void> asyncInvite(String server, String token, String id, String name) async {
+  await _call(server, 'POST', '/async/invite', token: token, body: {'id': id, 'name': name});
+}
+
+Future<void> asyncDeclineInvite(String server, String token, String id) async {
+  await _call(server, 'POST', '/async/invite/decline', token: token, body: {'id': id});
+}
+
+// ---------------- Amigos ----------------
+
+/// Amigo com presença: [status] é playing (numa partida agora), online (jogo aberto há pouco) ou vazio.
+class FriendInfo {
+  const FriendInfo(this.name, {this.status = ''});
+  final String name;
+  final String status;
+  bool get playing => status == 'playing';
+  bool get online => status == 'playing' || status == 'online';
+}
+
+class FriendLists {
+  const FriendLists({this.friends = const [], this.incoming = const [], this.outgoing = const []});
+  final List<FriendInfo> friends;
+  final List<String> incoming;
+  final List<String> outgoing;
+}
+
+Future<FriendLists> friendsList(String server, String token) async {
+  final j = await _call(server, 'GET', '/friends', token: token);
+  List<String> names(String k) => [
+        for (final x in (j[k] as List<dynamic>? ?? const [])) (x as Map)['name'] as String? ?? '',
+      ];
+  return FriendLists(
+    friends: [
+      for (final x in (j['friends'] as List<dynamic>? ?? const []))
+        FriendInfo((x as Map)['name'] as String? ?? '', status: x['status'] as String? ?? ''),
+    ],
+    incoming: names('incoming'),
+    outgoing: names('outgoing'),
+  );
+}
+
+/// Pede amizade; devolve o nome como está na conta e se já virou amizade (a pessoa tinha pedido também).
+Future<({String name, bool accepted})> friendRequest(String server, String token, String name) async {
+  final j = await _call(server, 'POST', '/friends/request', token: token, body: {'name': name});
+  return (name: j['name'] as String? ?? name, accepted: j['accepted'] == true);
+}
+
+Future<void> friendAccept(String server, String token, String name) async {
+  await _call(server, 'POST', '/friends/accept', token: token, body: {'name': name});
+}
+
+/// Desfaz a amizade, recusa o pedido recebido ou cancela o enviado.
+Future<void> friendRemove(String server, String token, String name) async {
+  await _call(server, 'POST', '/friends/remove', token: token, body: {'name': name});
 }
 
 /// Código de partida por correspondência (6 letras) digitado ou colado como link (?partida=).

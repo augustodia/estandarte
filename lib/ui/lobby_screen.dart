@@ -7,6 +7,7 @@ import '../core/map_data.dart';
 import '../game/app_controller.dart';
 import '../platform/lan_host.dart';
 import '../platform/p2p.dart';
+import 'friends_screen.dart';
 import 'modals.dart';
 import 'theme.dart';
 
@@ -497,8 +498,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
               const SizedBox(height: 12),
               EstButton(
                 icon: EstIconKind.qr,
-                label: 'Convidar (link ou QR)',
-                onPressed: () => showOnlineInviteModal(context, c),
+                label: isCorr ? 'Convidar' : 'Convidar (link ou QR)',
+                onPressed: () => isCorr ? showCorrInviteSheet(context, c) : showOnlineInviteModal(context, c),
               ),
             ],
             const SizedBox(height: 8),
@@ -793,7 +794,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 Expanded(
                   child: EstButton(
                     label: 'Convidar',
-                    onPressed: (full || code == null) ? null : () => showOnlineInviteModal(context, c),
+                    onPressed: (full || code == null)
+                        ? null
+                        : () => isCorr ? showCorrInviteSheet(context, c) : showOnlineInviteModal(context, c),
                   ),
                 ),
                 const SizedBox(width: 8),

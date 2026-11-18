@@ -75,7 +75,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: EdgeInsets.all(compact ? 14 : 22),
                 child: Stack(
                   children: [
-                    Positioned(right: 0, top: 0, child: _AccountSeal(ctrl: c, onTap: _openAccount)),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _FriendsButton(ctrl: c),
+                          const SizedBox(width: 8),
+                          _AccountSeal(ctrl: c, onTap: _openAccount),
+                        ],
+                      ),
+                    ),
                     Positioned(
                       right: 0,
                       bottom: 0,
@@ -135,13 +146,26 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                EstWordmark(size: dense ? 28 : 36),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: EstWordmark(size: dense ? 28 : 36),
+                ),
                 const SizedBox(height: 6),
-                Text('ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(), style: AppText.label(size: 11)),
+                Text(
+                  'ESTRATÉGIA POR TERRITÓRIO · $appVersion'.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.label(size: 11),
+                ),
               ],
             ),
           ),
-          if (portrait) _AccountSeal(ctrl: c, onTap: _openAccount),
+          if (portrait) ...[
+            _FriendsButton(ctrl: c),
+            const SizedBox(width: 8),
+            _AccountSeal(ctrl: c, onTap: _openAccount),
+          ],
         ],
       ),
       SizedBox(height: portrait ? 36 : (dense ? 16 : 30)),
@@ -199,10 +223,13 @@ class _PaceLedger extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = ctrl;
     final yours = c.corrYourTurn;
+    final invites = c.corrInvites;
     final playing = c.corrGames.where((g) => g.playing).length;
     final String corrSub;
     if (!c.signedIn) {
       corrSub = '24 h por jogada · avisamos por e-mail';
+    } else if (invites.isNotEmpty) {
+      corrSub = invites.length == 1 ? '${invites.first.from} te chamou para uma partida' : '${invites.length} convites de amigos';
     } else if (yours > 0) {
       corrSub = yours == 1 ? 'Uma partida espera a sua jogada' : '$yours partidas esperam a sua jogada';
     } else if (playing > 0) {
@@ -227,7 +254,7 @@ class _PaceLedger extends StatelessWidget {
           title: 'Correspondência',
           sub: corrSub,
           dense: dense,
-          badge: yours > 0 ? '$yours' : null,
+          badge: yours + invites.length > 0 ? '${yours + invites.length}' : null,
           onTap: c.openCorrScreen,
         ),
         _LedgerRow(
@@ -422,6 +449,60 @@ class _ResumeRow extends StatelessWidget {
   }
 }
 
+/// Amigos: quantos estão com o jogo aberto; pedidos de amizade esperando resposta acendem um número.
+class _FriendsButton extends StatelessWidget {
+  const _FriendsButton({required this.ctrl});
+
+  final AppController ctrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = ctrl.friends.incoming.length;
+    final online = ctrl.friendsOnline;
+    return Tooltip(
+      message: 'Amigos',
+      child: Material(
+        color: AppColors.deep,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        child: InkWell(
+          onTap: ctrl.openFriendsScreen,
+          borderRadius: BorderRadius.circular(Radii.sm),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Radii.sm),
+              border: Border.all(color: AppColors.glassBorder),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.group_outlined, size: 17, color: AppColors.ink),
+                if (pending > 0) ...[
+                  const SizedBox(width: 7),
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 18),
+                    height: 18,
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(9)),
+                    child: Text('$pending', style: AppText.number(size: 11.5, color: AppColors.onAction, weight: FontWeight.w700)),
+                  ),
+                ] else if (online > 0) ...[
+                  const SizedBox(width: 7),
+                  Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.ink, shape: BoxShape.circle)),
+                  const SizedBox(width: 5),
+                  Text('$online', style: AppText.number(size: 13, color: AppColors.ink, weight: FontWeight.w600)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Selo da conta: o nome (ou ENTRAR). E-mail sem confirmar ganha um ponto.
 class _AccountSeal extends StatelessWidget {
   const _AccountSeal({required this.ctrl, required this.onTap});
@@ -441,7 +522,7 @@ class _AccountSeal extends StatelessWidget {
         borderRadius: BorderRadius.circular(Radii.sm),
         child: Container(
           height: 36,
-          constraints: const BoxConstraints(maxWidth: 190),
+          constraints: const BoxConstraints(maxWidth: 150),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(Radii.sm),
