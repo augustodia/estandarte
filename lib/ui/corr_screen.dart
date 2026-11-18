@@ -439,7 +439,7 @@ class _InviteRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '#${inv.id} · ${inv.seats.length} de 6 na sala de espera',
+                  '#${inv.id} · ${inv.seats.length} de 6',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppText.number(size: 12.5, color: AppColors.faint, weight: FontWeight.w500),
