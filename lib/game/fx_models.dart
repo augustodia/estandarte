@@ -4,6 +4,49 @@ import '../net/online_client.dart';
 
 enum AppScreen { home, rooms, corr, friends, lobby, daily, game }
 
+/// Início de um turno no replay (para pular de turno em turno).
+class ReplayTurn {
+  const ReplayTurn(this.step, this.round, this.turn);
+  final int step;
+  final int round;
+  final int turn;
+}
+
+/// Replay aberto: a partida refeita pelo motor, passo a passo.
+class ReplaySession {
+  ReplaySession({
+    required this.code,
+    required this.engineId,
+    required this.steps,
+    required this.turns,
+    required this.meta,
+    required this.rep,
+  });
+
+  final String code;
+  final int engineId;
+  final int steps;
+  final List<ReplayTurn> turns;
+  final Map<String, dynamic> meta;
+  final Map<String, dynamic> rep;
+  int pos = 0;
+  bool playing = false;
+  int speed = 1;
+
+  /// Índice do turno em que o replay está.
+  int get turnIndex {
+    var i = 0;
+    for (var k = 0; k < turns.length; k++) {
+      if (turns[k].step <= pos) i = k;
+    }
+    return i;
+  }
+
+  String get commit => rep['commit'] as String? ?? '';
+  String get server => rep['server'] as String? ?? '';
+  List<String> get clients => [for (final c in (rep['clients'] as List<dynamic>? ?? const [])) '$c'];
+}
+
 class LobbySeat {
   LobbySeat({
     required this.name,

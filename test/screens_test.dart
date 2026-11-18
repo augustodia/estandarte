@@ -3,6 +3,7 @@
 // Só roda com SCREENS=1 e a biblioteca nativa do motor em native/ (o CI copia de tool/screens/):
 //   SCREENS=1 flutter test test/screens_test.dart
 // As imagens saem em build/screens/*.png.
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -23,6 +24,7 @@ import 'package:estandarte/ui/home_screen.dart';
 import 'package:estandarte/ui/lobby_screen.dart';
 import 'package:estandarte/ui/modals.dart';
 import 'package:estandarte/ui/quartel_modal.dart';
+import 'package:estandarte/ui/replay_bar.dart';
 import 'package:estandarte/ui/rooms_screen.dart';
 import 'package:estandarte/ui/theme.dart';
 import 'package:flutter/material.dart';
@@ -374,6 +376,19 @@ void main() {
       await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
       await tester.pump(const Duration(seconds: 1));
       await _shot(tester, 'tutorial_$tag');
+
+      // replay de uma partida gravada pelo motor (test/replay_demo.json) e a prova dos dados
+      final rep = jsonDecode(File('test/replay_demo.json').readAsStringSync()) as Map<String, dynamic>;
+      ctrl.debugOpenReplay('K7M2QAXY', const {'mode': 'online', 'winner': 'Carla'}, rep);
+      ctrl.replayGoTo(ctrl.replay!.turns[20].step + 3);
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
+      await _shot(tester, 'replay_$tag');
+      final gameCtx = tester.element(find.byType(GameScreen));
+      showReplayProofSheet(gameCtx, ctrl);
+      await _shot(tester, 'replay_proof_$tag');
+      Navigator.of(gameCtx, rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 600));
+      ctrl.leaveGame();
 
       await tester.pumpWidget(const SizedBox());
       ctrl.dispose();

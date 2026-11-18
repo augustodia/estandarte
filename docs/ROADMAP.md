@@ -71,9 +71,11 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
 
 ## Fase 3 — Competitivo, Fair Play e Replays
 
-- [ ] **Dados Verificáveis (*Provably Fair* — Commit-Reveal)** com publicação de hash da semente.
+- [x] **Dados verificáveis (commit-reveal):** compromisso SHA-256 da semente no começo, contribuição de cada jogador na
+  chave dos dados, semente revelada no fim; o app confere e refaz a partida.
 - [ ] **Filas Ranqueadas (1v1 e FFA 3–6) com TrueSkill / Glicko-2 e Patentes**.
-- [ ] **Replays determinísticos compartilháveis** (aproveitando que `estandarte-engine` é reproduzível a partir de `seed + setup + actions`).
+- [x] **Replays compartilháveis** das partidas online e por correspondência (`?replay=CÓDIGO`, 60 dias): tocar, pausar,
+  passo a passo, de turno em turno e em 1×, 2× ou 4×.
 - [ ] **Ranking Global & Sazonal das Quintas Históricas** (somando estrelas acumuladas por temporada entre jogadores logados).
 
 ---

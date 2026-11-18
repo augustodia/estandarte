@@ -196,6 +196,7 @@ class AsyncGameInfo {
     this.youWon = false,
     this.owner = false,
     this.updatedMs = 0,
+    this.replay = '',
   });
 
   final String id;
@@ -209,6 +210,9 @@ class AsyncGameInfo {
   final bool youWon;
   final bool owner;
   final int updatedMs;
+
+  /// Replay da partida encerrada ('' se não há).
+  final String replay;
 
   bool get playing => status == 'play';
   bool get waiting => status == 'lobby';
@@ -229,6 +233,7 @@ class AsyncGameInfo {
         youWon: j['youWon'] == true,
         owner: j['owner'] == true,
         updatedMs: (j['updated'] as num?)?.toInt() ?? 0,
+        replay: j['replay'] as String? ?? '',
       );
 }
 
@@ -278,6 +283,26 @@ Future<void> asyncInvite(String server, String token, String id, String name) as
 
 Future<void> asyncDeclineInvite(String server, String token, String id) async {
   await _call(server, 'POST', '/async/invite/decline', token: token, body: {'id': id});
+}
+
+// ---------------- Replays ----------------
+
+/// Código de replay (8 letras) digitado ou colado como link (?replay=).
+String? replayCode(String? raw) {
+  final s = (raw ?? '').trim();
+  final m1 = RegExp(r'[?&]replay=([A-Za-z0-9]{8})').firstMatch(s);
+  if (m1 != null) return m1.group(1)!.toUpperCase();
+  final m2 = RegExp(r'^#?([A-Za-z0-9]{8})$').firstMatch(s);
+  return m2?.group(1)!.toUpperCase();
+}
+
+/// Busca o replay (com a semente revelada) e o cabeçalho dele.
+Future<({Map<String, dynamic> meta, Map<String, dynamic> replay})> fetchReplay(String server, String code) async {
+  final j = await _call(server, 'GET', '/replay?id=${Uri.encodeQueryComponent(code)}');
+  return (
+    meta: Map<String, dynamic>.from(j['meta'] as Map? ?? const {}),
+    replay: Map<String, dynamic>.from(j['replay'] as Map? ?? const {}),
+  );
 }
 
 // ---------------- Amigos ----------------

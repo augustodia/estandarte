@@ -227,6 +227,182 @@ class AppController extends ChangeNotifier {
   String? pendingJoinQrCode;
   String? pendingJoinCorrCode;
 
+  String? pendingReplayCode;
+
+  // ---------------- Replay e dados verificáveis ----------------
+
+  /// Compromisso dos dados da partida online em andamento (SHA-256 da semente do servidor).
+  String? matchCommit;
+
+  /// Replay da partida online que acabou de terminar.
+  String? matchReplayId;
+
+  /// Contribuição deste aparelho para os dados das partidas online (vai no "hello"; aparece no replay).
+  final String clientSeed = _newClientSeed();
+
+  static String _newClientSeed() {
+    final r = Random.secure();
+    return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  ReplaySession? replay;
+  bool replayLoading = false;
+  Timer? _replayTimer;
+  AppScreen _replayBack = AppScreen.home;
+
+  /// Abre o replay pelo código ou link: busca no servidor, confere a semente e refaz a partida no motor.
+  Future<void> openReplay(String raw) async {
+    final code = acc.replayCode(raw);
+    if (code == null) {
+      showToast('O código do replay tem 8 letras.');
+      return;
+    }
+    if (replayLoading) return;
+    if (!netOnline) {
+      showToast('Sem internet: o replay vem do servidor.', 4000);
+      return;
+    }
+    replayLoading = true;
+    notifyListeners();
+    try {
+      final r = await acc.fetchReplay(serverUrl(), code);
+      _startReplay(code, r.meta, r.replay);
+    } on acc.AccountError catch (e) {
+      showToast(e.message, 4500);
+    } on StateError catch (e) {
+      showToast('Este replay não confere: ${e.message.replaceFirst(RegExp(r'^Engine error in \w+: '), '')}', 5000);
+    } finally {
+      replayLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void _startReplay(String code, Map<String, dynamic> meta, Map<String, dynamic> rep) {
+    final res = engine.callJson('replayLoad', rep); // confere o compromisso e refaz a partida (erro se adulterado)
+    if (online != null || _engineId != null || replay != null) leaveGame(keepSeat: true);
+    _replayBack = screen == AppScreen.game ? AppScreen.home : screen;
+    _resetSessionState();
+    final id = (res['id'] as num).toInt();
+    replay = ReplaySession(
+      code: code,
+      engineId: id,
+      steps: (res['steps'] as num?)?.toInt() ?? 0,
+      turns: [
+        for (final t in (res['turns'] as List<dynamic>? ?? const []))
+          ReplayTurn(((t as Map)['step'] as num).toInt(), (t['round'] as num).toInt(), (t['turn'] as num).toInt()),
+      ],
+      meta: meta,
+      rep: rep,
+    );
+    role = 'guest';
+    me = -1;
+    _applyIncomingView(engine.viewFor(id, -1));
+    screen = AppScreen.game;
+    Telemetry.track('replay_opened', mode: meta['mode'] as String?);
+    notifyListeners();
+  }
+
+  /// Vai para o passo [step]. Sem [animate], pula sem dados nem avisos (salto de turno, barra de progresso).
+  void replayGoTo(int step, {bool animate = false}) {
+    final r = replay;
+    if (r == null) return;
+    final res = engine.callJson('replayGoto', {'id': r.engineId, 'step': step});
+    r.pos = (res['pos'] as num?)?.toInt() ?? step;
+    final v = engine.viewFor(r.engineId, -1);
+    if (!animate) {
+      v['ev'] = <Map<String, dynamic>>[];
+      _lastRollN = ((v['roll'] as Map?)?['n'] as num?)?.toInt() ?? _lastRollN;
+      diceBanner = null;
+    }
+    _applyIncomingView(v);
+    if (r.pos >= r.steps) {
+      r.playing = false;
+      _replayTimer?.cancel();
+    }
+    notifyListeners();
+  }
+
+  void replayToggle() {
+    final r = replay;
+    if (r == null) return;
+    if (r.pos >= r.steps) replayGoTo(0);
+    r.playing = !r.playing;
+    _replayTimer?.cancel();
+    if (r.playing) _replayTick();
+    notifyListeners();
+  }
+
+  void _replayTick() {
+    final r = replay;
+    if (r == null || !r.playing) return;
+    if (r.pos >= r.steps) {
+      r.playing = false;
+      notifyListeners();
+      return;
+    }
+    final steps = r.rep['steps'] as List<dynamic>? ?? const [];
+    final a = r.pos < steps.length ? (steps[r.pos] as Map)['a'] : null;
+    final t = a is Map ? a['t'] : null;
+    final ms = switch (t) {
+      'attack' => 1300,
+      'nuke' || 'order' => 1500,
+      'place' || 'mobilize' => 260,
+      _ => 520,
+    };
+    replayGoTo(r.pos + 1, animate: true);
+    _replayTimer = Timer(Duration(milliseconds: ms ~/ r.speed), _replayTick);
+  }
+
+  void replayStep(int delta) {
+    final r = replay;
+    if (r == null) return;
+    r.playing = false;
+    _replayTimer?.cancel();
+    replayGoTo((r.pos + delta).clamp(0, r.steps), animate: delta > 0);
+  }
+
+  /// Pula para o começo do turno anterior (-1) ou do próximo (+1).
+  void replayTurn(int delta) {
+    final r = replay;
+    if (r == null || r.turns.isEmpty) return;
+    var i = r.turnIndex;
+    if (delta < 0 && r.pos > r.turns[i].step) {
+      // no meio do turno: volta para o começo dele
+    } else {
+      i = (i + delta).clamp(0, r.turns.length - 1);
+    }
+    final target = delta > 0 && r.turnIndex == r.turns.length - 1 ? r.steps : r.turns[i].step;
+    replayGoTo(target);
+  }
+
+  void replaySeekTurn(int i) {
+    final r = replay;
+    if (r == null || r.turns.isEmpty) return;
+    replayGoTo(r.turns[i.clamp(0, r.turns.length - 1)].step);
+  }
+
+  void replaySpeed() {
+    final r = replay;
+    if (r == null) return;
+    r.speed = r.speed >= 4 ? 1 : r.speed * 2;
+    if (r.playing) {
+      _replayTimer?.cancel();
+      _replayTimer = Timer(Duration(milliseconds: 300 ~/ r.speed), _replayTick);
+    }
+    notifyListeners();
+  }
+
+  void _leaveReplay() {
+    _resetSessionState();
+    screen = _replayBack;
+    notifyListeners();
+    if (screen == AppScreen.corr) unawaited(refreshCorr(silent: true));
+  }
+
+  /// Só para as fotos de tela: abre um replay sem servidor.
+  @visibleForTesting
+  void debugOpenReplay(String code, Map<String, dynamic> meta, Map<String, dynamic> rep) => _startReplay(code, meta, rep);
+
   /// Código que chegou por link: a tela da correspondência já abre com ele no campo.
   String corrPrefill = '';
 
@@ -287,7 +463,7 @@ class AppController extends ChangeNotifier {
         }
         if (online != null && guestLink == null && !online!.gone) {
           _reconnectOnline();
-        } else if (role == 'guest' && (guestLink == null || hostLag) && online == null) {
+        } else if (role == 'guest' && (guestLink == null || hostLag) && online == null && replay == null) {
           _tryAutoSpare();
         }
       }
@@ -309,8 +485,12 @@ class AppController extends ChangeNotifier {
     // Check URL params / hash
     final sala = roomCode(WebEnv.getQueryParam('sala'));
     final partida = acc.asyncCode(WebEnv.getQueryParam('partida'));
+    final replayLink = acc.replayCode(WebEnv.getQueryParam('replay'));
     final hash = WebEnv.getHash();
-    if (partida != null) {
+    if (replayLink != null) {
+      pendingReplayCode = replayLink;
+      WebEnv.replaceCleanUrl();
+    } else if (partida != null) {
       pendingJoinCorrCode = partida;
       WebEnv.replaceCleanUrl();
     } else if (sala != null) {
@@ -2994,6 +3174,7 @@ class AppController extends ChangeNotifier {
             if (ses.token != null) 'token': ses.token,
             if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
             if (!isLan && _accountToken != null) 'acc': _accountToken,
+            if (!isLan) 'cs': clientSeed,
           });
         } else {
           link.send({
@@ -3062,6 +3243,7 @@ class AppController extends ChangeNotifier {
           'token': ?tok,
           if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
           if (!ses.lan && _accountToken != null) 'acc': _accountToken,
+          if (!ses.lan) 'cs': clientSeed,
         });
         notifyListeners();
       },
@@ -3295,6 +3477,10 @@ class AppController extends ChangeNotifier {
       me = (msg['you'] as num?)?.toInt() ?? -1;
       turnLimitMs = msg['limit'] is num ? (msg['limit'] as num).toInt() : null;
       var leftMs = msg['left'] is num ? (msg['left'] as num).toInt() : null;
+      final cm = msg['commit'] as String? ?? '';
+      matchCommit = cm.isEmpty ? null : cm;
+      final rp = msg['replay'] as String? ?? '';
+      matchReplayId = rp.isEmpty ? null : rp;
       if (msg['async'] == true && msg['deadline'] is num) {
         // correspondência: 24 h por jogada, contadas no servidor
         turnLimitMs = corrTurnMs;
@@ -4934,6 +5120,10 @@ class AppController extends ChangeNotifier {
 
   /// Sai da partida. Na correspondência, [keepSeat] só fecha neste aparelho (o lugar continua seu).
   void leaveGame({String? showReason, bool keepSeat = false}) {
+    if (replay != null) {
+      _leaveReplay();
+      return;
+    }
     final backToRooms = online != null && online!.fromRooms && !online!.gone;
     final backToCorr = online != null && online!.corr;
     final backToDaily = activeChallenge != null;
@@ -4997,6 +5187,16 @@ class AppController extends ChangeNotifier {
   }
 
   void _resetSessionState() {
+    _replayTimer?.cancel();
+    final rp = replay;
+    if (rp != null) {
+      try {
+        engine.dropGame(rp.engineId);
+      } catch (_) {}
+      replay = null;
+    }
+    matchCommit = null;
+    matchReplayId = null;
     inTutorial = false;
     _tutorialCompletedSent = false;
     _matchEndSent = false;

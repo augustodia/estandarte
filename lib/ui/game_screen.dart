@@ -12,6 +12,7 @@ import 'account_sheet.dart';
 import 'map_view.dart';
 import 'modals.dart';
 import 'quartel_modal.dart';
+import 'replay_bar.dart';
 import 'theme.dart';
 
 class GameScreen extends StatefulWidget {
@@ -1998,6 +1999,7 @@ class _BottomActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ctrl.replay != null) return ReplayBar(ctrl: ctrl);
     final v = ctrl.view;
     final ev = ctrl.eval;
     if (v == null || ev == null) return const SizedBox.shrink();
@@ -2084,6 +2086,9 @@ class _BottomActionBar extends StatelessWidget {
       final objTxt = ev.objectiveTexts[wIdx] ?? '';
       msgSpans.add(TextSpan(text: '${w['name']}', style: TextStyle(fontWeight: FontWeight.w700, color: wCol)));
       msgSpans.add(TextSpan(text: ' venceu! $objTxt'));
+      if (ctrl.matchReplayId != null) {
+        btns.add(actionBtn('Replay', () => ctrl.openReplay(ctrl.matchReplayId!)));
+      }
       if (ctrl.inCorr) {
         btns.add(actionBtn('Correspondência', () => ctrl.leaveGame(keepSeat: true), variant: EstButtonVariant.primary));
       } else if (ctrl.role != 'guest' || ctrl.lobbyOwner) {
@@ -3297,6 +3302,14 @@ class _VictoryOverlayState extends State<_VictoryOverlay> {
             },
           ),
         const SizedBox(height: 14),
+        if (c.matchReplayId != null) ...[
+          EstButton(
+            icon: EstIconKind.compass,
+            label: 'Ver replay',
+            onPressed: () => c.openReplay(c.matchReplayId!),
+          ),
+          const SizedBox(height: 8),
+        ],
         Row(
           children: [
             Expanded(child: EstButton(label: 'Ver o mapa', onPressed: c.dismissVictory)),

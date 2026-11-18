@@ -11,6 +11,7 @@ import '../platform/qr_scanner.dart';
 import '../platform/sound.dart';
 import '../platform/web_env.dart';
 import 'quartel_modal.dart';
+import 'replay_bar.dart';
 import 'theme.dart';
 
 int _ownedCount(Map<String, dynamic> v, int playerIdx) {
@@ -1276,6 +1277,27 @@ void showMenuModal(BuildContext context, AppController ctrl) {
           titleIcon: const EstIcon(EstIconKind.menu, size: 20, color: AppColors.gold),
           onClose: () => Navigator.pop(ctx),
           children: [
+            if (ctrl.matchCommit != null && ctrl.replay == null) ...[
+              InkWell(
+                onTap: () => showReplayProofSheet(context, ctrl),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_outlined, size: 15, color: AppColors.mute),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Dados verificáveis · compromisso ${ctrl.matchCommit!.substring(0, 8)}…',
+                          style: const TextStyle(fontSize: 12, color: AppColors.mute),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.faint),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const EstSectionTag('FORÇAS EM CAMPO'),
             const SizedBox(height: 8),
             for (var i = 0; i < players.length; i++)
@@ -1616,6 +1638,10 @@ void showMenuModal(BuildContext context, AppController ctrl) {
 }
 
 void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
+  if (ctrl.replay != null) {
+    ctrl.leaveGame();
+    return;
+  }
   final watching = ctrl.online != null && (ctrl.me < 0);
   final corr = ctrl.inCorr;
   final desc = watching
