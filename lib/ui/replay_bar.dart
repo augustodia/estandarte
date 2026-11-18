@@ -43,6 +43,64 @@ class ReplayBar extends StatelessWidget {
           ),
         );
 
+    final slider = SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 2,
+        activeTrackColor: AppColors.ink,
+        inactiveTrackColor: AppColors.line,
+        thumbColor: AppColors.ink,
+        overlayShape: SliderComponentShape.noOverlay,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+      ),
+      child: Slider(
+        value: r.steps == 0 ? 0 : r.pos / r.steps,
+        onChanged: r.steps == 0
+            ? null
+            : (x) {
+                if (r.playing) ctrl.replayToggle();
+                ctrl.replayGoTo((x * r.steps).round());
+              },
+      ),
+    );
+
+    // celular deitado: uma linha só, para o mapa ficar à vista
+    if (MediaQuery.sizeOf(context).height <= 520) {
+      return Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: AppColors.glassBorder),
+          boxShadow: AppColors.edgeShadows,
+        ),
+        child: Row(
+          children: [
+            btn(Icons.skip_previous_rounded, 'Turno anterior', () => ctrl.replayTurn(-1)),
+            btn(r.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, r.playing ? 'Pausar' : 'Tocar',
+                ctrl.replayToggle,
+                big: true),
+            btn(Icons.skip_next_rounded, 'Próximo turno', () => ctrl.replayTurn(1)),
+            const SizedBox(width: 10),
+            Expanded(child: slider),
+            const SizedBox(width: 10),
+            Text(over ? 'FIM' : 'R$round/$lastRound', style: AppText.number(size: 13, weight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            TextButton(
+              onPressed: ctrl.replaySpeed,
+              style: TextButton.styleFrom(minimumSize: const Size(40, 36), padding: EdgeInsets.zero),
+              child: Text('${r.speed}×', style: AppText.number(size: 14, weight: FontWeight.w700)),
+            ),
+            IconButton(
+              tooltip: 'Dados verificados',
+              onPressed: () => showReplayProofSheet(context, ctrl),
+              icon: const Icon(Icons.verified_outlined, size: 18, color: AppColors.ink),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
@@ -99,25 +157,7 @@ class ReplayBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 2,
-              activeTrackColor: AppColors.ink,
-              inactiveTrackColor: AppColors.line,
-              thumbColor: AppColors.ink,
-              overlayShape: SliderComponentShape.noOverlay,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            ),
-            child: Slider(
-              value: r.steps == 0 ? 0 : r.pos / r.steps,
-              onChanged: r.steps == 0
-                  ? null
-                  : (x) {
-                      if (r.playing) ctrl.replayToggle();
-                      ctrl.replayGoTo((x * r.steps).round());
-                    },
-            ),
-          ),
+          slider,
           const SizedBox(height: 4),
           Row(
             children: [
