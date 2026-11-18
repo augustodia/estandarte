@@ -58,5 +58,5 @@ void main() {
     await tester.tap(find.byTooltip('Fechar'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
-  });
+  }, skip: Platform.environment['SCREENS'] != '1'); // precisa do motor nativo, que só o job das telas tem
 }

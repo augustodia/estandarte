@@ -48,7 +48,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: mkdir -p native && cp tool/screens/libestandarte_engine.so native/
-      - run: SCREENS=1 flutter test test/screens_test.dart
+      - run: SCREENS=1 flutter test test/screens_test.dart test/account_sheet_test.dart
       - name: Publica as fotos
         if: always()
         run: |
