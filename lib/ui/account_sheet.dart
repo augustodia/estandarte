@@ -13,6 +13,9 @@ Future<void> showAccountSheet(BuildContext context, AppController ctrl, {bool st
   return showEstSheet<void>(
     context,
     maxWidth: 440,
+    // não fecha com toque fora nem com Esc: o menu do gerenciador de senhas (1Password e outros) fica por cima da
+    // página, e o clique nele chegava ao fundo da janela e a fechava antes de preencher. Fecha no × e nos botões.
+    dismissible: false,
     builder: (ctx) => _AccountSheet(ctrl: ctrl, startOnSignUp: startOnSignUp, reason: reason),
   );
 }
@@ -37,6 +40,7 @@ class _AccountSheetState extends State<_AccountSheet> {
   late final _newEmail = TextEditingController(text: widget.ctrl.account?.email ?? '');
   bool _showPass = false;
   bool _editEmail = false;
+  bool _closing = false;
 
   // esqueci a senha: 0 = fora, 1 = pedir o código, 2 = código + senha nova
   int _resetStep = 0;
@@ -153,6 +157,7 @@ class _AccountSheetState extends State<_AccountSheet> {
       final e = await c.accountSignUp(em, un, _pass.text);
       if (!mounted) return;
       if (e != null) return _show(e);
+      TextInput.finishAutofillContext();
       _pass.clear();
       // a janela passa para a confirmação do e-mail
       setState(() => _info = c.accountResendAt == null ? 'O e-mail não saiu agora. Toque em reenviar código.' : null);
@@ -165,10 +170,11 @@ class _AccountSheetState extends State<_AccountSheet> {
     final e = await c.accountSignIn(_login.text, _pass.text);
     if (!mounted) return;
     if (e != null) return _show(e);
+    TextInput.finishAutofillContext(); // o gerenciador de senhas guarda (ou atualiza) o login que deu certo
     _pass.clear();
     if (!c.accountNeedsConfirm) {
       c.showToast('Bem-vindo, ${c.account?.username}.');
-      Navigator.of(context).maybePop();
+      _close();
     }
   }
 
@@ -258,7 +264,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     _resetCode.clear();
     c.showToast('Senha trocada. Os outros aparelhos saíram da conta.');
     setState(() => _resetStep = 0);
-    if (!c.accountNeedsConfirm) Navigator.of(context).maybePop();
+    if (!c.accountNeedsConfirm) _close();
   }
 
   Future<void> _rename() async {
@@ -296,9 +302,29 @@ class _AccountSheetState extends State<_AccountSheet> {
           title = 'Sua conta';
           body = _signedIn();
         }
-        return EstSheetBody(title: title, children: body);
+        // Com o formulário preenchido, um toque fora da janela ou um Esc não fecham: gerenciadores de senha (1Password
+        // e outros) mexem na página ao preencher e não podem derrubar o login no meio. O × e os botões fecham sempre.
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            if (_closing || !_dirty) {
+              _closing = true;
+              Navigator.of(context).pop();
+            }
+          },
+          child: EstSheetBody(title: title, onClose: _close, children: body),
+        );
       },
     );
+  }
+
+  /// Algo digitado (ou preenchido pelo gerenciador de senhas) que se perderia ao fechar.
+  bool get _dirty => [_login, _pass, _email, _code, _resetCode, _newPass].any((t) => t.text.isNotEmpty);
+
+  void _close() {
+    _closing = true;
+    Navigator.of(context).maybePop();
   }
 
   // ── sem conta ────────────────────────────────────────────────────────────────
@@ -364,6 +390,8 @@ class _AccountSheetState extends State<_AccountSheet> {
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.email, AutofillHints.username],
+            // o gerenciador de senhas às vezes manda o Enter daqui, já com a senha preenchida
+            onSubmitted: (_) => _pass.text.isNotEmpty ? _submit() : FocusScope.of(context).nextFocus(),
             decoration: const InputDecoration(hintText: 'voce@email.com'),
           ),
         ),
@@ -699,7 +727,7 @@ class _AccountSheetState extends State<_AccountSheet> {
         variant: EstButtonVariant.ghost,
         small: true,
         label: 'Fazer depois',
-        onPressed: () => Navigator.of(context).maybePop(),
+        onPressed: _close,
       ),
     ];
   }
@@ -847,7 +875,7 @@ class _AccountSheetState extends State<_AccountSheet> {
                 await c.accountSignOut();
                 if (!mounted) return;
                 c.showToast('Você saiu da conta. Seu nome continua neste aparelho.');
-                Navigator.of(context).maybePop();
+                _close();
               },
       ),
     ];
