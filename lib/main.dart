@@ -189,7 +189,13 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
     if (_handledPendingUrl) return;
     _handledPendingUrl = true;
     final c = widget.ctrl;
-    if (c.pendingJoinCorrCode != null) {
+    if (c.pendingReplayCode != null) {
+      final code = c.pendingReplayCode!;
+      c.pendingReplayCode = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) c.openReplay(code);
+      });
+    } else if (c.pendingJoinCorrCode != null) {
       // link de convite da correspondência: abre a lista com a partida (pede a conta antes, se faltar)
       final code = c.pendingJoinCorrCode!;
       c.pendingJoinCorrCode = null;

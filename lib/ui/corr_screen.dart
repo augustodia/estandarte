@@ -99,7 +99,12 @@ class _CorrScreenState extends State<CorrScreen> {
         body.add(const SizedBox(height: 10));
         for (var i = 0; i < list.length; i++) {
           if (i > 0) body.add(const SizedBox(height: 6));
-          body.add(_GameRow(ctrl: c, game: list[i], onTap: () => c.openCorrGame(list[i].id)));
+          final g = list[i];
+          body.add(_GameRow(
+            ctrl: c,
+            game: g,
+            onTap: () => g.over && g.replay.isNotEmpty ? c.openReplay(g.replay) : c.openCorrGame(g.id),
+          ));
         }
       }
     }
@@ -277,7 +282,7 @@ class _GameRow extends StatelessWidget {
       detail = '${g.seats.length} de 6 · ${g.owner ? 'você começa' : 'quem criou começa'}';
     } else {
       status = g.youWon ? 'VITÓRIA' : (g.winner.isNotEmpty ? 'VENCEU ${g.winner.toUpperCase()}' : 'ENCERRADA');
-      detail = _ago(g.updatedMs);
+      detail = [_ago(g.updatedMs), if (g.replay.isNotEmpty) 'ver replay'].where((x) => x.isNotEmpty).join(' · ');
       if (g.youWon) statusColor = AppColors.medal;
     }
     final sub = [
