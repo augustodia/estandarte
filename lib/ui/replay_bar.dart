@@ -228,51 +228,86 @@ void showReplayProofSheet(BuildContext context, AppController ctrl) {
   final r = ctrl.replay;
   final commit = r?.commit ?? ctrl.matchCommit ?? '';
   final server = r?.server ?? '';
-  final clients = r?.clients ?? const <String>[];
-  final players = [for (final p in (r?.rep['seats'] as List<dynamic>? ?? const [])) '${(p as Map)['Name'] ?? ''}'];
-  Widget row(String k, String v) => Padding(
+  final mine = commit.isNotEmpty && ctrl.contributedTo(commit);
+  final dev = ctrl.devicePub;
+  Widget kv(String k, String v) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(width: 120, child: Text(k, style: AppText.label(size: 11))),
             Expanded(
-              child: SelectableText(
-                v,
-                style: AppText.number(size: 13, color: AppColors.ink, weight: FontWeight.w500),
-              ),
+              child: SelectableText(v, style: AppText.number(size: 13, color: AppColors.ink, weight: FontWeight.w500)),
             ),
           ],
         ),
       );
+  String who(Map<String, dynamic> rp) {
+    int n(String k) => (rp[k] as num?)?.toInt() ?? 0;
+    final parts = <String>[
+      if (n('signed') > 0) '${n('signed')} assinadas',
+      if (n('unsigned') > 0) '${n('unsigned')} sem assinatura',
+      if (n('bot') > 0) '${n('bot')} pelo bot',
+      if (n('timeout') > 0) '${n('timeout')} no prazo esgotado',
+      if (n('devices') > 1) 'trocou de aparelho',
+    ];
+    return parts.isEmpty ? 'nenhuma jogada' : parts.join(' · ');
+  }
+
   showEstSheet<void>(
     context,
-    maxWidth: 520,
+    maxWidth: 560,
     builder: (ctx) => EstSheetBody(
       title: r != null ? 'Dados verificados' : 'Dados verificáveis',
       onClose: () => Navigator.pop(ctx),
       children: [
         Text(
           r != null
-              ? 'No começo da partida, o servidor publicou o compromisso da semente secreta. No fim, revelou a semente: '
-                  'ela bate com o compromisso, e a partida refeita aqui, jogada por jogada, chega ao mesmo resultado. '
-                  'Os dados saíram da semente junto com a contribuição de cada jogador, então ninguém escolheu os dados.'
-              : 'O servidor já se comprometeu com a semente secreta desta partida. Ela é revelada no fim, no replay, e '
-                  'qualquer um confere que os dados não foram escolhidos depois.',
+              ? 'O servidor fixou a semente secreta antes da partida e publicou o compromisso na sala de espera; cada '
+                  'aparelho contribuiu depois de vê-lo. No fim, a semente revelada bate com o compromisso, e a partida '
+                  'refeita aqui chega ao mesmo resultado. Cada jogada foi conferida: as dos jogadores pela assinatura do '
+                  'aparelho deles; as do bot e as de prazo esgotado por serem exatamente as que o jogo faria.'
+              : 'O servidor já se comprometeu com a semente secreta desta partida, antes das contribuições dos '
+                  'aparelhos. Ela é revelada no fim, no replay, e qualquer um confere os dados e as jogadas.',
           style: const TextStyle(fontSize: 13, height: 1.45, color: AppColors.mute),
         ),
         const SizedBox(height: 14),
-        row('COMPROMISSO', _short(commit)),
-        if (server.isNotEmpty) row('SEMENTE', _short(server)),
-        for (var i = 0; i < clients.length; i++)
-          if (clients[i].isNotEmpty)
-            row(
-              i < players.length ? players[i].toUpperCase() : 'JOGADOR ${i + 1}',
-              clients[i] == ctrl.clientSeed ? '${_short(clients[i])} (este aparelho)' : _short(clients[i]),
+        kv('COMPROMISSO', _short(commit)),
+        if (server.isNotEmpty) kv('SEMENTE', _short(server)),
+        if (mine)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              'Este aparelho contribuiu depois de ver este compromisso.',
+              style: AppText.label(size: 11, color: AppColors.ink),
             ),
-        const SizedBox(height: 4),
+          ),
+        if (r != null) ...[
+          const SizedBox(height: 6),
+          for (final p in r.proof) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${p['name']}',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                  ),
+                ),
+                if (dev != null && (p['keys'] as List<dynamic>? ?? const []).contains(dev))
+                  Text('ESTE APARELHO', style: AppText.label(size: 10.5, color: AppColors.ink)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              who(Map<String, dynamic>.from(p['report'] as Map? ?? const {})),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.mute),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
         Text(
-          'Conta: SHA-256(semente) = compromisso; chave dos dados = SHA-256(semente, contribuições); sorteio ChaCha8.',
+          'Conta: SHA-256(semente) = compromisso; dados = ChaCha8 com SHA-256(semente, contribuições); '
+          'jogadas assinadas com Ed25519.',
           style: AppText.label(size: 10.5, color: AppColors.faint),
         ),
       ],

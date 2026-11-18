@@ -245,6 +245,61 @@ class AppController extends ChangeNotifier {
     return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
   }
 
+  // Chave Ed25519 deste aparelho (a semente fica guardada; a chave nunca sai do motor): assina as jogadas online.
+  String? _devicePub;
+  String? get devicePub {
+    if (_devicePub != null) return _devicePub;
+    try {
+      final r = engine.callJson('deviceKey', {'seed': AppStorage.instance.getString(_kDeviceKey) ?? ''});
+      AppStorage.instance.setString(_kDeviceKey, r['seed'] as String);
+      _devicePub = r['pub'] as String;
+    } catch (_) {}
+    return _devicePub;
+  }
+
+  String? _csSentFor;
+  String? _keySentFor;
+  int _lastQ = 0;
+
+  /// Na sala de espera online: manda a contribuição para os dados e a chave do aparelho depois de ver o compromisso
+  /// (assim o servidor não tem como escolher a semente sabendo a contribuição).
+  void _contribute(String? commit, GameLink link) {
+    final ses = online;
+    if (ses == null || ses.lan || commit == null || commit.length != 64 || commit == _csSentFor) return;
+    _csSentFor = commit;
+    _keySentFor = commit;
+    link.send({'t': 'cs', 'c': commit, 'v': clientSeed, 'k': ?devicePub});
+    final log = (_readJsonList(_kContrib) ?? const []).map((e) => '$e').toList()
+      ..remove(commit)
+      ..add(commit);
+    AppStorage.instance.setString(_kContrib, jsonEncode(log.length > 200 ? log.sublist(log.length - 200) : log));
+  }
+
+  /// Na partida online: avisa a chave deste aparelho (troca de aparelho no meio da partida, como na correspondência).
+  void _announceKey(GameLink link) {
+    final ses = online;
+    final commit = matchCommit;
+    if (ses == null || ses.lan || commit == null || me < 0 || commit == _keySentFor) return;
+    _keySentFor = commit;
+    final k = devicePub;
+    if (k != null) link.send({'t': 'key', 'k': k});
+  }
+
+  /// Este aparelho contribuiu para a partida deste compromisso depois de vê-lo.
+  bool contributedTo(String commit) =>
+      (_readJsonList(_kContrib) ?? const []).map((e) => '$e').contains(commit);
+
+  List<dynamic>? _readJsonList(String key) {
+    final raw = AppStorage.instance.getString(key);
+    if (raw == null) return null;
+    try {
+      final v = jsonDecode(raw);
+      return v is List ? v : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   ReplaySession? replay;
   bool replayLoading = false;
   Timer? _replayTimer;
@@ -293,6 +348,7 @@ class AppController extends ChangeNotifier {
       ],
       meta: meta,
       rep: rep,
+      proof: [for (final p in (res['players'] as List<dynamic>? ?? const [])) Map<String, dynamic>.from(p as Map)],
     );
     role = 'guest';
     me = -1;
@@ -615,6 +671,8 @@ class AppController extends ChangeNotifier {
   // Com conta: o nome de usuário (único) é o nome no jogo e o desafio do dia vale em qualquer aparelho.
   static const _kAccToken = 'ultimato.account.token';
   static const _kPlayed = 'ultimato.played';
+  static const _kDeviceKey = 'ultimato.devicekey';
+  static const _kContrib = 'ultimato.contrib';
   static const _kAccUser = 'ultimato.account.user';
   // De quem é o progresso guardado no aparelho (id da conta; vazio = convidado).
   static const _kProgressOwner = 'ultimato.progress.owner';
@@ -3174,8 +3232,8 @@ class AppController extends ChangeNotifier {
             if (ses.token != null) 'token': ses.token,
             if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
             if (!isLan && _accountToken != null) 'acc': _accountToken,
-            if (!isLan) 'cs': clientSeed,
           });
+          _csSentFor = _keySentFor = null; // conexão nova: a contribuição e a chave vão de novo
         } else {
           link.send({
             't': 'hello',
@@ -3243,8 +3301,8 @@ class AppController extends ChangeNotifier {
           'token': ?tok,
           if (_pendingRoomPass != null && _pendingRoomPass!.isNotEmpty) 'pass': _pendingRoomPass,
           if (!ses.lan && _accountToken != null) 'acc': _accountToken,
-          if (!ses.lan) 'cs': clientSeed,
         });
+        _csSentFor = _keySentFor = null;
         notifyListeners();
       },
       onMessage: (msg, link) => _handleRemoteMessage(msg, link),
@@ -3420,6 +3478,7 @@ class AppController extends ChangeNotifier {
     }
     if (t == 'lobby') {
       passPrompt = null;
+      _contribute(msg['commit'] as String?, link);
       _hostLastHeardMs = DateTime.now().millisecondsSinceEpoch;
       hostLag = false;
       screen = AppScreen.lobby;
@@ -3479,6 +3538,7 @@ class AppController extends ChangeNotifier {
       var leftMs = msg['left'] is num ? (msg['left'] as num).toInt() : null;
       final cm = msg['commit'] as String? ?? '';
       matchCommit = cm.isEmpty ? null : cm;
+      _announceKey(link);
       final rp = msg['replay'] as String? ?? '';
       matchReplayId = rp.isEmpty ? null : rp;
       if (msg['async'] == true && msg['deadline'] is num) {
@@ -4495,6 +4555,18 @@ class AppController extends ChangeNotifier {
 
   void _sendAction(Map<String, dynamic> action) {
     if (role == 'guest') {
+      final commit = matchCommit;
+      final key = devicePub;
+      if (online != null && !online!.lan && commit != null && key != null) {
+        // jogada assinada pela chave deste aparelho, com um contador que só cresce (sobrevive a recarregar a página)
+        final q = max(_lastQ + 1, DateTime.now().microsecondsSinceEpoch);
+        _lastQ = q;
+        try {
+          final sig = engine.callJson('signAction', {'commit': commit, 'n': q, 'a': jsonEncode(action)})['sig'] as String;
+          guestLink?.send({'t': 'act', 'a': action, 'q': q, 'g': sig});
+          return;
+        } catch (_) {}
+      }
       guestLink?.send({'t': 'act', 'a': action});
       return;
     }

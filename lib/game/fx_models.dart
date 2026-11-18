@@ -21,7 +21,12 @@ class ReplaySession {
     required this.turns,
     required this.meta,
     required this.rep,
+    this.proof = const [],
   });
+
+  /// Por jogador (na ordem da partida): nome, chaves usadas, contribuição e quem fez as jogadas (assinadas, sem
+  /// assinatura, bot, prazo esgotado, aparelhos).
+  final List<Map<String, dynamic>> proof;
 
   final String code;
   final int engineId;
