@@ -1238,6 +1238,7 @@ enum EstIconKind {
   minus,
   lock,
   lan,
+  chat,
 }
 
 class EstIcon extends StatelessWidget {
@@ -1570,6 +1571,27 @@ class _EstIconPainter extends CustomPainter {
           ..lineTo(20, 20)
           ..lineTo(20, 15);
         canvas.drawPath(q, stroke);
+      case EstIconKind.chat:
+        // balão de recado com rabicho embaixo à esquerda e três pontos
+        final b = Path()
+          ..moveTo(6, 4.5)
+          ..lineTo(18, 4.5)
+          ..arcToPoint(const Offset(21, 7.5), radius: const Radius.circular(3))
+          ..lineTo(21, 13.5)
+          ..arcToPoint(const Offset(18, 16.5), radius: const Radius.circular(3))
+          ..lineTo(11, 16.5)
+          ..lineTo(6.5, 20)
+          ..lineTo(7, 16.5)
+          ..lineTo(6, 16.5)
+          ..arcToPoint(const Offset(3, 13.5), radius: const Radius.circular(3))
+          ..lineTo(3, 7.5)
+          ..arcToPoint(const Offset(6, 4.5), radius: const Radius.circular(3))
+          ..close();
+        canvas.drawPath(b, stroke);
+        final dot = Paint()..color = color;
+        for (final x in [8.0, 12.0, 16.0]) {
+          canvas.drawCircle(Offset(x, 10.5), 1.3, dot);
+        }
       case EstIconKind.close:
         canvas.drawLine(const Offset(6.5, 6.5), const Offset(17.5, 17.5), stroke);
         canvas.drawLine(const Offset(17.5, 6.5), const Offset(6.5, 17.5), stroke);

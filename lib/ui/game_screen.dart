@@ -25,6 +25,8 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
+  bool _emoteOpen = false; // painel de recados aberto
+
   VoidCallback? _fitZoom;
   void Function(double factor)? _zoomBy;
   final FocusNode _focusNode = FocusNode();
@@ -337,6 +339,27 @@ class _GameScreenState extends State<GameScreen> {
                   difficulty: c.challengeDifficulty,
                   onExit: c.leaveGame,
                 ),
+              ),
+            ),
+
+          // recados prontos (emotes táticos): botão no canto, balões de quem mandou embaixo dele
+          if (_emoteOpen && c.canEmote)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _emoteOpen = false),
+              ),
+            ),
+          if (c.canEmote || c.emotes.isNotEmpty)
+            Positioned(
+              right: layout.land ? 8 : 10,
+              top: layout.land ? 8 : 10,
+              child: _EmoteCorner(
+                ctrl: c,
+                open: _emoteOpen && c.canEmote,
+                compact: layout.land && !layout.wide,
+                onToggle: () => setState(() => _emoteOpen = !_emoteOpen),
+                onSent: () => setState(() => _emoteOpen = false),
               ),
             ),
         ],
@@ -3990,6 +4013,240 @@ class _CopyReportButtonState extends State<_CopyReportButton> {
         label: _done ?? 'Copiar relatório tático',
         variant: done ? EstButtonVariant.primary : EstButtonVariant.pact,
         onPressed: _copy,
+      ),
+    );
+  }
+}
+
+// ---------- Recados prontos (emotes táticos) ----------
+
+class _EmoteCorner extends StatelessWidget {
+  const _EmoteCorner({
+    required this.ctrl,
+    required this.open,
+    required this.compact,
+    required this.onToggle,
+    required this.onSent,
+  });
+
+  final AppController ctrl;
+  final bool open;
+  final bool compact;
+  final VoidCallback onToggle;
+  final VoidCallback onSent;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ctrl;
+    final players = c.view?['players'] as List<dynamic>? ?? const [];
+    final colors = c.engine.constants.colors;
+    final btn = compact ? 32.0 : 36.0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (c.canEmote)
+          Container(
+            width: btn,
+            height: btn,
+            decoration: BoxDecoration(
+              color: AppColors.obsidian.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: open ? AppColors.ink : AppColors.glassBorder),
+            ),
+            child: EstIconButton(
+              icon: EstIconKind.chat,
+              size: btn - 2,
+              iconSize: compact ? 16 : 18,
+              color: open ? AppColors.ink : AppColors.mute,
+              tooltip: 'Recados',
+              onPressed: onToggle,
+            ),
+          ),
+        if (open) ...[
+          const SizedBox(height: 6),
+          _EmotePanel(ctrl: c, compact: compact, onSent: onSent),
+        ],
+        if (!open)
+          for (final b in c.emotes)
+            if (b.player < players.length)
+              Padding(
+                key: ValueKey(b.id),
+                padding: const EdgeInsets.only(top: 6),
+                child: _EmoteBubbleView(
+                  name: b.mine ? 'Você' : (players[b.player]['name'] as String? ?? ''),
+                  text: AppController.emoteTexts[b.emote],
+                  color: parseHexColor(colors[(players[b.player]['color'] as num).toInt()].hex),
+                ),
+              ),
+      ],
+    );
+  }
+}
+
+class _EmotePanel extends StatelessWidget {
+  const _EmotePanel({required this.ctrl, required this.compact, required this.onSent});
+
+  final AppController ctrl;
+  final bool compact;
+  final VoidCallback onSent;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ctrl;
+    final wait = c.emoteWaitMs > 0;
+    Widget chip(int i) => Material(
+          color: AppColors.panel2,
+          borderRadius: BorderRadius.circular(3),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(3),
+            onTap: wait
+                ? null
+                : () {
+                    c.sendEmote(i);
+                    onSent();
+                  },
+            child: Container(
+              height: compact ? 30 : 34,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                AppController.emoteTexts[i],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: wait ? AppColors.faint : AppColors.ink,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+        );
+    final n = AppController.emoteTexts.length;
+    return Container(
+      width: compact ? 300 : 320,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppColors.edgeShadows,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var r = 0; r < n; r += 2)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(child: chip(r)),
+                  const SizedBox(width: 4),
+                  Expanded(child: r + 1 < n ? chip(r + 1) : const SizedBox()),
+                ],
+              ),
+            ),
+          InkWell(
+            onTap: () => c.setEmotesMuted(!c.emotesMuted),
+            child: SizedBox(
+              height: 30,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    child: Checkbox(
+                      value: c.emotesMuted,
+                      onChanged: (v) => c.setEmotesMuted(v ?? false),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      side: const BorderSide(color: AppColors.glassBorder),
+                      activeColor: AppColors.ink,
+                      checkColor: AppColors.onAction,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Silenciar recados dos outros',
+                      style: TextStyle(fontSize: 12, color: AppColors.mute),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmoteBubbleView extends StatelessWidget {
+  const _EmoteBubbleView({required this.name, required this.text, required this.color});
+
+  final String name;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 180),
+        builder: (context, t, child) => Opacity(
+          opacity: t,
+          child: Transform.translate(offset: Offset(8 * (1 - t), 0), child: child),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 260),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(0, 0, 11, 0),
+            decoration: BoxDecoration(
+              color: AppColors.obsidian.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 3,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(3)),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '$name  ',
+                              style: const TextStyle(color: AppColors.mute, fontWeight: FontWeight.w600),
+                            ),
+                            TextSpan(text: text, style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12.5, height: 1.2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

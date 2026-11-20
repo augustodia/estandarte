@@ -301,6 +301,25 @@ class AppController extends ChangeNotifier {
   }
 
   ReplaySession? replay;
+
+  // Emotes táticos: recados prontos (sem texto livre). O servidor e o anfitrião só repassam o número.
+  static const List<String> emoteTexts = [
+    'Bom jogo',
+    'Bem jogado!',
+    'Obrigado',
+    'Ops…',
+    'Trégua?',
+    'Todos contra o líder!',
+    'Vou me vingar',
+    'Foi por pouco',
+  ];
+  static const int emoteGapMs = 3000; // o servidor recusa mais de um a cada 3 s
+  static const String _kEmotesMuted = 'estandarte.emotesMuted';
+  final List<EmoteBubble> emotes = [];
+  bool emotesMuted = false;
+  int _emoteSeq = 0;
+  int _emoteSentMs = 0;
+  final Map<int, int> _seatEmoteMs = {}; // anfitrião: último recado de cada lugar
   bool replayLoading = false;
   Timer? _replayTimer;
   AppScreen _replayBack = AppScreen.home;
@@ -495,6 +514,7 @@ class AppController extends ChangeNotifier {
     smoke.setReducedMotion(WebEnv.reducedMotion);
     SoundPlayer.enabled = AppStorage.instance.getString('estandarte.sound') != '0';
     forceLand = AppStorage.instance.getString('estandarte.land') != '0';
+    emotesMuted = AppStorage.instance.getString(_kEmotesMuted) == '1';
 
     final savedCfg = _readJsonStorage('estandarte.cfg');
     if (savedCfg != null) {
@@ -2708,6 +2728,18 @@ class AppController extends ChangeNotifier {
       if (_engineId != null) _syncHost();
       return;
     }
+    if (t == 'emote') {
+      // só de quem tem lugar na partida, no máximo um a cada 3 s; quem assiste não manda
+      final e = (msg['e'] is num) ? (msg['e'] as num).toInt() : -1;
+      final p = idx >= 0 ? _playerOfSeat(idx) : -1;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (_engineId == null || p < 0 || e < 0 || e >= emoteTexts.length) return;
+      if (now - (_seatEmoteMs[idx] ?? 0) < emoteGapMs) return;
+      _seatEmoteMs[idx] = now;
+      _relayEmote({'t': 'emote', 'p': p, 'e': e}, link);
+      _pushEmote(p, e);
+      return;
+    }
     if (t == 'hello') {
       if (idx < 0) {
         if (!_pendingGuestLinks.contains(link)) return;
@@ -3567,6 +3599,11 @@ class AppController extends ChangeNotifier {
         }
       }
       _applyIncomingView(sView);
+      return;
+    }
+    if (t == 'emote') {
+      final p = msg['p'], e = msg['e'];
+      if (p is num && e is num && p.toInt() != me) _pushEmote(p.toInt(), e.toInt());
       return;
     }
     if (t == 'peek') {
@@ -4615,6 +4652,81 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Dá para mandar recado: partida com outra pessoa do outro lado (online, correspondência, rede de casa ou relay).
+  @visibleForTesting
+  bool debugCanEmote = false; // telas de teste: mostra o botão sem precisar de outra pessoa conectada
+
+  @visibleForTesting
+  void debugPushEmote(int p, int e, {bool mine = false}) => _pushEmote(p, e, mine: mine);
+
+  bool get canEmote {
+    final v = view;
+    if (debugCanEmote && v != null) return true;
+    if (v == null || replay != null || activeChallenge != null || tutorialGuide != null) return false;
+    if (role == 'guest') return me >= 0 && guestLink != null && guestLink!.isOpen;
+    return _engineId != null &&
+        (seats.any((s) => s.link != null && s.link!.isOpen) || _relayWatchers.any((w) => w.isOpen));
+  }
+
+  /// Quanto falta (ms) para poder mandar outro recado.
+  int get emoteWaitMs => max(0, _emoteSentMs + emoteGapMs - DateTime.now().millisecondsSinceEpoch);
+
+  int _playerOfSeat(int seat) {
+    final players = view?['players'] as List<dynamic>? ?? const [];
+    for (var p = 0; p < players.length; p++) {
+      if ((players[p]['seat'] as num?)?.toInt() == seat) return p;
+    }
+    return -1;
+  }
+
+  void sendEmote(int e) {
+    if (e < 0 || e >= emoteTexts.length || !canEmote || emoteWaitMs > 0) return;
+    _emoteSentMs = DateTime.now().millisecondsSinceEpoch;
+    if (role == 'guest') {
+      guestLink?.send({'t': 'emote', 'e': e});
+      _pushEmote(me, e, mine: true);
+    } else {
+      final p = _playerOfSeat(0);
+      if (p < 0) return;
+      _relayEmote({'t': 'emote', 'p': p, 'e': e}, null);
+      _pushEmote(p, e, mine: true);
+    }
+    Timer(const Duration(milliseconds: emoteGapMs), notifyListeners); // libera os recados de novo no painel
+    Telemetry.track('emote_sent', mode: _activeTelemetryMode(), props: {'e': e});
+  }
+
+  void setEmotesMuted(bool on) {
+    emotesMuted = on;
+    AppStorage.instance.setString(_kEmotesMuted, on ? '1' : '0');
+    if (on) emotes.removeWhere((b) => !b.mine);
+    notifyListeners();
+  }
+
+  void _relayEmote(Map<String, dynamic> msg, GameLink? from) {
+    for (final s in seats) {
+      if (s.link != null && s.link!.isOpen && s.link != from) s.link!.send(msg);
+    }
+    for (final w in _relayWatchers) {
+      if (w.isOpen) w.send(msg);
+    }
+  }
+
+  void _pushEmote(int p, int e, {bool mine = false}) {
+    final players = view?['players'] as List<dynamic>? ?? const [];
+    if (p < 0 || p >= players.length || e < 0 || e >= emoteTexts.length) return;
+    if (emotesMuted && !mine) return;
+    final b = EmoteBubble(++_emoteSeq, p, e, mine);
+    emotes.removeWhere((x) => x.player == p); // um balão por jogador: o novo substitui o anterior
+    emotes.add(b);
+    while (emotes.length > 3) {
+      emotes.removeAt(0);
+    }
+    Timer(const Duration(milliseconds: 4200), () {
+      if (emotes.remove(b)) notifyListeners();
+    });
+    notifyListeners();
+  }
+
   void _sendPeek() {
     final v = view;
     if (v == null || role == 'local' || sel == null || !canPlayNow()) return;
@@ -5192,6 +5304,8 @@ class AppController extends ChangeNotifier {
 
   /// Sai da partida. Na correspondência, [keepSeat] só fecha neste aparelho (o lugar continua seu).
   void leaveGame({String? showReason, bool keepSeat = false}) {
+    emotes.clear();
+    _seatEmoteMs.clear();
     if (replay != null) {
       _leaveReplay();
       return;
