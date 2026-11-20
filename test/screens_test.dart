@@ -293,6 +293,7 @@ void main() {
       ctrl.debugCanEmote = true;
       ctrl.debugPushEmote(1, 4);
       ctrl.debugPushEmote(0, 0, mine: true);
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl))); // aqui a tela não escuta o controle sozinha
       await _shot(tester, 'emotes_$tag');
       await tester.tap(find.byTooltip('Recados'));
       await _shot(tester, 'emote_panel_$tag');
