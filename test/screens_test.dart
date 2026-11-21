@@ -289,6 +289,20 @@ void main() {
       }
       await _shot(tester, 'game_$tag');
 
+      // recados prontos: balões de quem mandou e o painel aberto
+      ctrl.debugCanEmote = true;
+      ctrl.debugPushEmote(1, 4);
+      ctrl.debugPushEmote(0, 0, mine: true);
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl))); // aqui a tela não escuta o controle sozinha
+      await _shot(tester, 'emotes_$tag');
+      await tester.tap(find.byTooltip('Recados'));
+      await _shot(tester, 'emote_panel_$tag');
+      await tester.tap(find.text('Bem jogado!'));
+      await tester.pump(const Duration(milliseconds: 4500)); // os balões somem sozinhos
+      await tester.pump(const Duration(milliseconds: 3200));
+      ctrl.debugCanEmote = false;
+      await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
+
       // objetivo do desafio: aberto ao começar, recolhido depois de alguns segundos
       ctrl.activeChallenge = const DailyChallengeSpec(
         id: 'd_teste', date: '2026-11-17', seed: 1, kind: 'daily', weekday: 2, flavor: 'daily',

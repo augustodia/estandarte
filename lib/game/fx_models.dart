@@ -265,3 +265,13 @@ class OnlineSession {
   String waitMsg;
   GameLink? pendingLink;
 }
+
+/// Um recado pronto aparecendo na partida (some sozinho em alguns segundos).
+class EmoteBubble {
+  EmoteBubble(this.id, this.player, this.emote, this.mine);
+
+  final int id;
+  final int player;
+  final int emote;
+  final bool mine;
+}
