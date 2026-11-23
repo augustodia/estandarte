@@ -20,6 +20,7 @@ class DailyScreen extends StatefulWidget {
 
 class _DailyScreenState extends State<DailyScreen> {
   String _rightTab = 'ranking'; // 'ranking' | 'codex'
+  bool _yesterday = false; // ranking de ontem (com os replays para assistir)
   Timer? _tick;
   int _elapsedSecs = 0;
 
@@ -435,8 +436,10 @@ class _DailyScreenState extends State<DailyScreen> {
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: AppColors.line),
           ),
-          child: const Text(
-            'Nenhum comandante concluiu esta missão hoje ainda.\nVença para inaugurar o pódio!',
+          child: Text(
+            _yesterday
+                ? 'Ninguém entrou no ranking ontem.'
+                : 'Nenhum comandante concluiu esta missão hoje ainda.\nVença para inaugurar o pódio!',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, height: 1.45, color: AppColors.mute),
           ),
@@ -524,6 +527,17 @@ class _DailyScreenState extends State<DailyScreen> {
                     '★' * e.stars + '☆' * (3 - e.stars),
                     style: const TextStyle(fontSize: 13, color: AppColors.gold, letterSpacing: 1.0),
                   ),
+                  if (e.replay.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    EstIconButton(
+                      icon: EstIconKind.play,
+                      size: 30,
+                      iconSize: 15,
+                      color: AppColors.mute,
+                      tooltip: 'Assistir a partida',
+                      onPressed: c.replayLoading ? null : () => c.openReplay(e.replay),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -708,7 +722,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 children: [
                   Expanded(
                     child: _DailyTab(
-                      label: 'Ranking Hoje (${entries.length})',
+                      label: 'Ranking (${entries.length})',
                       active: _rightTab == 'ranking',
                       onTap: () => setState(() => _rightTab = 'ranking'),
                     ),
@@ -725,12 +739,52 @@ class _DailyScreenState extends State<DailyScreen> {
             ),
             const SizedBox(height: 10),
             if (_rightTab == 'ranking') ...[
-              const Text(
-                'Ranking aberto de testes (sem conta por enquanto — futuramente vinculado ao perfil). Ordenado por Estrelas → Marechal → Menos rodadas → Baixas.',
-                style: TextStyle(fontSize: 11, height: 1.35, color: AppColors.mute),
+              Row(
+                children: [
+                  for (final y in [false, true]) ...[
+                    _DayChip(
+                      label: y ? 'Ontem' : 'Hoje',
+                      active: _yesterday == y,
+                      onTap: () {
+                        setState(() => _yesterday = y);
+                        if (y && c.yesterdayRanking == null) c.loadYesterdayRanking();
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  const Spacer(),
+                  if (!_yesterday && c.todayReplayId != null)
+                    EstButton(
+                      small: true,
+                      variant: EstButtonVariant.ghost,
+                      icon: EstIconKind.play,
+                      label: 'Sua partida',
+                      onPressed: c.replayLoading ? null : () => c.openReplay(c.todayReplayId!),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _yesterday
+                    ? '${c.yesterdayTitle.isNotEmpty ? '${c.yesterdayTitle}. ' : ''}Use o botão de assistir para ver a partida de cada comandante.'
+                    : 'Só entram partidas com conta, conferidas pelo servidor. Ordenado por Estrelas → Marechal → '
+                        'Menos rodadas → Baixas. As partidas ficam para assistir quando o dia virar.',
+                style: const TextStyle(fontSize: 11, height: 1.35, color: AppColors.mute),
               ),
               const SizedBox(height: 10),
-              rankingList(entries),
+              if (_yesterday && c.yesterdayRanking == null)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 1.6, color: AppColors.faint),
+                    ),
+                  ),
+                )
+              else
+                rankingList(_yesterday ? c.yesterdayRanking! : entries),
             ] else
               codexPanel(),
           ],
@@ -813,4 +867,36 @@ class _DailyTab extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DayChip extends StatelessWidget {
+  const _DayChip({required this.label, required this.active, required this.onTap});
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(3),
+        child: Container(
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? AppColors.panel2 : Colors.transparent,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: active ? AppColors.ink : AppColors.line),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: active ? AppColors.ink : AppColors.mute,
+            ),
+          ),
+        ),
+      );
 }

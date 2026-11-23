@@ -1239,6 +1239,7 @@ enum EstIconKind {
   lock,
   lan,
   chat,
+  play,
 }
 
 class EstIcon extends StatelessWidget {
@@ -1571,6 +1572,13 @@ class _EstIconPainter extends CustomPainter {
           ..lineTo(20, 20)
           ..lineTo(20, 15);
         canvas.drawPath(q, stroke);
+      case EstIconKind.play: // assistir (replay)
+        final tri = Path()
+          ..moveTo(8.5, 5.5)
+          ..lineTo(18.5, 12)
+          ..lineTo(8.5, 18.5)
+          ..close();
+        canvas.drawPath(tri, stroke);
       case EstIconKind.chat:
         // balão de recado com rabicho embaixo à esquerda e três pontos
         final b = Path()

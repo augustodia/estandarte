@@ -76,6 +76,8 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
 
 - [x] **Dados verificáveis (commit-reveal):** compromisso SHA-256 da semente no começo, contribuição de cada jogador na
   chave dos dados, semente revelada no fim; o app confere e refaz a partida.
+- [x] **Replay do desafio:** a melhor partida conferida de cada conta vira replay. O dono assiste na hora; no ranking,
+  as partidas ficam para assistir quando o dia vira (aba Ontem), para não entregar a solução do dia.
 - [x] **Desafio verificável:** as regras e as estrelas do desafio rodam no motor; o app joga com a semente que o
   servidor entrega e manda a partida gravada; o servidor refaz e grava o resultado *dele* no ranking e no Códice (só
   a campanha conferida libera brasão). Limite: o app conhece a semente, então um app alterado pode prever os dados.

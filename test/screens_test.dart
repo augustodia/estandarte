@@ -284,6 +284,22 @@ void main() {
       Navigator.of(tester.element(find.byType(DailyScreen)), rootNavigator: true).pop();
       await tester.pump(const Duration(milliseconds: 400));
 
+      // ranking de ontem, com as partidas para assistir
+      ctrl.yesterdayRanking = [
+        const DailyRankEntry(rank: 1, playerName: 'Bia', difficulty: 'marechal', stars: 3, rounds: 6, armiesLost: 14, ordersUsed: 2,
+            durationSec: 840, submittedAtMs: 1, crest: 'hist_britain_1940:3', replay: 'K7Q2M9XA'),
+        const DailyRankEntry(rank: 2, playerName: 'Luiz', difficulty: 'standard', stars: 2, rounds: 8, armiesLost: 22, ordersUsed: 0,
+            durationSec: 1210, submittedAtMs: 2, replay: 'P4N8R2TB'),
+      ];
+      ctrl.yesterdayTitle = 'Ofensiva Relâmpago';
+      await tester.ensureVisible(find.textContaining('Ranking ('));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.textContaining('Ranking ('));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.ensureVisible(find.text('Ontem'));
+      await tester.tap(find.text('Ontem'));
+      await _shot(tester, 'daily_yesterday_$tag');
+
       // ranqueada: patente, fila e ranking da temporada
       ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com', emailVerified: true));
       ctrl.rankedInfo = {
