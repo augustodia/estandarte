@@ -291,9 +291,9 @@ void main() {
             durationSec: 1210, submittedAtMs: 2, replay: 'P4N8R2TB'),
       ];
       ctrl.yesterdayTitle = 'Ofensiva Relâmpago';
-      await tester.ensureVisible(find.textContaining('Ranking Hoje'));
+      await tester.ensureVisible(find.textContaining('Ranking ('));
       await tester.pump(const Duration(milliseconds: 200));
-      await tester.tap(find.textContaining('Ranking Hoje'));
+      await tester.tap(find.textContaining('Ranking ('));
       await tester.pump(const Duration(milliseconds: 200));
       await tester.ensureVisible(find.text('Ontem'));
       await tester.tap(find.text('Ontem'));

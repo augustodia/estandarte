@@ -722,7 +722,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 children: [
                   Expanded(
                     child: _DailyTab(
-                      label: 'Ranking Hoje (${entries.length})',
+                      label: 'Ranking (${entries.length})',
                       active: _rightTab == 'ranking',
                       onTap: () => setState(() => _rightTab = 'ranking'),
                     ),
@@ -766,7 +766,7 @@ class _DailyScreenState extends State<DailyScreen> {
               const SizedBox(height: 8),
               Text(
                 _yesterday
-                    ? 'Toque em ▶ para assistir à partida de cada comandante. ${c.yesterdayTitle}'
+                    ? '${c.yesterdayTitle.isNotEmpty ? '${c.yesterdayTitle}. ' : ''}Use o botão de assistir para ver a partida de cada comandante.'
                     : 'Só entram partidas com conta, conferidas pelo servidor. Ordenado por Estrelas → Marechal → '
                         'Menos rodadas → Baixas. As partidas ficam para assistir quando o dia virar.',
                 style: const TextStyle(fontSize: 11, height: 1.35, color: AppColors.mute),
