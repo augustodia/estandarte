@@ -134,7 +134,7 @@ class _CrestsBodyState extends State<_CrestsBody> {
       children: [
         const Text(
           'Cada crônica das Quintas Históricas dá um brasão. O metal mostra a sua melhor campanha: '
-          'bronze ★, prata ★★, ouro ★★★.',
+          'bronze ★, prata ★★, ouro ★★★. Vale a partida jogada com conta e internet, que o servidor confere.',
           style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
         ),
         const SizedBox(height: 6),
@@ -150,11 +150,14 @@ class _CrestsBodyState extends State<_CrestsBody> {
         grid([
           for (final m in historicalCodexCatalog)
             () {
-              final s = codexStars(codex, m.id);
+              final s = verifiedStars(codex, m.id);
+              final played = codexStars(codex, m.id);
               return tile(
                 crest: s > 0 ? '${m.id}:$s' : '${m.id}:1',
                 title: m.title,
-                sub: s > 0 ? '${tierNames[s]} · ${m.era}' : 'Quinta-feira · ${m.era}',
+                sub: s > 0
+                    ? '${tierNames[s]} · ${m.era}'
+                    : (played > 0 ? 'Jogada sem conferir · ${m.era}' : 'Quinta-feira · ${m.era}'),
                 got: s > 0,
               );
             }(),

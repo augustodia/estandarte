@@ -533,3 +533,31 @@ String buildChallengeShareReport({
       '$starsStr Vitória em $rounds rodadas · $diffLabel$rankPart\n'
       'Quartel: $ordersUsed ordens · Baixas: $armiesLost exércitos';
 }
+
+/// O desafio no formato que o motor entende (challengeStart): objetivo, doutrinas, mutações e evento fixo.
+Map<String, dynamic> challengeSpecJson(DailyChallengeSpec spec) {
+  final g = spec.goal;
+  return {
+    'id': spec.id,
+    'date': spec.date,
+    'startRound': spec.startRound,
+    if (spec.fixedEvenEvent.isNotEmpty) 'fixedEvenEvent': spec.fixedEvenEvent,
+    'doctrines': [for (final d in spec.doctrines) d.key],
+    'mutations': [for (final m in spec.mutations) m.key],
+    'goal': {
+      'kind': g.kind,
+      'requiredTerritories': g.requiredTerritories,
+      'mustKeepTerritories': g.mustKeepTerritories,
+      'fatalLoss': g.fatalLoss,
+      'strikeTerritories': g.strikeTerritories,
+      'minStrikeCount': g.minStrikeCount,
+      'surviveRounds': g.surviveRounds,
+      'targetCount': g.targetCount,
+      'requiredContinents': g.requiredContinents,
+      'maxRounds': g.maxRounds,
+      'star2MaxRound': g.star2MaxRound,
+      'star3Rule': g.star3Rule,
+      'star3Target': g.star3Target,
+    },
+  };
+}

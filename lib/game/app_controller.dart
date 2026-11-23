@@ -209,13 +209,15 @@ class AppController extends ChangeNotifier {
   bool challengeResultSubmitted = false;
   String? _challengeRunId;
   int _challengeStartedMs = 0;
-  int _challengeLastRound = 0;
-  int _challengeArmiesLost = 0;
-  int _challengeNukesUsed = 0;
-  int _challengeOrdersUsed = 0;
-  bool _challengeLostKeyEver = false;
-  String _challengeBlitzMedalTurnKey = '';
-  Set<int> _challengeOwnedContinents = {};
+  bool _challengeRecorded = false; // jogando com a semente do servidor: a partida vai gravada no envio
+
+  // placar do desafio: quem conta é o motor (o mesmo que o servidor usa para conferir)
+  Map<String, dynamic>? get _challengeState => view?['challenge'] as Map<String, dynamic>?;
+  int _challengeInt(String k) => (_challengeState?[k] as num?)?.toInt() ?? 0;
+  int get _challengeArmiesLost => _challengeInt('armiesLost');
+  int get _challengeNukesUsed => _challengeInt('nukesUsed');
+  int get _challengeOrdersUsed => _challengeInt('ordersUsed');
+  bool get _challengeLostKeyEver => _challengeState?['lostKey'] == true;
   Map<String, dynamic> dailyProgress = {};
   Map<String, dynamic> codexProgress = {};
 
@@ -1347,14 +1349,9 @@ class AppController extends ChangeNotifier {
     challengeSubmitRanking = List<DailyRankEntry>.from(dailySnapshot?.ranking ?? const []);
     challengeResultSubmitted = false;
     _challengeStartedMs = DateTime.now().millisecondsSinceEpoch;
-    _challengeLastRound = spec.startRound;
-    _challengeArmiesLost = 0;
-    _challengeNukesUsed = 0;
-    _challengeOrdersUsed = 0;
-    _challengeLostKeyEver = false;
-    _challengeBlitzMedalTurnKey = '';
 
     String? srvRunId;
+    String? srvSeed; // dados da corrida: com ela a partida é gravada e o servidor confere o resultado
     if (netOnline) {
       try {
         final startRes = await startDailyRun(
@@ -1365,43 +1362,27 @@ class AppController extends ChangeNotifier {
           appVersion: appVersion,
         );
         srvRunId = startRes['runId'] as String?;
+        srvSeed = startRes['seed'] as String?;
       } catch (_) {}
     }
     _challengeRunId = srvRunId ?? 'off_${DateTime.now().millisecondsSinceEpoch}';
 
-    final st = jsonDecode(jsonEncode(spec.setup)) as Map<String, dynamic>;
-    final players = (st['players'] as List<dynamic>).cast<Map<String, dynamic>>();
+    // O motor monta a partida do desafio (mutações, dificuldade, regras e estrelas) e, com a semente do servidor, grava
+    // as jogadas para o servidor refazer e conferir o resultado.
     final cleanPlayer = cleanName(savedName);
-    if (players.isNotEmpty) {
-      players[0]['name'] = cleanPlayer.isNotEmpty ? cleanPlayer : 'Você';
-      players[0]['ctrl'] = 'local';
-    }
+    _dropEngineGame();
+    final started = engine.callJson('challengeStart', {
+      'setup': spec.setup,
+      'spec': challengeSpecJson(spec),
+      'difficulty': challengeDifficulty,
+      'name': cleanPlayer.isNotEmpty ? cleanPlayer : 'Você',
+      'seed': ?srvSeed,
+    });
+    _engineId = (started['id'] as num).toInt();
+    _challengeRecorded = started['recorded'] == true;
+    final st = engine.exportGame(_engineId!);
+    final players = (st['players'] as List<dynamic>).cast<Map<String, dynamic>>();
     final opts = Map<String, dynamic>.from(st['opts'] as Map<String, dynamic>? ?? const {});
-    if (spec.hasMutation('no_nuke')) opts['nukes'] = false;
-    if (spec.hasMutation('aggressive_ai')) opts['pacts'] = false;
-    st['opts'] = opts;
-
-    if (challengeDifficulty == 'marechal') {
-      final terrs = st['terr'] as List<dynamic>;
-      for (final rawT in terrs) {
-        final tm = rawT as Map<String, dynamic>;
-        if ((tm['o'] as num).toInt() != 0 && (tm['a'] as num).toInt() >= 2) {
-          tm['a'] = (tm['a'] as num).toInt() + 1;
-        }
-      }
-      for (var i = 1; i < players.length; i++) {
-        final m = (players[i]['medals'] as num?)?.toInt() ?? 0;
-        players[i]['medals'] = min(6, m + 1);
-      }
-      if (players.isNotEmpty) {
-        final pm = (players[0]['medals'] as num?)?.toInt() ?? 2;
-        players[0]['medals'] = max(1, pm - 1);
-      }
-      final logList = (st['log'] as List<dynamic>? ?? []).toList();
-      logList.add('Dificuldade Marechal: fronteiras inimigas +1 tropa e bots com medalha extra.');
-      st['log'] = logList;
-    }
-
     optEvents = opts['events'] == true;
     optPacts = opts['pacts'] == true;
     optNukes = opts['nukes'] == true;
@@ -1415,12 +1396,6 @@ class AppController extends ChangeNotifier {
           ctrl: p['ctrl'] as String? ?? 'bot',
         ),
     ];
-
-    // Continentes já dominados na abertura não disparam Logística de Fronteira imediatamente
-    _challengeOwnedContinents = _continentsOwnedByPlayer0(st['terr'] as List<dynamic>);
-
-    _dropEngineGame();
-    _engineId = engine.loadGame(st);
     screen = AppScreen.game;
     WebEnv.setWakeLock(true);
     Telemetry.track(
@@ -1437,22 +1412,6 @@ class AppController extends ChangeNotifier {
     _syncHost();
   }
 
-  Set<int> _continentsOwnedByPlayer0(List<dynamic> terrs) {
-    final owned = <int>{};
-    for (var i = 0; i < terrs.length; i++) {
-      if ((terrs[i]['o'] as num?)?.toInt() == 0) owned.add(i);
-    }
-    final conts = <int>{};
-    for (var cId = 0; cId < mapData.continents.length; cId++) {
-      final hasAll = mapData.territories
-          .asMap()
-          .entries
-          .every((e) => e.value.continent != cId || owned.contains(e.key));
-      if (hasAll) conts.add(cId);
-    }
-    return conts;
-  }
-
   String _activeTelemetryMode() {
     if (inTutorial) return 'tutorial';
     if (activeChallenge != null) return activeChallenge!.kind;
@@ -1463,120 +1422,10 @@ class AppController extends ChangeNotifier {
     return 'local';
   }
 
-  void _applyChallengeRoundHooks() {
-    final spec = activeChallenge;
-    final id = _engineId;
-    if (spec == null || id == null || challengeWon || challengeLost) return;
-    final v = engine.viewFor(id, 0);
-    final round = (v['round'] as num?)?.toInt() ?? 1;
-    final turn = (v['turn'] as num?)?.toInt() ?? 0;
-    final step = v['step'] as String? ?? '';
-    final terrs = v['terr'] as List<dynamic>;
-
-    // Verifica perda temporária de território-chave
-    for (final tk in spec.goal.mustKeepTerritories) {
-      if (tk >= 0 && tk < terrs.length && (terrs[tk]['o'] as num).toInt() != 0) {
-        _challengeLostKeyEver = true;
-      }
-    }
-
-    var mutated = false;
-    Map<String, dynamic>? exported;
-    Map<String, dynamic> getSt() => exported ??= engine.exportGame(id);
-
-    // Rodadas pares com evento fixo (ex.: Mar revolto / Tempestade no Canal)
-    if (round > _challengeLastRound) {
-      _challengeLastRound = round;
-      if (spec.fixedEvenEvent.isNotEmpty && round % 2 == 0) {
-        final st = getSt();
-        st['event'] = {
-          'k': spec.fixedEvenEvent,
-          if (spec.fixedEvenEvent == 'storm') 'c': 2,
-        };
-        mutated = true;
-        Telemetry.track(
-          'mechanic_triggered',
-          date: spec.date,
-          challengeId: spec.id,
-          mode: spec.kind,
-          props: {'key': 'event:${spec.fixedEvenEvent}', 'round': round},
-        );
-      }
-    }
-
-    // Logística de Fronteira: ao fechar um continente novo, +2 exércitos no reforço do jogador 0
-    if (spec.hasDoctrine('continental_fervor') && turn == 0 && step == 'reinforce') {
-      final nowOwned = _continentsOwnedByPlayer0(terrs);
-      final newlyClosed = nowOwned.difference(_challengeOwnedContinents);
-      if (newlyClosed.isNotEmpty) {
-        _challengeOwnedContinents.addAll(newlyClosed);
-        final st = getSt();
-        final pool = Map<String, dynamic>.from(st['pool'] as Map<String, dynamic>? ?? const {});
-        final bonus = newlyClosed.length * 2;
-        pool['free'] = ((pool['free'] as num?)?.toInt() ?? 0) + bonus;
-        st['pool'] = pool;
-        mutated = true;
-        showFlash(
-          'Logística de Fronteira',
-          const Color(0xFFF2EEE6),
-          sub: '+$bonus exércitos bônus por novo continente dominado',
-          ms: 1700,
-          top: true,
-        );
-        Telemetry.track(
-          'mechanic_triggered',
-          date: spec.date,
-          challengeId: spec.id,
-          mode: spec.kind,
-          props: {'key': 'doctrine:continental_fervor', 'bonus': bonus},
-        );
-      }
-    }
-
-    if (mutated && exported != null) {
-      _dropEngineGame();
-      _engineId = engine.loadGame(exported!);
-    }
-  }
-
-  void _grantChallengeMedalBonus(int round, int turn) {
-    final spec = activeChallenge;
-    final id = _engineId;
-    if (spec == null || id == null || !spec.hasDoctrine('blitz_medals')) return;
-    final key = '$round:$turn';
-    if (_challengeBlitzMedalTurnKey == key) return;
-    _challengeBlitzMedalTurnKey = key;
-
-    final st = engine.exportGame(id);
-    final players = st['players'] as List<dynamic>;
-    if (players.isEmpty) return;
-    final p0 = players[0] as Map<String, dynamic>;
-    final curM = (p0['medals'] as num?)?.toInt() ?? 0;
-    if (curM < 6) {
-      p0['medals'] = curM + 1;
-      _dropEngineGame();
-      _engineId = engine.loadGame(st);
-      showFlash(
-        'Doutrina de Choque · +1 medalha',
-        const Color(0xFFF2EEE6),
-        sub: 'Conquista com ataque máximo (3 dados)',
-        ms: 1300,
-        top: true,
-      );
-      Telemetry.track(
-        'mechanic_triggered',
-        date: spec.date,
-        challengeId: spec.id,
-        mode: spec.kind,
-        props: {'key': 'doctrine:blitz_medals'},
-      );
-    }
-  }
-
   void _evaluateActiveChallenge(Map<String, dynamic> hostView) {
     final spec = activeChallenge;
     if (spec == null || challengeWon || challengeLost) return;
-    final status = evaluateChallengeState(
+    var status = evaluateChallengeState(
       spec: spec,
       mapData: mapData,
       view: hostView,
@@ -1585,6 +1434,35 @@ class AppController extends ChangeNotifier {
       ordersUsed: _challengeOrdersUsed,
       lostKeyEver: _challengeLostKeyEver,
     );
+    // Quem decide vitória, derrota e estrelas é o motor (o servidor refaz a partida com ele); daqui fica o texto.
+    var round = (hostView['round'] as num?)?.toInt() ?? 1;
+    final eng = _challengeState;
+    if (eng != null) {
+      final res = eng['result'] as Map<String, dynamic>?;
+      if (res == null) {
+        status = ChallengeLiveStatus(
+          progressText: status.progressText,
+          star2Active: eng['star2'] == true,
+          star3Active: eng['star3'] == true,
+          star3Reason: status.star3Reason,
+          won: false,
+          lost: false,
+        );
+      } else {
+        final won = res['won'] == true;
+        round = (res['round'] as num?)?.toInt() ?? round;
+        status = ChallengeLiveStatus(
+          progressText: status.progressText,
+          star2Active: won && eng['star2'] == true,
+          star3Active: won && eng['star3'] == true,
+          star3Reason: status.star3Reason,
+          won: won,
+          lost: !won,
+          endReason: (status.won || status.lost) && status.won == won ? status.endReason : _challengeEndText(res),
+          earnedStars: won ? (res['stars'] as num?)?.toInt() ?? 1 : 0,
+        );
+      }
+    }
     challengeStatus = status;
     if (status.won || status.lost) {
       challengeWon = status.won;
@@ -1595,8 +1473,37 @@ class AppController extends ChangeNotifier {
       _clockTimer?.cancel();
       SoundPlayer.play(status.won ? 'win' : 'lost');
       WebEnv.vibrate(status.won ? 280 : 180);
-      _finalizeChallengeOutcome(spec, status, (hostView['round'] as num?)?.toInt() ?? 1);
+      _finalizeChallengeOutcome(spec, status, round);
       notifyListeners();
+    }
+  }
+
+  /// A partida gravada do desafio (vai no envio para o servidor conferir); null sem gravação.
+  Map<String, dynamic>? _challengeReplay() {
+    final id = _engineId;
+    if (!_challengeRecorded || id == null) return null;
+    try {
+      return engine.callJson('challengeReplay', {'id': id});
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _challengeEndText(Map<String, dynamic> res) {
+    final g = activeChallenge?.goal;
+    switch (res['reason']) {
+      case 'won':
+        return 'Missão cumprida!';
+      case 'eliminated':
+        return 'Suas forças foram eliminadas do mapa.';
+      case 'key_lost':
+        final t = (res['lost'] as num?)?.toInt() ?? -1;
+        final name = t >= 0 && t < mapData.territories.length ? mapData.territories[t].name : 'um território-chave';
+        return 'Você perdeu $name (território vital da missão).';
+      case 'beaten':
+        return 'Um adversário cumpriu o objetivo primeiro.';
+      default:
+        return 'O prazo máximo de ${g?.maxRounds ?? 0} rodadas terminou.';
     }
   }
 
@@ -1686,7 +1593,14 @@ class AppController extends ChangeNotifier {
           'armiesLost': _challengeArmiesLost,
           'ordersUsed': _challengeOrdersUsed,
           'durationSec': durSec,
+          'replay': ?_challengeReplay(),
         }, accountToken: _accountToken).then((res) {
+          final ver = res['verified'] as Map<String, dynamic>?;
+          if (ver != null) {
+            // o que o servidor apurou refazendo a partida (deve bater com o que o motor daqui calculou)
+            challengeStarsEarned = (ver['stars'] as num?)?.toInt() ?? challengeStarsEarned;
+          }
+          unawaited(syncProgress()); // traz a crônica conferida (libera o brasão)
           final rank = (res['rank'] as num?)?.toInt();
           final rawEntries = (res['entries'] as List<dynamic>? ?? const []);
           final parsed = [for (final e in rawEntries) DailyRankEntry.fromJson(e as Map<String, dynamic>)];
@@ -1705,7 +1619,10 @@ class AppController extends ChangeNotifier {
             );
           }
           notifyListeners();
-        }).catchError((_) {}),
+        }).catchError((Object e) {
+          final msg = e is DailySubmitError ? e.message : '';
+          if (msg.isNotEmpty) showToast(msg, 4200); // ex.: partida não conferida, app desatualizado
+        }),
       );
     }
   }
@@ -3676,7 +3593,6 @@ class AppController extends ChangeNotifier {
 
   void _syncHost() {
     if (_engineId == null) return;
-    _applyChallengeRoundHooks();
     final id = _engineId;
     if (id == null) return;
     final v = engine.viewFor(id, 0);
@@ -4231,21 +4147,6 @@ class AppController extends ChangeNotifier {
           final won = e['won'] == true;
           final la = (e['la'] as num?)?.toInt() ?? 0;
           final ld = (e['ld'] as num?)?.toInt() ?? 0;
-          if (activeChallenge != null) {
-            if (p == 0) _challengeArmiesLost += la;
-            if (def == 0) _challengeArmiesLost += ld;
-            if (p == 0 && won && activeChallenge!.hasDoctrine('blitz_medals')) {
-              final rMap = v['roll'] as Map<String, dynamic>?;
-              final attLen = (rMap?['att'] as List<dynamic>? ?? const []).length;
-              if (attLen >= 3) {
-                final curR = (v['round'] as num?)?.toInt() ?? 1;
-                final curT = (v['turn'] as num?)?.toInt() ?? 0;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _grantChallengeMedalBonus(curR, curT);
-                });
-              }
-            }
-          }
           strikes.add(MapStrike(from: from, to: to, color: col(p), won: won, startMs: now));
           if (la > 0) floats.add(MapFloatText(terr: from, text: '−$la', color: const Color(0xFFFF6B5E), startMs: now));
           if (ld > 0) floats.add(MapFloatText(terr: to, text: '−$ld', color: const Color(0xFFFF6B5E), startMs: now));
@@ -4311,9 +4212,6 @@ class AppController extends ChangeNotifier {
           final def = (e['def'] as num).toInt();
           final to = (e['to'] as num).toInt();
           final lost = (e['lost'] as num).toInt();
-          if (activeChallenge != null && def == 0) {
-            _challengeArmiesLost += lost;
-          }
           _startNukeCinema(to, p);
           _spotlight({to}, impactMs + 2600);
           showFlash(
@@ -4335,6 +4233,23 @@ class AppController extends ChangeNotifier {
               top: true,
             );
           });
+        case 'challenge': // regra do desafio que o motor aplicou (doutrina, evento fixo)
+          final k = e['k'] as String? ?? '';
+          final spec = activeChallenge;
+          if (k == 'blitz_medals') {
+            showFlash('Doutrina de Choque · +1 medalha', const Color(0xFFF2EEE6),
+                sub: 'Conquista com ataque máximo (3 dados)', ms: 1300, top: true);
+          } else if (k == 'continental_fervor') {
+            showFlash('Logística de Fronteira', const Color(0xFFF2EEE6),
+                sub: '+${(e['bonus'] as num?)?.toInt() ?? 2} exércitos bônus por novo continente dominado', ms: 1700, top: true);
+          }
+          if (spec != null && k.isNotEmpty) {
+            Telemetry.track('mechanic_triggered', date: spec.date, challengeId: spec.id, mode: spec.kind, props: {
+              'key': k.startsWith('event:') ? k : 'doctrine:$k',
+              if (e['bonus'] != null) 'bonus': e['bonus'],
+              if (e['round'] != null) 'round': e['round'],
+            });
+          }
         case 'fogEnd':
           final to = (e['to'] as num).toInt();
           showFlash('A névoa sobre ${mapData.territories[to].name} se dissipou', const Color(0xFFC8FF3E), ms: 1100, top: true);
@@ -4659,7 +4574,6 @@ class AppController extends ChangeNotifier {
       final actT = action['t'] as String?;
       if (actT == 'order') {
         final k = action['k'] as String? ?? '';
-        if (activeChallenge != null && pIdx == 0) _challengeOrdersUsed++;
         Telemetry.track(
           'hq_order_used',
           date: activeChallenge?.date,
@@ -4668,7 +4582,6 @@ class AppController extends ChangeNotifier {
           props: {'order': k},
         );
       } else if (actT == 'mobilize') {
-        if (activeChallenge != null && pIdx == 0) _challengeOrdersUsed++;
         Telemetry.track(
           'hq_order_used',
           date: activeChallenge?.date,
@@ -4677,10 +4590,6 @@ class AppController extends ChangeNotifier {
           props: {'order': 'mobilize'},
         );
       } else if (actT == 'nuke') {
-        if (activeChallenge != null && pIdx == 0) {
-          _challengeNukesUsed++;
-          _challengeOrdersUsed++;
-        }
         Telemetry.track(
           'hq_order_used',
           date: activeChallenge?.date,
@@ -5441,13 +5350,7 @@ class AppController extends ChangeNotifier {
     challengeResultSubmitted = false;
     _challengeRunId = null;
     _challengeStartedMs = 0;
-    _challengeLastRound = 0;
-    _challengeArmiesLost = 0;
-    _challengeNukesUsed = 0;
-    _challengeOrdersUsed = 0;
-    _challengeLostKeyEver = false;
-    _challengeBlitzMedalTurnKey = '';
-    _challengeOwnedContinents = {};
+    _challengeRecorded = false;
     _botTimer?.cancel();
     _clockTimer?.cancel();
     _autoTimer?.cancel();

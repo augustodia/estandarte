@@ -2,7 +2,8 @@
 //
 // Cada crônica dá um brasão com o metal da melhor campanha (1★ bronze, 2★ prata, 3★ ouro) e três insígnias
 // marcam a coleção. A conta escolhe um para aparecer ao lado do nome. As regras são as mesmas do servidor
-// (internal/server/crest.go), que confere antes de aceitar.
+// (internal/server/crest.go), que confere antes de aceitar. Só contam as campanhas que o servidor conferiu refazendo
+// a partida gravada (marca "v" no Códice da conta); jogada sem conta ou sem internet fica no Códice, sem brasão.
 //
 //   brasão de crônica: "<id da crônica>:<1..3>"   ex.: "hist_dday_1944:3"
 //   insígnia:          "ins_<nome>"               ex.: "ins_veterano"
@@ -27,16 +28,23 @@ const List<InsigniaMeta> insigniaCatalog = [
 
 const List<String> tierNames = ['', 'Bronze', 'Prata', 'Ouro'];
 
-/// Melhor campanha (estrelas) de uma crônica no Códice; 0 se ainda não jogou.
+/// Melhor campanha (estrelas) de uma crônica no Códice deste aparelho/conta; 0 se ainda não jogou.
 int codexStars(Map<String, dynamic> codex, String id) {
   final r = codex[id];
   if (r is! Map) return 0;
   return ((r['bestStars'] as num?)?.toInt() ?? 0).clamp(0, 3);
 }
 
-/// Quantas crônicas da rotação foram concluídas com pelo menos [stars] estrelas.
+/// Melhor campanha que o servidor conferiu refazendo a partida (é a que vale para os brasões); 0 se nenhuma.
+int verifiedStars(Map<String, dynamic> codex, String id) {
+  final r = codex[id];
+  if (r is! Map) return 0;
+  return ((r['v'] as num?)?.toInt() ?? 0).clamp(0, 3);
+}
+
+/// Quantas crônicas da rotação foram conferidas com pelo menos [stars] estrelas.
 int chroniclesWith(Map<String, dynamic> codex, int stars) =>
-    historicalCodexCatalog.where((m) => codexStars(codex, m.id) >= stars).length;
+    historicalCodexCatalog.where((m) => verifiedStars(codex, m.id) >= stars).length;
 
 /// Brasão parseado: crônica (com metal) ou insígnia. null se o texto não é um brasão conhecido.
 ({HistoricalCodexMeta? chronicle, InsigniaMeta? insignia, int tier})? parseCrest(String crest) {
@@ -67,19 +75,19 @@ bool crestEarned(Map<String, dynamic> codex, String crest) {
   final p = parseCrest(crest);
   if (p == null) return false;
   if (p.insignia != null) return chroniclesWith(codex, p.insignia!.stars) >= p.insignia!.count;
-  return codexStars(codex, p.chronicle!.id) >= p.tier;
+  return verifiedStars(codex, p.chronicle!.id) >= p.tier;
 }
 
 /// Brasão de crônica no melhor metal conquistado (vazio se ainda não jogou).
 String bestChronicleCrest(Map<String, dynamic> codex, String id) {
-  final s = codexStars(codex, id);
+  final s = verifiedStars(codex, id);
   return s == 0 ? '' : '$id:$s';
 }
 
 /// Todos os brasões que dá para exibir agora (cada crônica no melhor metal, mais as insígnias).
 List<String> earnedCrests(Map<String, dynamic> codex) => [
       for (final m in historicalCodexCatalog)
-        if (codexStars(codex, m.id) > 0) bestChronicleCrest(codex, m.id),
+        if (verifiedStars(codex, m.id) > 0) bestChronicleCrest(codex, m.id),
       for (final i in insigniaCatalog)
         if (crestEarned(codex, i.id)) i.id,
     ];
