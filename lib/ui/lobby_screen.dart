@@ -32,7 +32,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.initState();
     _passCtrl.text = widget.ctrl.lobbyPass;
     _quickTick = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (mounted && widget.ctrl.lobbyQuick && widget.ctrl.lobbyQuickDeadlineMs > 0) {
+      if (mounted &&
+          ((widget.ctrl.lobbyQuick && widget.ctrl.lobbyQuickDeadlineMs > 0) || widget.ctrl.lobbyRankedStartBy > 0)) {
         setState(() {});
       }
     });
@@ -107,10 +108,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final isLanHostActive = !isOnline && c.lanHostAddr != null;
     final isRelayHostActive = !isOnline && c.relayCode != null;
     final isQuick = c.lobbyQuick;
+    final isRanked = c.rankedMode != null;
     final isCorr = c.inCorr;
     final canConfig = isOnline ? c.lobbyOwner : c.role != 'guest';
     final code = c.relayCode ?? c.lobbyCode ?? c.online?.code;
-    final maxSeats = isQuick ? 4 : 6;
+    final maxSeats = isRanked ? 2 : (isQuick ? 4 : 6);
     final sub = 'Forças na mesa · ${c.seats.length} de $maxSeats';
     final extrasOpen = c.extrasOpen ?? layout.big;
 
@@ -184,7 +186,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   ),
                   const SizedBox(width: 12),
                   EstIcon(
-                    isQuick
+                    isRanked
+                        ? EstIconKind.sword
+                        : isQuick
                         ? EstIconKind.bolt
                         : isCorr
                         ? EstIconKind.compass
@@ -197,7 +201,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   const SizedBox(width: 10),
                   Flexible(
                     child: Text(
-                      isQuick
+                      isRanked
+                          ? 'Duelo Ranqueado'
+                          : isQuick
                           ? 'Partida Rápida'
                           : isCorr
                           ? 'Correspondência'
@@ -208,7 +214,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       style: AppText.serif(size: big ? 30 : 24),
                     ),
                   ),
-                  if ((isOnline || isLanHostActive || isRelayHostActive) && code != null) ...[
+                  if ((isOnline || isLanHostActive || isRelayHostActive) && code != null && !isRanked) ...[
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -301,6 +307,41 @@ class _LobbyScreenState extends State<LobbyScreen> {
             const Text(
               'Aguardando até 4 comandantes. Ao zerar o relógio (ou iniciando agora), bots completam as vagas.',
               style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFFE8ECF1)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Duelo ranqueado: os dois lugares já são dos pareados; começa sozinho quando os dois chegam.
+    Widget? rankedBanner() {
+      if (!isRanked) return null;
+      final left = c.lobbyRankedStartBy > 0 ? ((c.lobbyRankedStartBy - nowMs) / 1000).ceil().clamp(0, 60) : 0;
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('VALENDO NOTA E PATENTE',
+                      style: AppText.label(size: 12, color: AppColors.ink, weight: FontWeight.w700)),
+                ),
+                if (left > 0) Text('${left}s', style: AppText.number(size: 13, color: AppColors.ink, weight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 5),
+            const Text(
+              'A partida começa sozinha quando os dois estiverem na sala. Quem não entrar a tempo fica um tempo fora '
+              'da fila. Regras fixas: turno de 60 s, Quartel e eventos, sem ogivas e sem pactos.',
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.mute),
             ),
           ],
         ),
@@ -411,6 +452,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           children: [
             ?connBanner,
             ?quickBanner(),
+            ?rankedBanner(),
             ?corrBanner(),
             const EstSectionTag('BRIEFING DA MESA'),
             const SizedBox(height: 10),
@@ -487,7 +529,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              isCorr
+              isRanked
+                  ? (c.seats.every((s) => s.online) ? 'Os dois chegaram. Começando…' : 'Esperando o adversário entrar…')
+                  : isCorr
                   ? 'Quem criou começa a partida. Pode fechar: avisamos por e-mail.'
                   : isOnline
                   ? 'Aguardando o anfitrião iniciar. Toque no círculo da sua cor para trocar.'
@@ -495,7 +539,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13, color: AppColors.mute),
             ),
-            if (isOnline && !isLanGuest && code != null) ...[
+            if (isOnline && !isLanGuest && code != null && !isRanked) ...[
               const SizedBox(height: 12),
               EstButton(
                 icon: EstIconKind.qr,
@@ -519,6 +563,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         children: [
           ?connBanner,
           ?quickBanner(),
+          ?rankedBanner(),
           ?corrBanner(),
           const EstSectionTag('REGRAS DA BATALHA'),
           SizedBox(height: roomy ? 14 : 10),
@@ -1353,6 +1398,7 @@ class _SeatTile extends StatelessWidget {
                     TextSpan(
                       style: const TextStyle(fontSize: 11, color: AppColors.mute),
                       children: [
+                        if (seat.rank.isNotEmpty) TextSpan(text: '${seat.rank} · '),
                         TextSpan(text: '${color.name} · '),
                         TextSpan(
                           text: kindLabel,

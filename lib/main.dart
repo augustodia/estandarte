@@ -9,6 +9,7 @@ import 'ui/account_sheet.dart';
 import 'ui/corr_screen.dart';
 import 'ui/daily_screen.dart';
 import 'ui/friends_screen.dart';
+import 'ui/ranked_screen.dart';
 import 'ui/game_screen.dart';
 import 'ui/home_screen.dart';
 import 'ui/lobby_screen.dart';
@@ -282,6 +283,7 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
             AppScreen.rooms => RoomsScreen(ctrl: widget.ctrl),
             AppScreen.corr => CorrScreen(ctrl: widget.ctrl),
             AppScreen.friends => FriendsScreen(ctrl: widget.ctrl),
+            AppScreen.ranked => RankedScreen(ctrl: widget.ctrl),
             AppScreen.lobby => LobbyScreen(ctrl: widget.ctrl),
             AppScreen.daily => DailyScreen(ctrl: widget.ctrl),
             AppScreen.game => GameScreen(ctrl: widget.ctrl),

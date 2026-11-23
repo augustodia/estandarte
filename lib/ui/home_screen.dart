@@ -238,6 +238,13 @@ class _PaceLedger extends StatelessWidget {
       corrSub = '24 h por jogada · avisamos por e-mail';
     }
 
+    final me = c.signedIn ? (c.rankedInfo?['me'] as Map<String, dynamic>?) : null;
+    final rankedSub = c.rankedInfo?['room'] != null
+        ? 'Você tem um duelo em andamento'
+        : me != null && ((me['placement'] as num?)?.toInt() ?? 5) == 0
+            ? '${me['patenteName']} · nota ${me['r']}'
+            : 'Duelo 1 contra 1 · vale nota e patente';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -248,6 +255,13 @@ class _PaceLedger extends StatelessWidget {
           sub: 'Escolha uma mesa ou entre com código',
           dense: dense,
           onTap: c.openRoomsBrowser,
+        ),
+        _LedgerRow(
+          pace: 'VALENDO\nPATENTE',
+          title: 'Ranqueada',
+          sub: rankedSub,
+          dense: dense,
+          onTap: c.openRankedScreen,
         ),
         _LedgerRow(
           pace: 'NO SEU\nTEMPO',

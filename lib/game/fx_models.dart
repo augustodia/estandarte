@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import '../net/online_client.dart';
 
-enum AppScreen { home, rooms, corr, friends, lobby, daily, game }
+enum AppScreen { home, rooms, corr, friends, ranked, lobby, daily, game }
 
 /// Início de um turno no replay (para pular de turno em turno).
 class ReplayTurn {
@@ -64,10 +64,12 @@ class LobbySeat {
     this.link,
     this.spare,
     this.crest = '',
+    this.rank = '',
   });
 
   String name;
   String crest; // brasão em destaque da conta (só online)
+  String rank; // patente (duelo ranqueado)
   int color;
   String ctrl; // 'local' | 'bot' | 'remote'
   bool online;
