@@ -238,7 +238,7 @@ class _PaceLedger extends StatelessWidget {
       corrSub = '24 h por jogada · avisamos por e-mail';
     }
 
-    final me = c.signedIn ? c.rankedInfo?['me'] as Map<String, dynamic>? : null;
+    final me = c.signedIn ? (c.rankedInfo?['me'] as Map<String, dynamic>?) : null;
     final rankedSub = c.rankedInfo?['room'] != null
         ? 'Você tem um duelo em andamento'
         : me != null && ((me['placement'] as num?)?.toInt() ?? 5) == 0
