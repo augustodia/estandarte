@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../game/app_controller.dart';
+import '../game/crests.dart';
 import '../game/daily_challenge.dart';
 import 'account_sheet.dart';
 import 'crest_badge.dart';
@@ -623,9 +624,11 @@ class _DailyScreenState extends State<DailyScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       CrestBadge(
-                        unlocked ? '${meta.id}:${bStars.clamp(1, 3)}' : '${meta.id}:1',
+                        verifiedStars(c.codexProgress, meta.id) > 0
+                            ? '${meta.id}:${verifiedStars(c.codexProgress, meta.id)}'
+                            : '${meta.id}:1',
                         size: 34,
-                        locked: !unlocked,
+                        locked: verifiedStars(c.codexProgress, meta.id) == 0,
                         tooltip: true,
                       ),
                       const SizedBox(width: 11),

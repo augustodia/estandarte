@@ -182,7 +182,7 @@ void main() {
       await _shot(tester, 'account_code_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
       // Códice com algumas crônicas jogadas (brasões em bronze, prata e ouro) e um brasão em destaque
-      Map<String, dynamic> rec(int stars) => {'bestStars': stars, 'bestRounds': 9};
+      Map<String, dynamic> rec(int stars) => {'bestStars': stars, 'bestRounds': 9, 'v': stars};
       ctrl.codexProgress = {
         'hist_dday_1944': rec(3), 'hist_britain_1940': rec(2), 'hist_pacific_1942': rec(1),
         'hist_stalingrad_1942': rec(3), 'hist_coldwar_1962': rec(2),

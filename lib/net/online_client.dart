@@ -271,9 +271,22 @@ Future<Map<String, dynamic>> submitDailyRun(
       )
       .timeout(timeout);
   if (r.statusCode < 200 || r.statusCode >= 300) {
-    throw Exception('http ${r.statusCode}');
+    var msg = '';
+    try {
+      msg = (jsonDecode(r.body) as Map<String, dynamic>)['error'] as String? ?? '';
+    } catch (_) {}
+    throw DailySubmitError(msg, r.statusCode);
   }
   return jsonDecode(r.body) as Map<String, dynamic>;
+}
+
+/// O servidor recusou o resultado (com a explicação dele, quando há).
+class DailySubmitError implements Exception {
+  const DailySubmitError(this.message, this.status);
+  final String message;
+  final int status;
+  @override
+  String toString() => message.isEmpty ? 'http $status' : message;
 }
 
 Future<Map<String, dynamic>> fetchDailyRanking(
