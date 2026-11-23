@@ -6,21 +6,30 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AccountUser {
-  const AccountUser({required this.id, required this.username, this.email = '', this.emailVerified = false});
+  const AccountUser({
+    required this.id,
+    required this.username,
+    this.email = '',
+    this.emailVerified = false,
+    this.crest = '',
+  });
 
   final int id;
   final String username; // também é o nome no jogo (único)
   final String email;
   final bool emailVerified;
+  final String crest; // brasão em destaque ('' = nenhum)
 
   factory AccountUser.fromJson(Map<String, dynamic> j) => AccountUser(
         id: (j['id'] as num?)?.toInt() ?? 0,
         username: j['username'] as String? ?? '',
         email: j['email'] as String? ?? '',
         emailVerified: j['emailVerified'] == true,
+        crest: j['crest'] as String? ?? '',
       );
 
-  Map<String, dynamic> toJson() => {'id': id, 'username': username, 'email': email, 'emailVerified': emailVerified};
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'username': username, 'email': email, 'emailVerified': emailVerified, 'crest': crest};
 }
 
 class AccountSession {
@@ -127,6 +136,10 @@ Future<int> accountResendCode(String server, String token) async =>
 
 Future<AccountState> accountChangeEmail(String server, String token, String email) async =>
     _state(await _call(server, 'POST', '/account/email', token: token, body: {'email': email}));
+
+/// Escolhe o brasão em destaque ('' tira). O servidor confere se a conta já o conquistou.
+Future<AccountUser> accountSetCrest(String server, String token, String crest) async =>
+    _user(await _call(server, 'POST', '/account/crest', token: token, body: {'crest': crest}));
 
 Future<AccountUser> accountRename(String server, String token, String username) async =>
     _user(await _call(server, 'POST', '/account/name', token: token, body: {'username': username}));
@@ -309,9 +322,10 @@ Future<({Map<String, dynamic> meta, Map<String, dynamic> replay})> fetchReplay(S
 
 /// Amigo com presença: [status] é playing (numa partida agora), online (jogo aberto há pouco) ou vazio.
 class FriendInfo {
-  const FriendInfo(this.name, {this.status = ''});
+  const FriendInfo(this.name, {this.status = '', this.crest = ''});
   final String name;
   final String status;
+  final String crest;
   bool get playing => status == 'playing';
   bool get online => status == 'playing' || status == 'online';
 }
@@ -331,7 +345,8 @@ Future<FriendLists> friendsList(String server, String token) async {
   return FriendLists(
     friends: [
       for (final x in (j['friends'] as List<dynamic>? ?? const []))
-        FriendInfo((x as Map)['name'] as String? ?? '', status: x['status'] as String? ?? ''),
+        FriendInfo((x as Map)['name'] as String? ?? '',
+            status: x['status'] as String? ?? '', crest: x['crest'] as String? ?? ''),
     ],
     incoming: names('incoming'),
     outgoing: names('outgoing'),

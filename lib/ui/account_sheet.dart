@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 
 import '../game/app_controller.dart';
 import '../net/account_api.dart' show AccountError, looksLikeEmail;
+import '../game/crests.dart';
+import 'crest_badge.dart';
+import 'crests_sheet.dart';
 import 'theme.dart';
 
 Future<void> showAccountSheet(BuildContext context, AppController ctrl, {bool startOnSignUp = false, String? reason}) {
@@ -810,6 +813,32 @@ class _AccountSheetState extends State<_AccountSheet> {
         ),
       ),
       if (nameMsg == null) const _Hint('É o nome que aparece no jogo e no ranking. Só você pode usar.'),
+      const SizedBox(height: Space.x3),
+      _Field(
+        label: 'BRASÃO',
+        child: Row(
+          children: [
+            if (u.crest.isNotEmpty) ...[
+              CrestBadge(u.crest, size: 30),
+              const SizedBox(width: Space.x2),
+            ],
+            Expanded(
+              child: Text(
+                u.crest.isNotEmpty ? crestTitle(u.crest) : 'Nenhum em destaque',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13.5, color: u.crest.isNotEmpty ? AppColors.ink : AppColors.mute),
+              ),
+            ),
+            const SizedBox(width: Space.x2),
+            EstButton(
+              label: 'Escolher',
+              onPressed: busy || !c.netOnline ? null : () => showCrestsSheet(context, c),
+            ),
+          ],
+        ),
+      ),
+      const _Hint('Conquiste nas Quintas Históricas. Aparece ao lado do seu nome.'),
       const SizedBox(height: Space.x3),
       _Field(
         label: 'E-MAIL',

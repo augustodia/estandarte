@@ -63,9 +63,11 @@ class LobbySeat {
     this.token,
     this.link,
     this.spare,
+    this.crest = '',
   });
 
   String name;
+  String crest; // brasão em destaque da conta (só online)
   int color;
   String ctrl; // 'local' | 'bot' | 'remote'
   bool online;
