@@ -242,11 +242,12 @@ void showReplayProofSheet(BuildContext context, AppController ctrl) {
           ],
         ),
       );
+  final daily = r?.meta['mode'] == 'daily';
   String who(Map<String, dynamic> rp) {
     int n(String k) => (rp[k] as num?)?.toInt() ?? 0;
     final parts = <String>[
       if (n('signed') > 0) '${n('signed')} assinadas',
-      if (n('unsigned') > 0) '${n('unsigned')} sem assinatura',
+      if (n('unsigned') > 0) daily ? '${n('unsigned')} jogadas' : '${n('unsigned')} sem assinatura',
       if (n('bot') > 0) '${n('bot')} pelo bot',
       if (n('timeout') > 0) '${n('timeout')} no prazo esgotado',
       if (n('devices') > 1) 'trocou de aparelho',
@@ -262,7 +263,11 @@ void showReplayProofSheet(BuildContext context, AppController ctrl) {
       onClose: () => Navigator.pop(ctx),
       children: [
         Text(
-          r != null
+          daily
+              ? 'Desafio do dia: o servidor entregou a semente dos dados no início da corrida e, no envio, refez a '
+                  'partida inteira com o tabuleiro dele. O resultado e as estrelas do ranking são os que ele apurou. As '
+                  'jogadas dos bots foram conferidas por serem exatamente as que o jogo faria.'
+              : r != null
               ? 'O servidor fixou a semente secreta antes da partida e publicou o compromisso na sala de espera; cada '
                   'aparelho contribuiu depois de vê-lo. No fim, a semente revelada bate com o compromisso, e a partida '
                   'refeita aqui chega ao mesmo resultado. Cada jogada foi conferida: as dos jogadores pela assinatura do '

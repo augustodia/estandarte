@@ -207,6 +207,46 @@ class AppController extends ChangeNotifier {
   bool challengeNeedsAccount = false;
   List<DailyRankEntry> challengeSubmitRanking = [];
   bool challengeResultSubmitted = false;
+
+  /// Replay da melhor partida conferida da conta no desafio de hoje (o servidor devolve no envio).
+  String? challengeReplayId;
+
+  /// Ranking de ontem (com os replays para assistir); null enquanto não buscou.
+  List<DailyRankEntry>? yesterdayRanking;
+  String yesterdayTitle = '';
+  bool yesterdayLoading = false;
+
+  Future<void> loadYesterdayRanking() async {
+    final today = dailySnapshot?.date;
+    if (today == null || yesterdayLoading || !netOnline) return;
+    final d = DateTime.tryParse(today);
+    if (d == null) return;
+    final y = d.subtract(const Duration(days: 1));
+    final date = '${y.year.toString().padLeft(4, '0')}-${y.month.toString().padLeft(2, '0')}-${y.day.toString().padLeft(2, '0')}';
+    yesterdayLoading = true;
+    notifyListeners();
+    try {
+      final res = await fetchDailyRanking(serverUrl(), date: date);
+      yesterdayRanking = [
+        for (final e in (res['entries'] as List<dynamic>? ?? const []))
+          DailyRankEntry.fromJson(Map<String, dynamic>.from(e as Map)),
+      ];
+      yesterdayTitle = res['title'] as String? ?? '';
+    } catch (_) {
+      showToast('Não deu para buscar o ranking de ontem.');
+    } finally {
+      yesterdayLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// O replay da melhor partida de hoje deste aparelho/conta (guardado com o progresso do dia).
+  String? get todayReplayId {
+    final d = dailySnapshot?.date;
+    final rec = d == null ? null : dailyProgress[d];
+    final id = rec is Map ? rec['replay'] as String? : null;
+    return (id != null && id.length == 8) ? id : null;
+  }
   String? _challengeRunId;
   int _challengeStartedMs = 0;
   bool _challengeRecorded = false; // jogando com a semente do servidor: a partida vai gravada no envio
@@ -1348,6 +1388,7 @@ class AppController extends ChangeNotifier {
     challengeNeedsAccount = false;
     challengeSubmitRanking = List<DailyRankEntry>.from(dailySnapshot?.ranking ?? const []);
     challengeResultSubmitted = false;
+    challengeReplayId = null;
     _challengeStartedMs = DateTime.now().millisecondsSinceEpoch;
 
     String? srvRunId;
@@ -1599,6 +1640,15 @@ class AppController extends ChangeNotifier {
           if (ver != null) {
             // o que o servidor apurou refazendo a partida (deve bater com o que o motor daqui calculou)
             challengeStarsEarned = (ver['stars'] as num?)?.toInt() ?? challengeStarsEarned;
+            final rid = ver['replay'] as String?;
+            if (rid != null && rid.length == 8) {
+              challengeReplayId = rid;
+              final rec = dailyProgress[spec.date];
+              if (rec is Map) {
+                dailyProgress[spec.date] = {...Map<String, dynamic>.from(rec), 'replay': rid};
+                AppStorage.instance.setString('estandarte.daily.done', jsonEncode(dailyProgress));
+              }
+            }
           }
           unawaited(syncProgress()); // traz a crônica conferida (libera o brasão)
           final rank = (res['rank'] as num?)?.toInt();
