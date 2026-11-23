@@ -2,8 +2,11 @@
 // O token vai no cabeçalho Authorization; nunca em URL (endereços acabam em logs).
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
+
+import '../platform/storage.dart';
 
 class AccountUser {
   const AccountUser({
@@ -73,9 +76,11 @@ Future<Map<String, dynamic>> _call(String server, String method, String path,
   };
   http.Response r;
   try {
-    r = method == 'GET'
-        ? await http.get(uri, headers: headers).timeout(_timeout)
-        : await http.post(uri, headers: headers, body: jsonEncode(body ?? const {})).timeout(_timeout);
+    r = switch (method) {
+      'GET' => await http.get(uri, headers: headers).timeout(_timeout),
+      'DELETE' => await http.delete(uri, headers: headers).timeout(_timeout),
+      _ => await http.post(uri, headers: headers, body: jsonEncode(body ?? const {})).timeout(_timeout),
+    };
   } on TimeoutException {
     throw const AccountError('O servidor demorou para responder. Tente de novo.', network: true);
   } catch (_) {
@@ -381,7 +386,19 @@ String? asyncCode(String? raw) {
 
 /// Entra na fila do Duelo. Devolve {status: waiting|matched, ticket, room?, secs, queue}.
 Future<Map<String, dynamic>> rankedJoin(String server, String token) =>
-    _call(server, 'POST', '/ranked/queue', token: token, body: {'mode': 'duel'});
+    _call(server, 'POST', '/ranked/queue', token: token, body: {'mode': 'duel', 'install': installId()});
+
+/// Identificador desta instalação do app (aleatório, guardado no aparelho; sobrevive a sair da conta). O servidor
+/// guarda só um resumo dele, para não deixar duas contas do mesmo aparelho se enfrentarem na ranqueada.
+String installId() {
+  const key = 'ultimato.install';
+  final saved = AppStorage.instance.getString(key);
+  if (saved != null && saved.length >= 16) return saved;
+  final rng = Random.secure();
+  final id = List.generate(32, (_) => '0123456789abcdef'[rng.nextInt(16)]).join();
+  AppStorage.instance.setString(key, id);
+  return id;
+}
 
 /// Como está o bilhete na fila (sem conta: o bilhete é o segredo). status: waiting|matched|gone.
 Future<Map<String, dynamic>> rankedPoll(String server, String ticket) =>
@@ -397,3 +414,118 @@ Future<Map<String, dynamic>> rankedMe(String server, String token) => _call(serv
 
 /// As 100 maiores notas da temporada.
 Future<Map<String, dynamic>> rankedTop(String server) => _call(server, 'GET', '/ranked/top?mode=duel');
+
+// ---------------------------------------------------------------- loja (Comandante)
+
+/// Item do catálogo. O preço vale para o Pix; nas lojas de app vale o preço da própria loja.
+class StoreItem {
+  const StoreItem({required this.sku, required this.name, required this.desc, required this.cents, required this.available});
+  final String sku;
+  final String name;
+  final String desc;
+  final int cents;
+  final bool available;
+
+  String get price => 'R\$ ${cents ~/ 100},${(cents % 100).toString().padLeft(2, '0')}';
+
+  factory StoreItem.fromJson(Map<String, dynamic> j) => StoreItem(
+        sku: j['sku'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        desc: j['desc'] as String? ?? '',
+        cents: (j['cents'] as num?)?.toInt() ?? 0,
+        available: j['available'] == true,
+      );
+}
+
+class StoreCatalog {
+  const StoreCatalog({this.items = const [], this.pix = false, this.play = false, this.fundadorUntilMs = 0});
+  final List<StoreItem> items;
+  final bool pix; // Pix pelo site ligado no servidor
+  final bool play; // conferência da Google Play ligada no servidor
+  final int fundadorUntilMs; // fim da venda do Fundador (0 = fora de venda)
+}
+
+Future<StoreCatalog> storeCatalog(String server) async {
+  final j = await _call(server, 'GET', '/store/catalog');
+  return StoreCatalog(
+    items: [for (final e in (j['items'] as List<dynamic>? ?? const [])) StoreItem.fromJson(e as Map<String, dynamic>)],
+    pix: j['pix'] == true,
+    play: j['play'] == true,
+    fundadorUntilMs: (j['fundadorUntil'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// Direitos da conta. O token é assinado pelo servidor e vale 30 dias sem internet (offline e LAN).
+class Entitlements {
+  const Entitlements({this.comandante = false, this.fundador = 0, this.token = '', this.tag = '', this.expiresMs = 0});
+  final bool comandante;
+  final int fundador; // número do Comandante Fundador (0 = não é)
+  final String token;
+  final String tag; // etiqueta da conta para a loja de apps (a compra fica presa a esta conta)
+  final int expiresMs;
+
+  static const none = Entitlements();
+
+  bool get valid => token.isNotEmpty && DateTime.now().millisecondsSinceEpoch < expiresMs;
+
+  /// Lê a carga do token guardado ("ult1.<carga>.<assinatura>"). Quem manda de verdade é o servidor; aqui é só
+  /// para o app lembrar o que a conta tem quando está sem internet.
+  factory Entitlements.fromToken(String token, {String tag = ''}) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3 || parts[0] != 'ult1') return none;
+      final body = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map<String, dynamic>;
+      final skus = [for (final s in (body['s'] as List<dynamic>? ?? const [])) s as String];
+      return Entitlements(
+        comandante: skus.contains('comandante') || skus.contains('comandante_fundador'),
+        fundador: (body['f'] as num?)?.toInt() ?? 0,
+        token: token,
+        tag: tag,
+        expiresMs: ((body['e'] as num?)?.toInt() ?? 0) * 1000,
+      );
+    } catch (_) {
+      return none;
+    }
+  }
+
+  factory Entitlements.fromMe(Map<String, dynamic> j) =>
+      Entitlements.fromToken(j['token'] as String? ?? '', tag: j['tag'] as String? ?? '');
+}
+
+Future<Entitlements> storeMe(String server, String token) async =>
+    Entitlements.fromMe(await _call(server, 'GET', '/store/me', token: token));
+
+/// Confere uma compra da Google Play no servidor. Devolve null enquanto a compra está pendente.
+Future<Entitlements?> storePlayVerify(String server, String token, String product, String purchaseToken) async {
+  final j = await _call(server, 'POST', '/store/play/verify', token: token, body: {'product': product, 'token': purchaseToken});
+  if (j['status'] == 'pending') return null;
+  return Entitlements.fromMe(j);
+}
+
+class PixOrder {
+  const PixOrder({required this.id, required this.status, this.code = '', this.cents = 0, this.expiresMs = 0});
+  final String id;
+  final String status; // pending | paid | expired
+  final String code; // Pix copia e cola
+  final int cents;
+  final int expiresMs;
+
+  factory PixOrder.fromJson(Map<String, dynamic> j) {
+    final o = j['order'] as Map<String, dynamic>? ?? const {};
+    return PixOrder(
+      id: o['id'] as String? ?? '',
+      status: o['status'] as String? ?? 'pending',
+      code: o['code'] as String? ?? '',
+      cents: (o['cents'] as num?)?.toInt() ?? 0,
+      expiresMs: DateTime.tryParse(o['expires'] as String? ?? '')?.millisecondsSinceEpoch ?? 0,
+    );
+  }
+}
+
+Future<PixOrder> storePixOrder(String server, String token, String sku) async =>
+    PixOrder.fromJson(await _call(server, 'POST', '/store/pix/order', token: token, body: {'sku': sku}));
+
+Future<({PixOrder order, Entitlements? ent})> storePixStatus(String server, String token, String id) async {
+  final j = await _call(server, 'GET', '/store/pix/order?id=${Uri.encodeQueryComponent(id)}', token: token);
+  return (order: PixOrder.fromJson(j), ent: j['token'] is String ? Entitlements.fromMe(j) : null);
+}

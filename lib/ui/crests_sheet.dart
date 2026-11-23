@@ -178,6 +178,21 @@ class _CrestsBodyState extends State<_CrestsBody> {
               );
             }(),
         ]),
+        const SizedBox(height: 16),
+        const EstSectionTag('COMANDANTE'),
+        const SizedBox(height: 8),
+        grid([
+          for (final i in shopInsignias)
+            () {
+              final got = i.id == 'ins_fundador' ? c.signedIn && c.ent.fundador > 0 : c.isComandante;
+              return tile(
+                crest: i.id,
+                title: i.id == 'ins_fundador' && got ? 'Fundador nº ${c.ent.fundador}' : i.title,
+                sub: got ? i.rule : 'Na loja',
+                got: got,
+              );
+            }(),
+        ]),
         if (_error != null) ...[
           const SizedBox(height: 12),
           Text(_error!, style: const TextStyle(fontSize: 12.5, color: AppColors.bad)),

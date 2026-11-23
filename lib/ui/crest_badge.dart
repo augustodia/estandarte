@@ -180,6 +180,13 @@ class _CrestPainter extends CustomPainter {
         }
       case 'ins_estrategista': // estrela cheia no hexágono
         canvas.drawPath(_star(const Offset(12, 12.4), 5.6, 2.3), fill);
+      case 'ins_comandante': // estandarte no mastro
+        canvas.drawLine(const Offset(8.5, 6), const Offset(8.5, 18), line);
+        canvas.drawPath(Path()..moveTo(8.5, 6.6)..lineTo(16.5, 8.4)..lineTo(13.6, 10.2)..lineTo(16.5, 12)..lineTo(8.5, 12)..close(), fill);
+      case 'ins_fundador': // estandarte com a estrela do lançamento
+        canvas.drawLine(const Offset(8, 6), const Offset(8, 18), line);
+        canvas.drawPath(Path()..moveTo(8, 6.6)..lineTo(17, 6.6)..lineTo(17, 12.4)..lineTo(8, 12.4)..close(), line);
+        canvas.drawPath(_star(const Offset(12.5, 9.5), 2.4, 1.0), fill);
       case 'ins_historiador': // livro aberto
         final book = Path()
           ..moveTo(6.5, 8.6)

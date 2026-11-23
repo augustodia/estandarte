@@ -15,6 +15,7 @@ import 'ui/home_screen.dart';
 import 'ui/lobby_screen.dart';
 import 'ui/modals.dart';
 import 'ui/rooms_screen.dart';
+import 'ui/store_screen.dart';
 import 'ui/theme.dart';
 
 void main() {
@@ -284,6 +285,7 @@ class _EstandarteRootState extends State<_EstandarteRoot> {
             AppScreen.corr => CorrScreen(ctrl: widget.ctrl),
             AppScreen.friends => FriendsScreen(ctrl: widget.ctrl),
             AppScreen.ranked => RankedScreen(ctrl: widget.ctrl),
+            AppScreen.store => StoreScreen(ctrl: widget.ctrl),
             AppScreen.lobby => LobbyScreen(ctrl: widget.ctrl),
             AppScreen.daily => DailyScreen(ctrl: widget.ctrl),
             AppScreen.game => GameScreen(ctrl: widget.ctrl),

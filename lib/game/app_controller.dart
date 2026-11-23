@@ -824,6 +824,10 @@ class AppController extends ChangeNotifier {
     final u = _readJsonStorage(_kAccUser);
     account = _accountToken != null && u != null ? acc.AccountUser.fromJson(u) : null;
     if (account == null) _accountToken = null;
+    if (account != null) {
+      final saved = acc.Entitlements.fromToken(AppStorage.instance.getString(_kEnt) ?? '');
+      if (saved.valid) ent = saved; // offline e LAN: o que a conta comprou continua valendo por 30 dias
+    }
     if (netOnline) unawaited(refreshAccount());
   }
 
@@ -852,8 +856,12 @@ class AppController extends ChangeNotifier {
     account = null;
     accountPendingEmail = null;
     accountResendAt = null;
+    ent = acc.Entitlements.none;
+    pixOrder = null;
+    _pixTimer?.cancel();
     AppStorage.instance.remove(_kAccToken);
     AppStorage.instance.remove(_kAccUser);
+    AppStorage.instance.remove(_kEnt);
   }
 
   /// Confere a sessão guardada. Sem internet, mantém a conta como estava.
@@ -868,6 +876,7 @@ class AppController extends ChangeNotifier {
       unawaited(refreshCorr(silent: true));
       unawaited(refreshFriends(silent: true));
       unawaited(refreshRankedMe()); // duelo em andamento e patente aparecem no início
+      unawaited(refreshEntitlements());
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) _clearAccount();
     }
@@ -1197,6 +1206,111 @@ class AppController extends ChangeNotifier {
       friendsLoading = false;
       notifyListeners();
     }
+  }
+
+  // ---------------------------------------------------------------- loja (Comandante)
+
+  static const _kEnt = 'ultimato.ent';
+  acc.Entitlements ent = acc.Entitlements.none; // o que a conta comprou
+  acc.StoreCatalog? storeCatalog;
+  bool storeLoading = false;
+  String? storeError;
+  acc.PixOrder? pixOrder; // Pix em andamento (pelo site)
+  bool pixBusy = false;
+  Timer? _pixTimer;
+
+  bool lobbyPremium = false; // quem manda na sala é Comandante: o conteúdo dele vale para a mesa toda
+
+  bool get isComandante => signedIn && ent.comandante;
+
+  void _setEnt(acc.Entitlements e) {
+    ent = e;
+    if (e.token.isNotEmpty) AppStorage.instance.setString(_kEnt, e.token);
+    notifyListeners();
+  }
+
+  Future<void> refreshEntitlements() async {
+    final tok = _accountToken;
+    if (tok == null || !netOnline) return;
+    try {
+      final e = await acc.storeMe(serverUrl(), tok);
+      if (_accountToken == tok) _setEnt(e);
+    } catch (_) {} // loja fechada ou sem internet: fica o que estava guardado
+  }
+
+  void openStoreScreen() {
+    SoundPlayer.unlock();
+    _corrTimer?.cancel();
+    _roomsTimer?.cancel();
+    _friendsTimer?.cancel();
+    screen = AppScreen.store;
+    storeError = null;
+    notifyListeners();
+    Telemetry.track('store_view');
+    unawaited(refreshStore());
+  }
+
+  Future<void> refreshStore() async {
+    if (storeLoading) return;
+    storeLoading = true;
+    notifyListeners();
+    try {
+      storeCatalog = await acc.storeCatalog(serverUrl());
+      await refreshEntitlements();
+    } on acc.AccountError catch (e) {
+      storeError = e.message;
+    } catch (_) {
+      storeError = 'O servidor não respondeu. Tente de novo.';
+    } finally {
+      storeLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Gera um Pix para o item e confere a cada 3 s até ser pago (ou vencer).
+  Future<void> buyWithPix(String sku) async {
+    final tok = _accountToken;
+    if (tok == null || pixBusy) return;
+    pixBusy = true;
+    storeError = null;
+    notifyListeners();
+    try {
+      pixOrder = await acc.storePixOrder(serverUrl(), tok, sku);
+      Telemetry.track('store_pix_order', props: {'sku': sku});
+      _pixTimer?.cancel();
+      _pixTimer = Timer.periodic(const Duration(seconds: 3), (_) => unawaited(_pollPix()));
+    } on acc.AccountError catch (e) {
+      storeError = e.message;
+    } catch (_) {
+      storeError = 'Não deu para gerar o Pix. Confira a internet e tente de novo.';
+    } finally {
+      pixBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _pollPix() async {
+    final tok = _accountToken, o = pixOrder;
+    if (tok == null || o == null || screen != AppScreen.store) {
+      _pixTimer?.cancel();
+      return;
+    }
+    try {
+      final r = await acc.storePixStatus(serverUrl(), tok, o.id);
+      pixOrder = r.order;
+      if (r.order.status != 'pending') _pixTimer?.cancel();
+      if (r.ent != null) {
+        _setEnt(r.ent!);
+        Telemetry.track('store_purchase', props: {'channel': 'pix'});
+      }
+      notifyListeners();
+    } catch (_) {} // tenta de novo no próximo ciclo
+  }
+
+  void cancelPix() {
+    _pixTimer?.cancel();
+    pixOrder = null;
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------- fila ranqueada (Duelo)
@@ -3693,10 +3807,13 @@ class AppController extends ChangeNotifier {
               online: s['on'] == true,
               crest: s['crest'] as String? ?? '',
               rank: s['rank'] as String? ?? '',
+              cmd: s['cmd'] == true,
+              fnd: (s['fnd'] as num?)?.toInt() ?? 0,
             );
           })
           .toList();
       rankedMode = msg['ranked'] as String?;
+      lobbyPremium = msg['premium'] == true;
       lobbyRankedStartBy = (msg['startBy'] as num?)?.toInt() ?? 0;
       me = (msg['you'] as num?)?.toInt() ?? -1;
       turnSecs = (msg['secs'] as num?)?.toInt() ?? 0;

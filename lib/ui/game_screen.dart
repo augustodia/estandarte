@@ -4317,6 +4317,13 @@ class _RankedResultLine extends StatelessWidget {
                       : 'Nota ${after['r']}',
                   style: const TextStyle(fontSize: 12, color: AppColors.mute),
                 ),
+                if (r['reduced'] == 'low_effort' || r['reduced'] == 'repeat')
+                  Text(
+                    r['reduced'] == 'low_effort'
+                        ? 'Vitória sobre quem desistiu cedo ou não atacou vale menos nota.'
+                        : 'Partidas repetidas contra o mesmo adversário valem menos nota.',
+                    style: const TextStyle(fontSize: 11.5, height: 1.3, color: AppColors.faint),
+                  ),
               ],
             ),
           ),
