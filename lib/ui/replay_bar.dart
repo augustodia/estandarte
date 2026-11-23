@@ -249,6 +249,7 @@ void showReplayProofSheet(BuildContext context, AppController ctrl) {
       if (n('unsigned') > 0) '${n('unsigned')} sem assinatura',
       if (n('bot') > 0) '${n('bot')} pelo bot',
       if (n('timeout') > 0) '${n('timeout')} no prazo esgotado',
+      if (n('forfeit') > 0) 'perdeu por abandono',
       if (n('devices') > 1) 'trocou de aparelho',
     ];
     return parts.isEmpty ? 'nenhuma jogada' : parts.join(' · ');

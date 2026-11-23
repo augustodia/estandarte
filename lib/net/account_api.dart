@@ -376,3 +376,24 @@ String? asyncCode(String? raw) {
   final m2 = RegExp(r'^#?([A-Za-z0-9]{6})$').firstMatch(s);
   return m2?.group(1)!.toUpperCase();
 }
+
+// ---------------------------------------------------------------- fila ranqueada (Duelo)
+
+/// Entra na fila do Duelo. Devolve {status: waiting|matched, ticket, room?, secs, queue}.
+Future<Map<String, dynamic>> rankedJoin(String server, String token) =>
+    _call(server, 'POST', '/ranked/queue', token: token, body: {'mode': 'duel'});
+
+/// Como está o bilhete na fila (sem conta: o bilhete é o segredo). status: waiting|matched|gone.
+Future<Map<String, dynamic>> rankedPoll(String server, String ticket) =>
+    _call(server, 'GET', '/ranked/queue?t=${Uri.encodeQueryComponent(ticket)}');
+
+/// Sai da fila.
+Future<void> rankedLeave(String server, String ticket) async {
+  await _call(server, 'DELETE', '/ranked/queue?t=${Uri.encodeQueryComponent(ticket)}');
+}
+
+/// A nota da conta na temporada, a posição, castigo e duelo em andamento.
+Future<Map<String, dynamic>> rankedMe(String server, String token) => _call(server, 'GET', '/ranked/me', token: token);
+
+/// As 100 maiores notas da temporada.
+Future<Map<String, dynamic>> rankedTop(String server) => _call(server, 'GET', '/ranked/top?mode=duel');

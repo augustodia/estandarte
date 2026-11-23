@@ -14,6 +14,7 @@ import 'modals.dart';
 import 'quartel_modal.dart';
 import 'replay_bar.dart';
 import 'crest_badge.dart';
+import 'patente_badge.dart';
 import 'theme.dart';
 
 class GameScreen extends StatefulWidget {
@@ -3251,7 +3252,10 @@ class _VictoryOverlayState extends State<_VictoryOverlay> {
           'Rodada ${round + 1}',
           style: AppText.number(size: 15, color: AppColors.mute, weight: FontWeight.w600),
         ),
-        if (objTxt.isNotEmpty) ...[
+        if (v['winBy'] == 'resign') ...[
+          const SizedBox(height: 14),
+          Text('VITÓRIA POR DESISTÊNCIA DO ADVERSÁRIO', style: AppText.label(size: 11)),
+        ] else if (objTxt.isNotEmpty) ...[
           const SizedBox(height: 14),
           Text(
             v['winBy'] == 'last' ? 'ÚLTIMO EXÉRCITO EM JOGO · O OBJETIVO ERA' : 'OBJETIVO CUMPRIDO',
@@ -3327,6 +3331,10 @@ class _VictoryOverlayState extends State<_VictoryOverlay> {
             },
           ),
         const SizedBox(height: 14),
+        if (c.rankedMode != null) ...[
+          _RankedResultLine(result: c.rankedResult),
+          const SizedBox(height: 12),
+        ],
         if (c.matchReplayId != null) ...[
           EstButton(
             icon: EstIconKind.compass,
@@ -3338,7 +3346,12 @@ class _VictoryOverlayState extends State<_VictoryOverlay> {
         Row(
           children: [
             Expanded(child: EstButton(label: 'Ver o mapa', onPressed: c.dismissVictory)),
-            if (c.inCorr) ...[
+            if (c.rankedMode != null) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: EstButton(label: 'Ranqueada', variant: EstButtonVariant.primary, onPressed: c.leaveGame),
+              ),
+            ] else if (c.inCorr) ...[
               const SizedBox(width: 8),
               Expanded(
                 child: EstButton(
@@ -4249,6 +4262,60 @@ class _EmoteBubbleView extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A nota depois do duelo ranqueado: patente, nota nova e quanto mudou.
+class _RankedResultLine extends StatelessWidget {
+  const _RankedResultLine({required this.result});
+
+  final Map<String, dynamic>? result;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    if (r == null) {
+      return Text('Calculando a sua nota…', textAlign: TextAlign.center, style: AppText.label(size: 11));
+    }
+    final after = r['after'] as Map<String, dynamic>? ?? const {};
+    final delta = (r['delta'] as num?)?.toInt() ?? 0;
+    final placement = (after['placement'] as num?)?.toInt() ?? 0;
+    final before = r['before'] as Map<String, dynamic>? ?? const {};
+    final promoted = (after['patente'] as num? ?? -1) != (before['patente'] as num? ?? -1) && placement == 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Radii.sm),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: [
+          PatenteBadge((after['patente'] as num?)?.toInt() ?? -1, size: 30),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  promoted ? 'Nova patente: ${after['patenteName']}' : '${after['patenteName'] ?? ''}',
+                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+                ),
+                Text(
+                  placement > 0
+                      ? 'Colocação: faltam $placement ${placement == 1 ? 'partida' : 'partidas'}'
+                      : 'Nota ${after['r']}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.mute),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            delta >= 0 ? '+$delta' : '$delta',
+            style: AppText.number(size: 20, weight: FontWeight.w700, color: delta >= 0 ? AppColors.ink : AppColors.bad),
+          ),
+        ],
       ),
     );
   }

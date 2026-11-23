@@ -74,6 +74,7 @@ class AppController extends ChangeNotifier {
   bool lobbyOwner = false;
   bool lobbyQuick = false;
   int lobbyQuickDeadlineMs = 0;
+  int lobbyRankedStartBy = 0; // duelo ranqueado: até quando o adversário pode chegar (ms)
   String lobbyPass = '';
   bool lobbyHasPass = false;
   ({String code, bool wrong, bool isLan})? passPrompt;
@@ -826,6 +827,7 @@ class AppController extends ChangeNotifier {
       unawaited(syncProgress());
       unawaited(refreshCorr(silent: true));
       unawaited(refreshFriends(silent: true));
+      unawaited(refreshRankedMe()); // duelo em andamento e patente aparecem no início
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) _clearAccount();
     }
@@ -1000,6 +1002,7 @@ class AppController extends ChangeNotifier {
     if (signedIn) {
       unawaited(refreshCorr(silent: true));
       unawaited(refreshFriends(silent: true));
+      unawaited(refreshRankedMe());
     }
   }
 
@@ -1154,6 +1157,165 @@ class AppController extends ChangeNotifier {
       friendsLoading = false;
       notifyListeners();
     }
+  }
+
+  // ---------------------------------------------------------------- fila ranqueada (Duelo)
+
+  Map<String, dynamic>? rankedInfo; // /ranked/me: nota, posição, castigo, duelo em andamento
+  List<Map<String, dynamic>> rankedTopList = const [];
+  int rankedQueueSize = 0;
+  bool rankedLoading = false;
+  String? rankedError;
+  String? _rankedTicket;
+  String rankedStatus = 'idle'; // idle | joining | waiting | matched
+  int _rankedJoinedMs = 0;
+  Timer? _rankedTimer;
+  String? rankedMode; // a partida atual é um duelo ranqueado ('duel')
+  Map<String, dynamic>? rankedResult; // resultado da nota no fim do duelo
+  bool _rankedSession = false; // entrou pela fila: ao sair, volta para a tela da ranqueada
+
+  int get rankedWaitSecs =>
+      _rankedJoinedMs == 0 ? 0 : (DateTime.now().millisecondsSinceEpoch - _rankedJoinedMs) ~/ 1000;
+
+  void openRankedScreen() {
+    SoundPlayer.unlock();
+    if (!_onlineGate()) return;
+    _corrTimer?.cancel();
+    _roomsTimer?.cancel();
+    _friendsTimer?.cancel();
+    screen = AppScreen.ranked;
+    rankedError = null;
+    notifyListeners();
+    unawaited(refreshRanked());
+  }
+
+  Future<void> refreshRanked() async {
+    if (rankedLoading) return;
+    rankedLoading = true;
+    notifyListeners();
+    final tok = _accountToken;
+    try {
+      final top = await acc.rankedTop(serverUrl());
+      rankedTopList = [for (final e in (top['entries'] as List<dynamic>? ?? const [])) Map<String, dynamic>.from(e as Map)];
+      rankedQueueSize = (top['queue'] as num?)?.toInt() ?? 0;
+      if (tok != null) {
+        rankedInfo = await acc.rankedMe(serverUrl(), tok);
+      }
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) {
+        _clearAccount();
+      } else {
+        rankedError = e.message;
+      }
+    } catch (_) {
+      rankedError = 'O servidor não respondeu. Tente de novo.';
+    } finally {
+      rankedLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Só a nota da conta (para o início: patente e duelo em andamento), sem mexer na tela.
+  Future<void> refreshRankedMe() async {
+    final tok = _accountToken;
+    if (tok == null || !netOnline) return;
+    try {
+      rankedInfo = await acc.rankedMe(serverUrl(), tok);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Entra na fila do Duelo e pergunta a cada 2 s até achar um adversário.
+  Future<void> joinRankedQueue() async {
+    final tok = _accountToken;
+    if (tok == null || rankedStatus != 'idle') return;
+    rankedStatus = 'joining';
+    rankedError = null;
+    notifyListeners();
+    try {
+      final r = await acc.rankedJoin(serverUrl(), tok);
+      _rankedJoinedMs = DateTime.now().millisecondsSinceEpoch - ((r['secs'] as num?)?.toInt() ?? 0) * 1000;
+      Telemetry.track('ranked_queue_join');
+      _onRankedPoll(r);
+    } on acc.AccountError catch (e) {
+      rankedStatus = 'idle';
+      rankedError = e.message;
+      notifyListeners();
+    } catch (_) {
+      rankedStatus = 'idle';
+      rankedError = 'Não deu para entrar na fila. Confira a internet e tente de novo.';
+      notifyListeners();
+    }
+  }
+
+  void _onRankedPoll(Map<String, dynamic> r) {
+    final st = r['status'] as String? ?? '';
+    _rankedTicket = r['ticket'] as String? ?? _rankedTicket;
+    rankedQueueSize = (r['queue'] as num?)?.toInt() ?? rankedQueueSize;
+    if (st == 'matched' && r['room'] is String) {
+      _rankedTimer?.cancel();
+      rankedStatus = 'matched';
+      notifyListeners();
+      Telemetry.track('ranked_matched', props: {'wait': rankedWaitSecs});
+      _enterRankedRoom(r['room'] as String);
+      return;
+    }
+    if (st != 'waiting') {
+      _stopRankedQueue();
+      notifyListeners();
+      return;
+    }
+    rankedStatus = 'waiting';
+    _rankedTimer?.cancel();
+    _rankedTimer = Timer(const Duration(seconds: 2), () async {
+      final t = _rankedTicket;
+      if (t == null || rankedStatus != 'waiting') return;
+      try {
+        _onRankedPoll(await acc.rankedPoll(serverUrl(), t));
+      } catch (_) {
+        if (rankedStatus == 'waiting') _onRankedPoll({'status': 'waiting', 'ticket': t}); // tenta de novo
+      }
+    });
+    notifyListeners();
+  }
+
+  Future<void> leaveRankedQueue() async {
+    final t = _rankedTicket;
+    _stopRankedQueue();
+    notifyListeners();
+    if (t != null) {
+      try {
+        await acc.rankedLeave(serverUrl(), t);
+      } catch (_) {}
+    }
+  }
+
+  void _stopRankedQueue() {
+    _rankedTimer?.cancel();
+    _rankedTicket = null;
+    rankedStatus = 'idle';
+    _rankedJoinedMs = 0;
+  }
+
+  /// Volta para o duelo em andamento (caiu, fechou o app) ou entra no que acabou de ser pareado.
+  void _enterRankedRoom(String code) {
+    _stopRankedQueue();
+    _rankedSession = true;
+    joinOnlineRoom(code, onlineName);
+    _rankedSession = true; // joinOnlineRoom limpa o estado da sessão anterior
+  }
+
+  void rejoinRankedDuel() {
+    final code = rankedInfo?['room'] as String?;
+    if (code != null) _enterRankedRoom(code);
+  }
+
+  /// Desistir do duelo em andamento (a vitória vai para o adversário; não é abandono).
+  void resignRanked() {
+    final v = view;
+    if (rankedMode == null || v == null || v['phase'] != 'play' || me < 0) return;
+    _sendAction({'t': 'resign'});
+    Telemetry.track('ranked_resign');
   }
 
   void openFriendsScreen() {
@@ -3480,9 +3642,12 @@ class AppController extends ChangeNotifier {
               ctrl: s['ctrl'] as String? ?? 'remote',
               online: s['on'] == true,
               crest: s['crest'] as String? ?? '',
+              rank: s['rank'] as String? ?? '',
             );
           })
           .toList();
+      rankedMode = msg['ranked'] as String?;
+      lobbyRankedStartBy = (msg['startBy'] as num?)?.toInt() ?? 0;
       me = (msg['you'] as num?)?.toInt() ?? -1;
       turnSecs = (msg['secs'] as num?)?.toInt() ?? 0;
       optEvents = msg['events'] == true;
@@ -3515,8 +3680,16 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (t == 'ranked') { // resultado do duelo ranqueado: a nota antes e depois
+      rankedResult = msg;
+      Telemetry.track('ranked_result', props: {'place': msg['place'], 'delta': msg['delta']});
+      notifyListeners();
+      if (_accountToken != null) unawaited(refreshRanked());
+      return;
+    }
     if (t == 'state') {
       passPrompt = null;
+      rankedMode = msg['ranked'] as String?;
       _markPlayed();
       _hostLastHeardMs = DateTime.now().millisecondsSinceEpoch;
       hostLag = false;
@@ -5264,6 +5437,7 @@ class AppController extends ChangeNotifier {
     final backToRooms = online != null && online!.fromRooms && !online!.gone;
     final backToCorr = online != null && online!.corr;
     final backToDaily = activeChallenge != null;
+    final backToRanked = _rankedSession || rankedMode != null;
     if (activeChallenge != null && !challengeWon && !challengeLost && _challengeStartedMs > 0) {
       final dur = max(1, (DateTime.now().millisecondsSinceEpoch - _challengeStartedMs) ~/ 1000);
       Telemetry.track(
@@ -5300,6 +5474,8 @@ class AppController extends ChangeNotifier {
     WebEnv.setWakeLock(false);
     if (backToDaily) {
       unawaited(openDailyScreen());
+    } else if (backToRanked && signedIn) {
+      openRankedScreen();
     } else if (backToCorr && signedIn) {
       openCorrScreen();
     } else if (backToRooms) {
@@ -5325,6 +5501,9 @@ class AppController extends ChangeNotifier {
 
   void _resetSessionState() {
     _replayTimer?.cancel();
+    rankedMode = null;
+    rankedResult = null;
+    _rankedSession = false;
     final rp = replay;
     if (rp != null) {
       try {

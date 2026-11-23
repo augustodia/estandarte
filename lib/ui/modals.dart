@@ -1642,6 +1642,10 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
     ctrl.leaveGame();
     return;
   }
+  if (ctrl.rankedMode != null && ctrl.view?['phase'] == 'play' && ctrl.me >= 0) {
+    _showResignModal(context, ctrl);
+    return;
+  }
   final watching = ctrl.online != null && (ctrl.me < 0);
   final corr = ctrl.inCorr;
   final desc = watching
@@ -1682,6 +1686,44 @@ void _showQuitConfirmModal(BuildContext context, AppController ctrl) {
                 variant: EstButtonVariant.primary,
                 onPressed: () => Navigator.pop(ctx),
               ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+/// Duelo ranqueado em andamento: sair é desistir (a vitória vai para o adversário).
+void _showResignModal(BuildContext context, AppController ctrl) {
+  showEstSheet<void>(
+    context,
+    maxWidth: 440,
+    builder: (ctx) => EstSheetBody(
+      title: 'Desistir do duelo?',
+      onClose: () => Navigator.pop(ctx),
+      children: [
+        const Text(
+          'A vitória vai para o adversário e a sua nota cai. Desistir não é abandono: você pode voltar à fila na '
+          'hora. Fechar o jogo sem desistir conta como abandono depois de 90 s e deixa você um tempo fora da fila.',
+          style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: EstButton(
+                label: 'Desistir',
+                variant: EstButtonVariant.warn,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ctrl.resignRanked();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: EstButton(label: 'Continuar', variant: EstButtonVariant.primary, onPressed: () => Navigator.pop(ctx)),
             ),
           ],
         ),

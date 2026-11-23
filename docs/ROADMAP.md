@@ -79,7 +79,11 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
 - [x] **Desafio verificável:** as regras e as estrelas do desafio rodam no motor; o app joga com a semente que o
   servidor entrega e manda a partida gravada; o servidor refaz e grava o resultado *dele* no ranking e no Códice (só
   a campanha conferida libera brasão). Limite: o app conhece a semente, então um app alterado pode prever os dados.
-- [ ] **Filas Ranqueadas (1v1 e FFA 3–6) com TrueSkill / Glicko-2 e Patentes**.
+- [x] **Fila ranqueada — Duelo (1v1):** Glicko-2, patentes de Recruta a Marechal, temporadas de 2 meses (nota puxada
+  para o meio na virada), regras fixas (turno de 60 s, Quartel e eventos, sem ogivas e sem pactos), sem espectadores e
+  sem bots. Abandono (sair, cair por mais de 90 s, 3 prazos seguidos, não aparecer) perde por desistência do servidor
+  e dá castigo na fila (5 min → 30 min → 24 h). Contas com e-mail confirmado e mais de 24 h; mesma rede não se enfrenta.
+- [ ] **Batalha ranqueada (FFA de 4)**, quando houver demanda na fila (amigos/mesmo IP nunca na mesma mesa).
 - [x] **Replays compartilháveis** das partidas online e por correspondência (`?replay=CÓDIGO`, 60 dias): tocar, pausar,
   passo a passo, de turno em turno e em 1×, 2× ou 4×.
 - [ ] **Ranking Global & Sazonal das Quintas Históricas** (somando estrelas acumuladas por temporada entre jogadores logados).

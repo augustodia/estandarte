@@ -20,6 +20,7 @@ import 'package:estandarte/ui/crests_sheet.dart';
 import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
 import 'package:estandarte/ui/daily_screen.dart';
+import 'package:estandarte/ui/ranked_screen.dart';
 import 'package:estandarte/ui/friends_screen.dart';
 import 'package:estandarte/ui/home_screen.dart';
 import 'package:estandarte/ui/lobby_screen.dart';
@@ -282,6 +283,26 @@ void main() {
       await _shot(tester, 'crests_$tag');
       Navigator.of(tester.element(find.byType(DailyScreen)), rootNavigator: true).pop();
       await tester.pump(const Duration(milliseconds: 400));
+
+      // ranqueada: patente, fila e ranking da temporada
+      ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com', emailVerified: true));
+      ctrl.rankedInfo = {
+        'season': 1, 'seasonEnd': DateTime(2027, 1, 1).millisecondsSinceEpoch, 'position': 7, 'verified': true,
+        'me': {'r': 1612, 'patente': 4, 'patenteName': 'Tenente', 'placement': 0, 'wins': 9, 'losses': 5, 'games': 14},
+      };
+      ctrl.rankedTopList = [
+        for (final (i, n, r, p) in [(1, 'Bia', 2188, 9), (2, 'Caio', 1934, 7), (3, 'Duda', 1801, 6), (7, 'Luiz', 1612, 4)])
+          {'pos': i, 'name': n, 'r': r, 'patente': p, 'patenteName': ['Recruta', 'Soldado', 'Cabo', 'Sargento', 'Tenente',
+            'Capitão', 'Major', 'Coronel', 'General', 'Marechal'][p], 'wins': 20 - i, 'losses': i + 2,
+            'crest': i == 1 ? 'hist_dday_1944:3' : ''},
+      ];
+      await tester.pumpWidget(_app(RankedScreen(ctrl: ctrl)));
+      await _shot(tester, 'ranked_$tag');
+      ctrl.rankedStatus = 'waiting';
+      ctrl.rankedQueueSize = 3;
+      await tester.pumpWidget(_app(RankedScreen(ctrl: ctrl)));
+      await _shot(tester, 'ranked_queue_$tag');
+      ctrl.rankedStatus = 'idle';
 
       // sala local com bots
       ctrl.startLocalSetup(withP2p: false, hostName: 'Luiz');
