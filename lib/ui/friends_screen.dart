@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../game/app_controller.dart';
 import '../net/account_api.dart';
 import 'modals.dart';
+import 'crest_badge.dart';
 import 'theme.dart';
 
 /// Amigos: pedir amizade pelo nome de usuário, ver quem está com o jogo aberto e desafiar por correspondência.
@@ -95,6 +96,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         for (final f in l.friends)
           _Row(
             name: f.name,
+            crest: f.crest,
             sub: f.playing ? 'jogando agora' : (f.online ? 'online' : ''),
             dot: f.playing ? _Dot.playing : (f.online ? _Dot.online : _Dot.off),
             actions: [
@@ -267,9 +269,17 @@ class _SectionHead extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.name, required this.sub, required this.actions, this.dot = _Dot.none, this.muted = false});
+  const _Row({
+    required this.name,
+    required this.sub,
+    required this.actions,
+    this.dot = _Dot.none,
+    this.muted = false,
+    this.crest = '',
+  });
 
   final String name;
+  final String crest;
   final String sub;
   final List<Widget> actions;
   final _Dot dot;
@@ -312,10 +322,10 @@ class _Row extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                NameWithCrest(
                   name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  crest: crest,
+                  size: 16,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,

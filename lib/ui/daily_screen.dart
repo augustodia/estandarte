@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../game/app_controller.dart';
 import '../game/daily_challenge.dart';
+import 'account_sheet.dart';
+import 'crest_badge.dart';
+import 'crests_sheet.dart';
 import 'theme.dart';
 
 class DailyScreen extends StatefulWidget {
@@ -476,9 +479,9 @@ class _DailyScreenState extends State<DailyScreen> {
                         Row(
                           children: [
                             Flexible(
-                              child: Text(
+                              child: NameWithCrest(
                                 e.playerName,
-                                overflow: TextOverflow.ellipsis,
+                                crest: e.crest,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
@@ -583,7 +586,21 @@ class _DailyScreenState extends State<DailyScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          EstSectionTag('CÓDICE HISTÓRICO ($unlockedCount / ${historicalCodexCatalog.length})'),
+          Row(
+            children: [
+              Expanded(
+                child: EstSectionTag('CÓDICE HISTÓRICO ($unlockedCount / ${historicalCodexCatalog.length})'),
+              ),
+              const SizedBox(width: 10),
+              EstButton(
+                small: true,
+                variant: EstButtonVariant.ghost,
+                icon: EstIconKind.crest,
+                label: 'Brasões',
+                onPressed: () => showCrestsSheet(context, c, onSignIn: () => showAccountSheet(context, c)),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           for (final meta in historicalCodexCatalog)
             Builder(
@@ -602,7 +619,18 @@ class _DailyScreenState extends State<DailyScreen> {
                       color: unlocked ? AppColors.brassDim : AppColors.line,
                     ),
                   ),
-                  child: Column(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CrestBadge(
+                        unlocked ? '${meta.id}:${bStars.clamp(1, 3)}' : '${meta.id}:1',
+                        size: 34,
+                        locked: !unlocked,
+                        tooltip: true,
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
@@ -642,6 +670,9 @@ class _DailyScreenState extends State<DailyScreen> {
                             ? meta.lore
                             : 'Disponível na rotação das Quintas-feiras Históricas.',
                         style: const TextStyle(fontSize: 12, height: 1.35, color: AppColors.mute),
+                      ),
+                    ],
+                        ),
                       ),
                     ],
                   ),

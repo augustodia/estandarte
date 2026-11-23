@@ -66,7 +66,9 @@ Este documento consolida a evolução do **Ultimato** nos três repositórios ([
 - [x] **Emotes táticos:** oito recados prontos (sem texto livre, nada a moderar) nas partidas online, por
   correspondência, na rede de casa e no relay; um a cada 3 s, quem assiste só vê, e dá para silenciar os dos outros.
 - [ ] Notificação no aparelho (push) além do e-mail de "sua vez".
-- [ ] Recompensas cosméticas permanentes (brasões/insígnias das Quintas Históricas) ligadas à conta.
+- [x] **Brasões das Quintas Históricas:** cada crônica dá um brasão (arte própria) no metal da melhor campanha
+  (bronze, prata, ouro) e três insígnias marcam a coleção. A conta escolhe um para aparecer ao lado do nome na sala,
+  na partida, nos amigos e no ranking; o servidor confere contra o Códice da conta.
 
 ---
 

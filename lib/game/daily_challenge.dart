@@ -166,10 +166,12 @@ class DailyRankEntry {
     required this.ordersUsed,
     required this.durationSec,
     required this.submittedAtMs,
+    this.crest = '',
   });
 
   final int rank;
   final String playerName;
+  final String crest; // brasão em destaque da conta
   final String difficulty;
   final int stars;
   final int rounds;
@@ -188,6 +190,7 @@ class DailyRankEntry {
         ordersUsed: (json['ordersUsed'] as num?)?.toInt() ?? 0,
         durationSec: (json['durationSec'] as num?)?.toInt() ?? 0,
         submittedAtMs: (json['submittedAtMs'] as num?)?.toInt() ?? 0,
+        crest: json['crest'] as String? ?? '',
       );
 }
 

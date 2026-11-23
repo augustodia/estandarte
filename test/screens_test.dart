@@ -16,6 +16,7 @@ import 'package:estandarte/net/account_api.dart';
 import 'package:estandarte/net/online_client.dart';
 import 'package:estandarte/ui/account_sheet.dart';
 import 'package:estandarte/ui/corr_screen.dart';
+import 'package:estandarte/ui/crests_sheet.dart';
 import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
 import 'package:estandarte/ui/daily_screen.dart';
@@ -180,7 +181,14 @@ void main() {
       showAccountSheet(homeCtx, ctrl);
       await _shot(tester, 'account_code_$tag');
       Navigator.of(homeCtx, rootNavigator: true).pop();
-      ctrl.debugSetAccount(const AccountUser(id: 1, username: 'Luiz', email: 'luiz@gmail.com', emailVerified: true));
+      // Códice com algumas crônicas jogadas (brasões em bronze, prata e ouro) e um brasão em destaque
+      Map<String, dynamic> rec(int stars) => {'bestStars': stars, 'bestRounds': 9};
+      ctrl.codexProgress = {
+        'hist_dday_1944': rec(3), 'hist_britain_1940': rec(2), 'hist_pacific_1942': rec(1),
+        'hist_stalingrad_1942': rec(3), 'hist_coldwar_1962': rec(2),
+      };
+      ctrl.debugSetAccount(const AccountUser(
+          id: 1, username: 'Luiz', email: 'luiz@gmail.com', emailVerified: true, crest: 'hist_dday_1944:3'));
       await tester.pumpWidget(_app(HomeScreen(ctrl: ctrl)));
       await _shot(tester, 'home_acct_$tag');
       showAccountSheet(homeCtx, ctrl);
@@ -197,7 +205,7 @@ void main() {
 
       // amigos: início com pedido e gente online, a lista, convites na correspondência e a lista vazia
       ctrl.debugSetFriends(const FriendLists(
-        friends: [FriendInfo('Beto', status: 'playing'), FriendInfo('Carla', status: 'online'), FriendInfo('Davi')],
+        friends: [FriendInfo('Beto', status: 'playing', crest: 'ins_veterano'), FriendInfo('Carla', status: 'online'), FriendInfo('Davi')],
         incoming: ['Eva'],
         outgoing: ['Fábio'],
       ));
@@ -266,11 +274,19 @@ void main() {
       await _shot(tester, 'rooms_$tag');
       await tester.pumpWidget(_app(DailyScreen(ctrl: ctrl)));
       await _shot(tester, 'daily_$tag');
+      await tester.ensureVisible(find.textContaining('Códice &'));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.textContaining('Códice &'));
+      await _shot(tester, 'codex_$tag');
+      showCrestsSheet(tester.element(find.byType(DailyScreen)), ctrl);
+      await _shot(tester, 'crests_$tag');
+      Navigator.of(tester.element(find.byType(DailyScreen)), rootNavigator: true).pop();
+      await tester.pump(const Duration(milliseconds: 400));
 
       // sala local com bots
       ctrl.startLocalSetup(withP2p: false, hostName: 'Luiz');
       ctrl.seats.addAll([
-        LobbySeat(name: 'Bia', color: 0, ctrl: 'bot'),
+        LobbySeat(name: 'Bia', color: 0, ctrl: 'bot', crest: 'hist_britain_1940:2'),
         LobbySeat(name: 'Bot 2', color: 2, ctrl: 'bot'),
         LobbySeat(name: 'Caio', color: 3, ctrl: 'bot'),
       ]);
@@ -283,6 +299,7 @@ void main() {
       ctrl.optPacts = true;
       ctrl.optNukes = true;
       ctrl.beginGame();
+      ctrl.playerCrests = const ['hist_dday_1944:3', 'ins_historiador', '', 'hist_coldwar_1962:1'];
       await tester.pumpWidget(_app(GameScreen(ctrl: ctrl)));
       for (var i = 0; i < 30 && ctrl.view?['turn'] != ctrl.me; i++) {
         await tester.pump(const Duration(milliseconds: 600));

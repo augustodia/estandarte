@@ -15,6 +15,7 @@ import '../platform/p2p.dart';
 import '../platform/sound.dart';
 import '../platform/storage.dart';
 import '../platform/web_env.dart';
+import 'crests.dart';
 import 'daily_challenge.dart';
 import 'fx_models.dart';
 import 'smoke_sim.dart';
@@ -700,6 +701,43 @@ class AppController extends ChangeNotifier {
   bool _syncAgain = false;
 
   acc.AccountUser? account;
+
+  /// Brasão de cada jogador da partida online (índice do jogador; vazio sem brasão).
+  List<String> playerCrests = const [];
+
+  String crestOfPlayer(int p) => p >= 0 && p < playerCrests.length ? playerCrests[p] : '';
+
+  /// Escolhe o brasão em destaque da conta ('' tira). Devolve a mensagem de erro, ou null se deu certo.
+  Future<String?> setCrest(String crest) async {
+    final tok = _accountToken;
+    if (tok == null) return 'Entre na sua conta para exibir um brasão.';
+    if (crest.isNotEmpty && !crestEarned(codexProgress, crest)) return 'Esse brasão ainda não foi conquistado.';
+    try {
+      final u = await acc.accountSetCrest(serverUrl(), tok, crest);
+      if (_accountToken != tok) return null;
+      _storeAccount(tok, u);
+      Telemetry.track('crest_set', props: {'crest': crest.isEmpty ? 'none' : crest.split(':').first});
+      notifyListeners();
+      return null;
+    } on acc.AccountError catch (e) {
+      if (e.unauthorized && _accountToken == tok) {
+        _clearAccount();
+        notifyListeners();
+      }
+      return e.message;
+    } catch (_) {
+      return 'Sem conexão com o servidor. Tente de novo.';
+    }
+  }
+
+  /// O brasão em destaque sobe de metal sozinho quando a campanha da crônica melhora.
+  void _upgradeCrest() {
+    final cur = account?.crest ?? '';
+    final p = parseCrest(cur);
+    if (p == null || p.chronicle == null) return;
+    final best = bestChronicleCrest(codexProgress, p.chronicle!.id);
+    if (best.isNotEmpty && best != cur && (parseCrest(best)?.tier ?? 0) > p.tier) unawaited(setCrest(best));
+  }
   String? _accountToken;
   bool accountBusy = false;
 
@@ -815,6 +853,7 @@ class AppController extends ChangeNotifier {
       AppStorage.instance.setString('estandarte.daily.done', jsonEncode(dailyProgress));
       AppStorage.instance.setString('estandarte.codex', jsonEncode(codexProgress));
       AppStorage.instance.setString(_kProgressOwner, '${me.id}');
+      _upgradeCrest();
       notifyListeners();
     } on acc.AccountError catch (e) {
       if (e.unauthorized && _accountToken == tok) {
@@ -3523,6 +3562,7 @@ class AppController extends ChangeNotifier {
               color: (s['color'] as num?)?.toInt() ?? 0,
               ctrl: s['ctrl'] as String? ?? 'remote',
               online: s['on'] == true,
+              crest: s['crest'] as String? ?? '',
             );
           })
           .toList();
@@ -3587,6 +3627,7 @@ class AppController extends ChangeNotifier {
       lobbyCode = msg['code'] as String? ?? lobbyCode;
       lobbyOwner = msg['owner'] == true;
       watchersCount = msg['watchers'] is num ? (msg['watchers'] as num).toInt() : null;
+      playerCrests = [for (final x in (msg['crests'] as List<dynamic>? ?? const [])) x is String ? x : ''];
       onlMap = {};
       final onRaw = msg['on'];
       if (onRaw is Map<String, dynamic>) {
@@ -5306,6 +5347,7 @@ class AppController extends ChangeNotifier {
   void leaveGame({String? showReason, bool keepSeat = false}) {
     emotes.clear();
     _seatEmoteMs.clear();
+    playerCrests = const [];
     if (replay != null) {
       _leaveReplay();
       return;

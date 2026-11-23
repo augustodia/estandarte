@@ -9,6 +9,7 @@ import '../platform/lan_host.dart';
 import '../platform/p2p.dart';
 import 'friends_screen.dart';
 import 'modals.dart';
+import 'crest_badge.dart';
 import 'theme.dart';
 
 class LobbyScreen extends StatefulWidget {
@@ -1306,9 +1307,10 @@ class _SeatTile extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(
-                        child: Text(
+                        child: NameWithCrest(
                           seat.name,
-                          overflow: TextOverflow.ellipsis,
+                          crest: seat.crest,
+                          size: 16,
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,

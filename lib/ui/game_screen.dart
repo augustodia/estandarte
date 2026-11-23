@@ -13,6 +13,7 @@ import 'map_view.dart';
 import 'modals.dart';
 import 'quartel_modal.dart';
 import 'replay_bar.dart';
+import 'crest_badge.dart';
 import 'theme.dart';
 
 class GameScreen extends StatefulWidget {
@@ -1192,9 +1193,10 @@ class _SidePanel extends StatelessWidget {
                           Row(
                             children: [
                               Flexible(
-                                child: Text(
+                                child: NameWithCrest(
                                   '${p['name'] ?? ''}',
-                                  overflow: TextOverflow.ellipsis,
+                                  crest: ctrl.crestOfPlayer(i),
+                                  size: 14,
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
