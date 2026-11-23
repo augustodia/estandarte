@@ -167,11 +167,13 @@ class DailyRankEntry {
     required this.durationSec,
     required this.submittedAtMs,
     this.crest = '',
+    this.replay = '',
   });
 
   final int rank;
   final String playerName;
   final String crest; // brasão em destaque da conta
+  final String replay; // código do replay da partida (só nos dias que já viraram)
   final String difficulty;
   final int stars;
   final int rounds;
@@ -191,6 +193,7 @@ class DailyRankEntry {
         durationSec: (json['durationSec'] as num?)?.toInt() ?? 0,
         submittedAtMs: (json['submittedAtMs'] as num?)?.toInt() ?? 0,
         crest: json['crest'] as String? ?? '',
+        replay: json['replay'] as String? ?? '',
       );
 }
 

@@ -3903,6 +3903,15 @@ class _ChallengeOutcomeOverlay extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
+                if (won && ctrl.challengeReplayId != null) ...[
+                  EstButton(
+                    label: 'Assistir sua partida',
+                    icon: EstIconKind.play,
+                    variant: EstButtonVariant.ghost,
+                    onPressed: ctrl.replayLoading ? null : () => ctrl.openReplay(ctrl.challengeReplayId!),
+                  ),
+                  const SizedBox(height: 6),
+                ],
                 EstButton(
                   label: 'Ver Ranking & Códice',
                   variant: EstButtonVariant.ghost,
