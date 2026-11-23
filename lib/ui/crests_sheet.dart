@@ -62,8 +62,8 @@ class _CrestsBodyState extends State<_CrestsBody> {
     final c = widget.ctrl;
     final codex = c.codexProgress;
     final current = c.signedIn ? (c.account?.crest ?? '') : '';
-    final earned = earnedCrests(codex).length;
-    final total = historicalCodexCatalog.length + insigniaCatalog.length;
+    final gotChron = chroniclesWith(codex, 1);
+    final gotIns = insigniaCatalog.where((i) => crestEarned(codex, i.id)).length;
 
     Widget tile({required String crest, required String title, required String sub, required bool got}) {
       final selected = got && crest == current;
@@ -145,7 +145,7 @@ class _CrestsBodyState extends State<_CrestsBody> {
           style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.mute),
         ),
         const SizedBox(height: 14),
-        EstSectionTag('CRÔNICAS · $earned / $total CONQUISTADOS'),
+        EstSectionTag('CRÔNICAS · $gotChron / ${historicalCodexCatalog.length}'),
         const SizedBox(height: 8),
         grid([
           for (final m in historicalCodexCatalog)
@@ -160,7 +160,7 @@ class _CrestsBodyState extends State<_CrestsBody> {
             }(),
         ]),
         const SizedBox(height: 16),
-        const EstSectionTag('INSÍGNIAS'),
+        EstSectionTag('INSÍGNIAS · $gotIns / ${insigniaCatalog.length}'),
         const SizedBox(height: 8),
         grid([
           for (final i in insigniaCatalog)
