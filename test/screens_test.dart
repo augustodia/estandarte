@@ -21,6 +21,7 @@ import 'package:estandarte/platform/storage.dart';
 import 'package:estandarte/ui/game_screen.dart';
 import 'package:estandarte/ui/daily_screen.dart';
 import 'package:estandarte/ui/ranked_screen.dart';
+import 'package:estandarte/ui/store_screen.dart';
 import 'package:estandarte/ui/friends_screen.dart';
 import 'package:estandarte/ui/home_screen.dart';
 import 'package:estandarte/ui/lobby_screen.dart';
@@ -319,6 +320,30 @@ void main() {
       await tester.pumpWidget(_app(RankedScreen(ctrl: ctrl)));
       await _shot(tester, 'ranked_queue_$tag');
       ctrl.rankedStatus = 'idle';
+      final rankedFull = ctrl.rankedInfo;
+      ctrl.rankedInfo = {...?rankedFull, 'enlist': {'done': 6, 'need': 10}};
+      await tester.pumpWidget(_app(RankedScreen(ctrl: ctrl)));
+      await _shot(tester, 'ranked_enlist_$tag');
+      ctrl.rankedInfo = rankedFull;
+
+      // loja: o Comandante Fundador à venda e, depois, a conta que já comprou
+      ctrl.storeCatalog = StoreCatalog(
+        items: const [
+          StoreItem(sku: 'comandante', name: 'Comandante', desc: 'Compra única.', cents: 2990, available: false),
+          StoreItem(
+              sku: 'comandante_fundador',
+              name: 'Comandante Fundador',
+              desc: 'Tudo do Comandante, mais o brasão Fundador numerado, que nunca mais será vendido. Só no lançamento.',
+              cents: 1990,
+              available: true),
+        ],
+        fundadorUntilMs: DateTime(2027, 3, 2).millisecondsSinceEpoch,
+      );
+      await tester.pumpWidget(_app(StoreScreen(ctrl: ctrl)));
+      await _shot(tester, 'store_$tag');
+      ctrl.ent = const Entitlements(comandante: true, fundador: 42, token: 'x', expiresMs: 1 << 50);
+      await tester.pumpWidget(_app(StoreScreen(ctrl: ctrl)));
+      await _shot(tester, 'store_owned_$tag');
 
       // sala local com bots
       ctrl.startLocalSetup(withP2p: false, hostName: 'Luiz');
@@ -330,6 +355,18 @@ void main() {
       ctrl.seats[0] = LobbySeat(name: 'Luiz', color: 1, ctrl: 'local');
       await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
       await _shot(tester, 'lobby_$tag');
+      // sala aberta por um Comandante (Fundador): faixa e marca no lugar
+      ctrl.lobbyPremium = true;
+      ctrl.seats[0].cmd = true;
+      ctrl.seats[0].fnd = 42;
+      ctrl.seats[1].cmd = true;
+      await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
+      await _shot(tester, 'lobby_premium_$tag');
+      ctrl.lobbyPremium = false;
+      ctrl.seats[0].cmd = false;
+      ctrl.seats[0].fnd = 0;
+      ctrl.seats[1].cmd = false;
+      ctrl.ent = Entitlements.none;
 
       // partida (com todos os extras, para as janelas)
       ctrl.optEvents = true;

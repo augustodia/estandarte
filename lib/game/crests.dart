@@ -26,6 +26,12 @@ const List<InsigniaMeta> insigniaCatalog = [
   InsigniaMeta('ins_historiador', 'Historiador', 'Concluir todas as 10 crônicas', 10, 1),
 ];
 
+/// Insígnias da loja: não se conquistam jogando, vêm da compra (o servidor confere contra as compras da conta).
+const List<InsigniaMeta> shopInsignias = [
+  InsigniaMeta('ins_comandante', 'Comandante', 'Para quem é Comandante', 0, 0),
+  InsigniaMeta('ins_fundador', 'Fundador', 'Comandante Fundador do lançamento', 0, 0),
+];
+
 const List<String> tierNames = ['', 'Bronze', 'Prata', 'Ouro'];
 
 /// Melhor campanha (estrelas) de uma crônica no Códice deste aparelho/conta; 0 se ainda não jogou.
@@ -48,7 +54,7 @@ int chroniclesWith(Map<String, dynamic> codex, int stars) =>
 
 /// Brasão parseado: crônica (com metal) ou insígnia. null se o texto não é um brasão conhecido.
 ({HistoricalCodexMeta? chronicle, InsigniaMeta? insignia, int tier})? parseCrest(String crest) {
-  for (final i in insigniaCatalog) {
+  for (final i in [...insigniaCatalog, ...shopInsignias]) {
     if (i.id == crest) return (chronicle: null, insignia: i, tier: 3);
   }
   final cut = crest.lastIndexOf(':');
@@ -74,7 +80,10 @@ String crestTitle(String crest) {
 bool crestEarned(Map<String, dynamic> codex, String crest) {
   final p = parseCrest(crest);
   if (p == null) return false;
-  if (p.insignia != null) return chroniclesWith(codex, p.insignia!.stars) >= p.insignia!.count;
+  if (p.insignia != null) {
+    if (shopInsignias.contains(p.insignia)) return false; // vem da compra, não do Códice
+    return chroniclesWith(codex, p.insignia!.stars) >= p.insignia!.count;
+  }
   return verifiedStars(codex, p.chronicle!.id) >= p.tier;
 }
 

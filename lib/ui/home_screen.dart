@@ -592,22 +592,38 @@ class _Footer extends StatelessWidget {
             child: Text(label, style: AppText.label(size: 12.5, color: lit ? AppColors.ink : AppColors.mute)),
           ),
         );
+    Widget sep() => Container(width: 1, height: 12, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line);
     return Row(
       children: [
-        if (fresh) ...[
-          Container(
-            width: 6,
-            height: 6,
-            margin: const EdgeInsets.only(right: 6),
-            decoration: const BoxDecoration(color: AppColors.ink, shape: BoxShape.circle),
+        Expanded(
+          child: FittedBox( // telas estreitas: os atalhos encolhem em vez de estourar a linha
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (fresh) ...[
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: const BoxDecoration(color: AppColors.ink, shape: BoxShape.circle),
+                  ),
+                  link('PRIMEIRA VEZ? TUTORIAL', () => c.startTutorial(), lit: true),
+                ] else
+                  link('TUTORIAL', () => c.startTutorial()),
+                sep(),
+                link('COMO JOGAR', () => showRulesModal(context, c)),
+                sep(),
+                link('COMANDANTE', c.openStoreScreen, lit: c.isComandante),
+              ],
+            ),
           ),
-          link('PRIMEIRA VEZ? TUTORIAL', () => c.startTutorial(), lit: true),
-        ] else
-          link('TUTORIAL', () => c.startTutorial()),
-        Container(width: 1, height: 12, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.line),
-        link('COMO JOGAR', () => showRulesModal(context, c)),
-        const Spacer(),
-        if (!c.netOnline) Text('SEM INTERNET', style: AppText.label(size: 11, color: AppColors.bad)),
+        ),
+        if (!c.netOnline) ...[
+          const SizedBox(width: 8),
+          Text('SEM INTERNET', style: AppText.label(size: 11, color: AppColors.bad)),
+        ],
       ],
     );
   }

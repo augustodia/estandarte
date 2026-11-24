@@ -348,6 +348,32 @@ class _LobbyScreenState extends State<LobbyScreen> {
       );
     }
 
+    // Sala de Comandante: quem manda na sala comprou o Comandante, e o que ele libera vale para a mesa inteira.
+    Widget? premiumBanner() {
+      if (!c.lobbyPremium || isRanked) return null;
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(13, 10, 13, 11),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AppColors.medal.withValues(alpha: 0.55)),
+        ),
+        child: Row(
+          children: [
+            const CrestBadge('ins_comandante', size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                c.lobbyOwner ? 'Sua sala de Comandante: o que você libera vale para todos nesta mesa.'
+                    : 'Sala de Comandante: o que o Comandante libera vale para todos nesta mesa, sem custo.',
+                style: const TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Correspondência: o combinado em uma linha (o prazo é fixo e a partida fica no servidor).
     Widget? corrBanner() {
       if (!isCorr) return null;
@@ -453,6 +479,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ?connBanner,
             ?quickBanner(),
             ?rankedBanner(),
+            ?premiumBanner(),
             ?corrBanner(),
             const EstSectionTag('BRIEFING DA MESA'),
             const SizedBox(height: 10),
@@ -564,6 +591,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ?connBanner,
           ?quickBanner(),
           ?rankedBanner(),
+          ?premiumBanner(),
           ?corrBanner(),
           const EstSectionTag('REGRAS DA BATALHA'),
           SizedBox(height: roomy ? 14 : 10),
@@ -1399,6 +1427,11 @@ class _SeatTile extends StatelessWidget {
                       style: const TextStyle(fontSize: 11, color: AppColors.mute),
                       children: [
                         if (seat.rank.isNotEmpty) TextSpan(text: '${seat.rank} · '),
+                        if (seat.cmd)
+                          TextSpan(
+                            text: seat.fnd > 0 ? 'Fundador nº ${seat.fnd} · ' : 'Comandante · ',
+                            style: const TextStyle(color: AppColors.medal),
+                          ),
                         TextSpan(text: '${color.name} · '),
                         TextSpan(
                           text: kindLabel,

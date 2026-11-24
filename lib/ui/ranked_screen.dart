@@ -299,6 +299,12 @@ class _QueueBox extends StatelessWidget {
         ),
       );
     }
+    final enlist = info?['enlist'] as Map<String, dynamic>?;
+    if (enlist != null) {
+      final done = (enlist['done'] as num?)?.toInt() ?? 0;
+      final need = (enlist['need'] as num?)?.toInt() ?? 10;
+      return _EnlistBox(done: done, need: need, onPlay: () => c.startQuickMatch(c.onlineName));
+    }
     final blocked = cooldown > now;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       EstButton(
@@ -326,6 +332,57 @@ class _QueueBox extends StatelessWidget {
   }
 
   static String _hhmm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+}
+
+/// Alistamento: partidas online antes da primeira ranqueada (contas descartáveis ficam caras).
+class _EnlistBox extends StatelessWidget {
+  const _EnlistBox({required this.done, required this.need, required this.onPlay});
+
+  final int done;
+  final int need;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = (need - done).clamp(0, need);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(Radii.sm),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Alistamento', style: AppText.title(size: 17))),
+              Text('$done / $need', style: AppText.number(size: 15, color: AppColors.ink, weight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: need == 0 ? 1 : done / need,
+              minHeight: 4,
+              backgroundColor: AppColors.line,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Antes da primeira ranqueada, jogue mais $left ${left == 1 ? 'partida' : 'partidas'} online: sala, partida '
+            'rápida ou desafio do dia. Assim cada conta na ranqueada é de alguém que joga de verdade.',
+            style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.mute),
+          ),
+          const SizedBox(height: 12),
+          EstButton(label: 'Jogar partida rápida', variant: EstButtonVariant.primary, height: 44, onPressed: onPlay),
+        ],
+      ),
+    );
+  }
 }
 
 /// As maiores notas da temporada.
