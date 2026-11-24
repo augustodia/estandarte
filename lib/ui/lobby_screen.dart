@@ -661,6 +661,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
                           'Regras extras',
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
                         ),
+                        if (c.extrasLocked) ...[
+                          const SizedBox(width: 8),
+                          const EstIcon(EstIconKind.lock, size: 12, color: AppColors.medal),
+                        ],
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -682,13 +686,36 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       ? Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (c.extrasLocked)
+                              InkWell(
+                                onTap: c.openStoreScreen,
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                                  child: Row(
+                                    children: [
+                                      const CrestBadge('ins_comandante', size: 20),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          isOnline
+                                              ? 'Regras extras são do Comandante: quem abre a sala precisa ser Comandante, e quem entra joga junto sem pagar.'
+                                              : 'Regras extras são do Comandante: com um Comandante abrindo a mesa, todos jogam com elas.',
+                                          style: const TextStyle(fontSize: 12, height: 1.35, color: AppColors.mute),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mute),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             for (final ex in _extrasMeta)
                               if (ex.$1 != 'spy' || c.optHq)
                                 EstSwitchOpt(
                                   title: ex.$2,
                                   subtitle: ex.$3,
                                   value: _getExtra(ex.$1),
-                                  enabled: true,
+                                  enabled: !c.extrasLocked,
                                   onChanged: (_) => _toggleExtra(ex.$1),
                                 ),
                           ],

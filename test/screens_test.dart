@@ -363,6 +363,14 @@ void main() {
       await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
       await _shot(tester, 'lobby_premium_$tag');
       ctrl.lobbyPremium = false;
+      // mesa de quem não é Comandante, com a loja já aberta: regras extras com cadeado
+      ctrl.ent = Entitlements.none;
+      AppStorage.instance.setString('ultimato.store.open', '1');
+      ctrl.extrasOpen = true;
+      await tester.pumpWidget(_app(LobbyScreen(ctrl: ctrl)));
+      await _shot(tester, 'lobby_locked_$tag');
+      AppStorage.instance.remove('ultimato.store.open');
+      ctrl.extrasOpen = null;
       ctrl.seats[0].cmd = false;
       ctrl.seats[0].fnd = 0;
       ctrl.seats[1].cmd = false;
