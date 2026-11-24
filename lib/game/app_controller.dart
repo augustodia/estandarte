@@ -1220,6 +1220,15 @@ class AppController extends ChangeNotifier {
   Timer? _pixTimer;
 
   bool lobbyPremium = false; // quem manda na sala é Comandante: o conteúdo dele vale para a mesa toda
+  bool lobbyExtrasLocked = false; // servidor: regras extras travadas (quem manda na sala não é Comandante)
+  static const _kStoreOpen = 'ultimato.store.open';
+
+  /// A loja já abriu alguma vez (até lá nada fica travado, porque não haveria como comprar).
+  bool get storeOpen => AppStorage.instance.getString(_kStoreOpen) == '1';
+
+  /// Regras extras travadas nesta sala: online quem decide é o servidor; na mesa local e na LAN, quem abre a mesa
+  /// precisa ser Comandante (vale offline pelo token guardado).
+  bool get extrasLocked => online != null ? lobbyExtrasLocked : (storeOpen && !isComandante);
 
   bool get isComandante => signedIn && ent.comandante;
 
@@ -1256,6 +1265,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     try {
       storeCatalog = await acc.storeCatalog(serverUrl());
+      if (storeCatalog!.items.any((i) => i.available)) AppStorage.instance.setString(_kStoreOpen, '1');
       await refreshEntitlements();
     } on acc.AccountError catch (e) {
       storeError = e.message;
@@ -1305,6 +1315,12 @@ class AppController extends ChangeNotifier {
       }
       notifyListeners();
     } catch (_) {} // tenta de novo no próximo ciclo
+  }
+
+  Future<({List<acc.MyReplay> list, bool archive, bool more, int keepDays})> loadMyReplays() {
+    final tok = _accountToken;
+    if (tok == null) throw const acc.AccountError('Entre na sua conta para ver suas partidas.');
+    return acc.replaysMine(serverUrl(), tok);
   }
 
   void cancelPix() {
@@ -2379,6 +2395,10 @@ class AppController extends ChangeNotifier {
       }
       return;
     }
+    if (extrasLocked && (events == true || pacts == true || nukes == true || spy == true || hq == false)) {
+      showToast('Regras extras são do Comandante.');
+      return;
+    }
     if (secs != null) turnSecs = secs;
     if (events != null) optEvents = events;
     if (pacts != null) optPacts = pacts;
@@ -2417,6 +2437,10 @@ class AppController extends ChangeNotifier {
     if (seats.length < 2) {
       showToast('Precisa de pelo menos 2 jogadores.');
       return;
+    }
+    if (extrasLocked) {
+      optEvents = optPacts = optNukes = optSpy = false; // mesa de quem não é Comandante: regras padrão
+      optHq = true;
     }
     _dropEngineGame();
     _engineId = engine.newGame(
@@ -3814,6 +3838,7 @@ class AppController extends ChangeNotifier {
           .toList();
       rankedMode = msg['ranked'] as String?;
       lobbyPremium = msg['premium'] == true;
+      lobbyExtrasLocked = msg['extrasLocked'] == true;
       lobbyRankedStartBy = (msg['startBy'] as num?)?.toInt() ?? 0;
       me = (msg['you'] as num?)?.toInt() ?? -1;
       turnSecs = (msg['secs'] as num?)?.toInt() ?? 0;

@@ -529,3 +529,36 @@ Future<({PixOrder order, Entitlements? ent})> storePixStatus(String server, Stri
   final j = await _call(server, 'GET', '/store/pix/order?id=${Uri.encodeQueryComponent(id)}', token: token);
   return (order: PixOrder.fromJson(j), ent: j['token'] is String ? Entitlements.fromMe(j) : null);
 }
+
+// ---------------------------------------------------------------- minhas partidas (arquivo do Comandante)
+
+class MyReplay {
+  const MyReplay({required this.id, required this.mode, required this.players, this.winner = '', this.rounds = 0, this.createdMs = 0, this.kept = false});
+  final String id;
+  final String mode; // online, quick, corr, daily
+  final List<String> players;
+  final String winner;
+  final int rounds;
+  final int createdMs;
+  final bool kept; // no arquivo do Comandante: não expira
+
+  factory MyReplay.fromJson(Map<String, dynamic> j) => MyReplay(
+        id: j['id'] as String? ?? '',
+        mode: j['mode'] as String? ?? '',
+        players: [for (final p in (j['players'] as List<dynamic>? ?? const [])) p as String],
+        winner: j['winner'] as String? ?? '',
+        rounds: (j['rounds'] as num?)?.toInt() ?? 0,
+        createdMs: DateTime.tryParse(j['created'] as String? ?? '')?.millisecondsSinceEpoch ?? 0,
+        kept: j['kept'] == true,
+      );
+}
+
+Future<({List<MyReplay> list, bool archive, bool more, int keepDays})> replaysMine(String server, String token) async {
+  final j = await _call(server, 'GET', '/replay/mine', token: token);
+  return (
+    list: [for (final e in (j['replays'] as List<dynamic>? ?? const [])) MyReplay.fromJson(e as Map<String, dynamic>)],
+    archive: j['archive'] == true,
+    more: j['more'] == true,
+    keepDays: (j['keepDays'] as num?)?.toInt() ?? 60,
+  );
+}

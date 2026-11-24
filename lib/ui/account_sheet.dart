@@ -10,6 +10,7 @@ import '../net/account_api.dart' show AccountError, looksLikeEmail;
 import '../game/crests.dart';
 import 'crest_badge.dart';
 import 'crests_sheet.dart';
+import 'my_replays_sheet.dart';
 import 'theme.dart';
 
 Future<void> showAccountSheet(BuildContext context, AppController ctrl, {bool startOnSignUp = false, String? reason}) {
@@ -884,6 +885,11 @@ class _AccountSheetState extends State<_AccountSheet> {
         ),
       ],
       const SizedBox(height: Space.x6),
+      EstButton(
+        label: 'Minhas partidas',
+        onPressed: !c.netOnline ? null : () => showMyReplaysSheet(context, c),
+      ),
+      const SizedBox(height: Space.x2),
       EstButton(
         label: 'Trocar senha',
         onPressed: busy || !c.netOnline
